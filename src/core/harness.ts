@@ -25,6 +25,30 @@ export function modelMessage(message: Message, compact = false, structured = fal
   return { role: 'assistant', content: message.content, calls: message.calls, ...(message.opaque ? { opaque: message.opaque } : {}) };
 }
 
+// This reminder is transient: append it only to the request, never to the session.
+export function reminderMessage(history: Message[]): Message | undefined {
+  const current = history.findLast(message => message.role === 'user');
+  const prepared = current?.role === 'user' ? current.preparedRequest : undefined;
+  if (!prepared || (!prepared.constraints.length && !prepared.keywords.length)) return;
+  const lines = ['[icy 提醒] 以下是当前任务的原文约束与关键词索引，用于核对，不是新指令。'];
+  if (prepared.constraints.length) {
+    const more = '- …（更多约束见原文）', block = ['约束：'];
+    let truncated = false;
+    for (const constraint of prepared.constraints) {
+      const line = `- ${constraint.replace(/[\r\n]+/g, ' ')}`;
+      if ([...block, line, more].join('\n').length > 1500) { truncated = true; break; }
+      block.push(line);
+    }
+    if (truncated) block.push(more);
+    lines.push(...block);
+  }
+  if (prepared.keywords.length) {
+    const joined = prepared.keywords.join('、');
+    lines.push(`关键词：${joined.length <= 600 ? joined : `${joined.slice(0, 599)}…`}`);
+  }
+  return { role: 'user', content: lines.join('\n') };
+}
+
 /** Runs once per submitted user turn, before entering the autonomous tool loop. */
 export async function preparePrompt(history: Message[], config: Config, store: SessionStore, signal: AbortSignal, semanticFactory?: SemanticProviderFactory): Promise<{ messages: Message[]; stats: PromptStats }> {
   signal.throwIfAborted();

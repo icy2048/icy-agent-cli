@@ -9,6 +9,7 @@ import { ToolRegistry, sha256 } from '../src/tools/registry.js';
 import { Agent } from '../src/core/agent.js';
 import type { Approve, Completion, Provider, Message, AgentEvent } from '../src/core/types.js';
 import { runBash } from '../src/tools/bash.js';
+import { reminderMessage } from '../src/core/harness.js';
 
 async function setup(approve?: Approve, options: Partial<Config> = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-test-'));
@@ -41,6 +42,47 @@ test('agent autonomously reads, edits, verifies and returns tool results with ma
     assert.equal(result.ok, true); assert.equal(turn, 5); assert.equal(await readFile(path.join(s.cwd, 'value.txt'), 'utf8'), 'after');
     assert.deepEqual(events.filter(e => e.type === 'tool_end').map(e => e.call.name), ['write', 'read', 'edit', 'bash']);
   } finally { await s.cleanup(); }
+});
+
+test('tool loop appends a transient task reminder after the first tool result and never persists it', async () => {
+  assert.equal(reminderMessage([{ role: 'user', content: 'x', preparedRequest: { schema: 'icy.user-request.v2', task: 'x', keywords: [], constraints: [] } }]), undefined);
+  const options = { promptCompaction: 'model' as const, compactionMinChars: 0 };
+  const s = await setup(undefined, options);
+  try {
+    await writeFile(path.join(s.cwd, 'note.txt'), 'existing');
+    const requests: Message[][] = [], events: AgentEvent[] = []; let calls = 0;
+    const provider: Provider = { async complete(messages) {
+      requests.push([...messages]); calls++;
+      return calls === 1 ? response('read', { path: 'note.txt', offset: null, limit: null }, 'read-note') : { text: '已读取。', calls: [], tokens: 1 };
+    } };
+    const factory = (_config: Config): Provider => ({ async complete() {
+      return { text: JSON.stringify({ prompt: '修改 note.txt。', keywords: ['note.txt'], constraints: ['不要删除任何文件。'] }), calls: [], tokens: 1 };
+    } });
+    const result = await new Agent(s.config, provider, s.tools, s.store, event => events.push(event), factory).run('修改 note.txt，不要删除任何文件。', new AbortController().signal);
+    assert.equal(result.ok, true); assert.equal(requests.length, 2);
+    assert.ok(requests[0].at(-1)!.content.startsWith('{'));
+    const second = requests[1];
+    assert.equal(second.at(-1)!.role, 'user'); assert.ok(second.at(-1)!.content.startsWith('[icy 提醒]'));
+    assert.match(second.at(-1)!.content, /不要删除任何文件。/); assert.match(second.at(-1)!.content, /note\.txt/); assert.equal(second.at(-2)!.role, 'tool');
+    assert.equal(s.store.data.messages.some(message => message.content.startsWith('[icy 提醒]')), false);
+    const turns = events.filter((event): event is Extract<AgentEvent, { type: 'turn' }> => event.type === 'turn');
+    assert.ok(turns.some(event => (event.reminderChars ?? 0) > 0)); assert.ok(turns.some(event => event.reminderChars === undefined));
+  } finally { await s.cleanup(); }
+
+  const noReminder = await setup(undefined, options);
+  try {
+    await writeFile(path.join(noReminder.cwd, 'note.txt'), 'existing');
+    const requests: Message[][] = []; let calls = 0;
+    const provider: Provider = { async complete(messages) {
+      requests.push([...messages]); calls++;
+      return calls === 1 ? response('read', { path: 'note.txt', offset: null, limit: null }, 'read-empty') : { text: '已读取。', calls: [], tokens: 1 };
+    } };
+    const factory = (_config: Config): Provider => ({ async complete() {
+      return { text: JSON.stringify({ prompt: '读取 note.txt。', keywords: [], constraints: [] }), calls: [], tokens: 1 };
+    } });
+    const result = await new Agent(noReminder.config, provider, noReminder.tools, noReminder.store, undefined, factory).run('读取 note.txt。', new AbortController().signal);
+    assert.equal(result.ok, true); assert.equal(requests.length, 2); assert.equal(requests[1].at(-1)!.role, 'tool');
+  } finally { await noReminder.cleanup(); }
 });
 
 test('tool errors return to model, and an identical repeated failure stops the loop', async () => {

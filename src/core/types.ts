@@ -25,7 +25,7 @@ export type AgentEvent =
   | { type: 'user'; text: string }
   | { type: 'harness_start' }
   | { type: 'harness_end'; stats: import('./harness.js').PromptStats }
-  | { type: 'turn'; turn: number }
+  | { type: 'turn'; turn: number; reminderChars?: number }
   | { type: 'delta'; text: string }
   | { type: 'reasoning_delta'; text: string }
   | { type: 'reasoning'; text: string }

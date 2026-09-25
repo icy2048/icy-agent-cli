@@ -4,7 +4,7 @@ import { ToolRegistry } from '../tools/registry.js';
 import { SessionStore } from '../sessions/store.js';
 import { errorText, redact } from './text.js';
 import type { SemanticProviderFactory } from './semantic.js';
-import { preparePrompt, modelMessage } from './harness.js';
+import { preparePrompt, modelMessage, reminderMessage } from './harness.js';
 
 export class Agent {
   private busy = false;
@@ -49,14 +49,16 @@ export class Agent {
       if (spent) await this.event({ type: 'usage', tokens: spent, estimated });
       for (let turn = 1; turn <= this.config.maxModelTurns; turn++) {
         signal.throwIfAborted();
-        if (JSON.stringify(modelHistory).length > this.config.maxContextChars) return await finish('context_limit', false);
+        const reminder = modelHistory.slice(modelHistory.findLastIndex(m => m.role === 'user') + 1).some(m => m.role === 'tool') ? reminderMessage(history) : undefined;
+        const request = reminder ? [...modelHistory, reminder] : modelHistory;
+        if (JSON.stringify(request).length > this.config.maxContextChars) return await finish('context_limit', false);
         if (spent >= this.config.maxTokens) return await finish('token_budget', false);
-        await this.event({ type: 'turn', turn });
-        const completion = await this.provider.complete(modelHistory, this.tools.definitions(), signal,
+        await this.event({ type: 'turn', turn, ...(reminder ? { reminderChars: reminder.content.length } : {}) });
+        const completion = await this.provider.complete(request, this.tools.definitions(), signal,
           text => this.emit({ type: 'delta', text: redact(text, [this.config.apiKey]) }),
           text => this.emit({ type: 'reasoning_delta', text: redact(text, [this.config.apiKey]) }));
         await this.event({ type: 'reasoning', text: completion.reasoning || '' });
-        spent += completion.tokens ?? Math.ceil((JSON.stringify(modelHistory).length + completion.text.length + JSON.stringify(completion.calls).length) / 2);
+        spent += completion.tokens ?? Math.ceil((JSON.stringify(request).length + completion.text.length + JSON.stringify(completion.calls).length) / 2);
         estimated ||= completion.tokens === undefined;
         await this.event({ type: 'usage', tokens: spent, estimated });
         signal.throwIfAborted();
