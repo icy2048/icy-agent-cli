@@ -1,0 +1,41 @@
+{
+  "name": "icy-agent-cli",
+  "version": "0.1.0",
+  "description": "A terminal AI agent with a visible tool loop",
+  "type": "module",
+  "bin": {
+    "icy": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.tsx",
+    "build": "node scripts/clean.mjs && tsc && node scripts/executable.mjs",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "diff": "9.0.0",
+    "ink": "7.1.1",
+    "openai": "7.23.0",
+    "react": "19.3.0",
+    "smol-toml": "1.9.0",
+    "string-width": "8.3.0",
+    "wrap-ansi": "10.0.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.2",
+    "@types/react": "19.3.0",
+    "ink-testing-library": "4.0.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
