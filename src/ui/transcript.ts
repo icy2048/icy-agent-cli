@@ -7,6 +7,34 @@ export interface Entry {
   text: string; call?: ToolCall; result?: ToolResult; active?: boolean; interrupted?: boolean;
 }
 export interface TranscriptLine { text: string; color?: string; backgroundColor?: string; marker?: string; markerColor?: string; dim?: boolean }
+export function describeCall(call: ToolCall, result?: ToolResult): string {
+  let args: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(call.arguments);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return call.name;
+    args = parsed as Record<string, unknown>;
+  } catch { return call.name; }
+  if (call.name === 'read' || call.name === 'write' || call.name === 'edit') {
+    if (typeof args.path !== 'string' || !args.path) return call.name;
+    let summary = `${call.name} ${args.path}`;
+    if ((call.name === 'write' || call.name === 'edit') && typeof result?.diff === 'string') {
+      let added = 0; let removed = 0;
+      for (const line of result.diff.split('\n')) {
+        if (line.startsWith('+') && !line.startsWith('+++')) added++;
+        else if (line.startsWith('-') && !line.startsWith('---')) removed++;
+      }
+      summary += ` +${added} −${removed}`;
+    }
+    return summary;
+  }
+  if (call.name === 'bash') {
+    if (typeof args.command !== 'string' || !args.command) return call.name;
+    let command = args.command.replace(/[\r\n\t]/g, ' ').replace(/ +/g, ' ');
+    if (command.length > 60) command = command.slice(0, 59) + '…';
+    return `bash ${command}`;
+  }
+  return call.name;
+}
 export function entryLines(entry: Entry, width: number, details: boolean, expanded: boolean): TranscriptLine[] {
   const { kind } = entry;
   let value = entry.text;
@@ -17,7 +45,8 @@ export function entryLines(entry: Entry, width: number, details: boolean, expand
     if (expanded) value += '\n' + (entry.text || (entry.active ? '等待接口返回可见思考内容…' : entry.interrupted ? '尚未收到可见思考内容。' : '本次接口未返回可见思考内容。'));
   } else if (kind === 'notice') value = `! ${value}`;
   else if (kind === 'tool') {
-    value = `${!entry.result ? '·' : entry.result.ok ? '✓' : '✗'} ${value} ${entry.result ? `(${entry.result.durationMs ?? 0}ms)` : ''}`;
+    const summary = entry.call ? describeCall(entry.call, entry.result) : entry.text;
+    value = `${!entry.result ? '·' : entry.result.ok ? '✓' : '✗'} ${summary} ${entry.result ? `(${entry.result.durationMs ?? 0}ms)` : ''}`;
     if (entry.call && details) value += `\n${entry.call.arguments}\n${entry.result?.diff || entry.result?.content || '执行中…'}`;
     else if (entry.result && !entry.result.ok) value += '\n' + entry.result.content;
   }

@@ -170,3 +170,43 @@ test('/new is selectable and resets the transcript and counters without calling 
     assert.match(ui.lastFrame()!, /新对话已开启/); assert.match(ui.lastFrame()!, /same-model/); assert.match(ui.lastFrame()!, /turn 0/);
   } finally { ui.unmount(); ui.cleanup(); }
 });
+
+test('describeCall summarizes tool calls and diffs', async () => {
+  const { describeCall, entryLines } = await import('../src/ui/transcript.js');
+  assert.equal(describeCall({ id: '1', name: 'read', arguments: JSON.stringify({ path: 'README.md' }) }), 'read README.md');
+  const diff = '--- a/src/ui/App.tsx\n+++ b/src/ui/App.tsx\n@@ -1,1 +1,3 @@\n-old\n+new1\n+new2\n+new3';
+  assert.equal(describeCall({ id: '2', name: 'edit', arguments: JSON.stringify({ path: 'src/ui/App.tsx' }) }, { ok: true, content: '', durationMs: 5, diff }), 'edit src/ui/App.tsx +3 −1');
+  const command = `echo ${'x'.repeat(70)}\n\t tail`;
+  const summary = describeCall({ id: '3', name: 'bash', arguments: JSON.stringify({ command }) });
+  const commandPart = summary.slice('bash '.length);
+  assert.equal(commandPart.length, 60);
+  assert.match(commandPart, /…$/);
+  assert.equal(describeCall({ id: '4', name: 'read', arguments: '{not json' }), 'read');
+  assert.match(entryLines({ kind: 'tool', text: '', call: { id: '2', name: 'edit', arguments: JSON.stringify({ path: 'src/ui/App.tsx' }) }, result: { ok: true, content: '', durationMs: 5, diff } }, 80, false, false)[0].text, /✓ edit src\/ui\/App\.tsx \+3 −1 \(5ms\)/);
+});
+
+test('Esc after slash clears the input before submit', async () => {
+  let received = '';
+  const agent = { config: { cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async (value: string) => { received = value; } } as unknown as Agent;
+  const ui = render(React.createElement(App, { agent, approval: {} }));
+  try {
+    await tick(); ui.stdin.write('/'); await tick(); ui.stdin.write('\x1b'); await tick();
+    ui.stdin.write('abc'); await tick(); ui.stdin.write('\r'); await tick(); await tick();
+    assert.equal(received, 'abc');
+  } finally { ui.unmount(); ui.cleanup(); }
+});
+
+test('running line shows a spinner and elapsed seconds', async () => {
+  let finished = false;
+  const agent = { config: { cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { await new Promise(resolve => setTimeout(resolve, 250)); finished = true; } } as unknown as Agent;
+  const ui = render(React.createElement(App, { agent, approval: {} }));
+  try {
+    await tick(); ui.stdin.write('hello'); await tick(); ui.stdin.write('\r'); await tick();
+    const running = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] .*\d+s · Esc 取消/;
+    let frame = '', matched = false;
+    for (let i = 0; i < 20; i++) { await tick(); frame = ui.lastFrame()!; if (running.test(frame)) { matched = true; break; } }
+    assert.ok(matched);
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(finished, true);
+  } finally { ui.unmount(); ui.cleanup(); }
+});

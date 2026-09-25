@@ -16,6 +16,7 @@ import { clean, errorText } from '../core/text.js';
 export interface ApprovalBridge { current?: Approve }
 interface Pending { request: ApprovalRequest; resolve: (choice: ApprovalDecision) => void }
 const accent = 'cyan';
+const spinFrames = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
 
 export function App({ agent, approval, initialPrompt = '', demo = false, recovery = 0, configureServices }: { agent: Agent; approval: ApprovalBridge; initialPrompt?: string; demo?: boolean; recovery?: number; configureServices?: ModelServices }) {
   const { exit } = useApp(), { columns, rows } = useWindowSize();
@@ -30,6 +31,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   });
   const [input, setInput] = useState(''), [running, setRunning] = useState(false), [stream, setStream] = useState('');
   const [status, setStatus] = useState('Ready'), [turn, setTurn] = useState(0), [tokens, setTokens] = useState('—');
+  const [spin, setSpin] = useState(0), [elapsed, setElapsed] = useState(0);
   const [task, setTask] = useState(initialPrompt), [pending, setPending] = useState<Pending>();
   const [details, setDetails] = useState(false), [scroll, setScroll] = useState(0), [changes, setChanges] = useState<string[]>([]);
   const [approvalPage, setApprovalPage] = useState(0);
@@ -106,7 +108,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     }
     if (prompt === '/model') { if (demo) notice('当前为离线演示；请运行 icy 后使用 /model 配置模型。'); else setModelOpen(true); return; }
     if (prompt === '/new') {
-      busy.current = true; setRunning(true);
+      busy.current = true; setRunning(true); setStatus('准备中');
       try {
         await agent.newConversation();
         setEntries([{ kind: 'notice', text: '新对话已开启，原会话已保留。' }]);
@@ -119,11 +121,18 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     if (prompt === '/clear') { await agent.clear(); setEntries([]); setChanges([]); setTask(''); return; }
     if (prompt.startsWith('/')) { notice('未知命令。输入 /help 查看帮助。'); return; }
     history.current.push(prompt); historyIndex.current = history.current.length;
-    busy.current = true; setRunning(true); setTurn(0); setTokens('—'); setChanges([]);
+    busy.current = true; setRunning(true); setStatus('准备中'); setTurn(0); setTokens('—'); setChanges([]);
     controller.current = new AbortController();
     try { await agent.run(prompt, controller.current.signal); } catch (e) { notice(errorText(e)); }
     finally { busy.current = false; setRunning(false); controller.current = null; if (exitAfterCancel.current) exitSaved(); }
   };
+  useEffect(() => {
+    if (!running) return;
+    const startedAt = Date.now();
+    setSpin(0); setElapsed(0);
+    const id = setInterval(() => { setSpin(i => (i + 1) % 10); setElapsed(Math.floor((Date.now() - startedAt) / 1000)); }, 100);
+    return () => clearInterval(id);
+  }, [running]);
   useEffect(() => {
     const terminate = () => { exitAfterCancel.current = true; if (busy.current) controller.current?.abort(); else exitSaved(); };
     process.on('SIGTERM', terminate);
@@ -133,7 +142,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   useInput((value, key) => {
     if (modelOpen) return;
     if (key.ctrl && value === 'c') { if (busy.current) controller.current?.abort(); else exitSaved(); return; }
-    if (key.escape) { if (menuOpen) { setMenuDismissed(true); return; } controller.current?.abort(); return; }
+    if (key.escape) { if (menuOpen || (!running && input.startsWith('/'))) { setMenuDismissed(true); changeInput(''); return; } controller.current?.abort(); return; }
     if (pendingRef.current) {
       if (key.pageDown) setApprovalPage(p => Math.min(p + 1, approvalPages - 1));
       if (key.pageUp) setApprovalPage(p => Math.max(0, p - 1));
@@ -187,7 +196,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
           <Text dimColor>bash 在主机执行，可访问工作区之外的资源。</Text>
         </Box> : <Box flexDirection="column" marginTop={1}><Text dimColor>{'─'.repeat(leftWidth - 2)}</Text><Box paddingX={1}>
           <Text color={accent}>❯ </Text>
-          {running ? <Text dimColor>{status}… Esc 取消</Text> : <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />}
+          {running ? <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text> : <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />}
         </Box></Box>}
       </Box>
       {dual && <Box flexDirection="column" width={28} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor="gray" paddingX={1}>
@@ -197,6 +206,6 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
         <Box marginTop={1} flexDirection="column"><Text dimColor>会话</Text><Text wrap="truncate-end">{agent.store.data.id}</Text></Box>
       </Box>}
     </Box>
-    <Box paddingX={2} marginTop={1} justifyContent="space-between"><Text color={pending ? 'yellow' : accent}>{status} <Text dimColor>· turn {turn} · tokens {tokens}</Text></Text><Text dimColor>Ctrl+T 思考 · / 命令</Text></Box>
+    <Box paddingX={2} marginTop={1} justifyContent="space-between"><Text color={pending ? 'yellow' : accent}>{status} <Text dimColor>· turn {turn} · tokens {tokens}{running ? ` · ${elapsed}s` : ''}</Text></Text><Text dimColor>Ctrl+T 思考 · / 命令</Text></Box>
   </Box>;
 }
