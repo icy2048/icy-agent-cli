@@ -15,7 +15,7 @@ import type { AgentEvent, Message, Provider } from '../src/core/types.js';
 const signal = () => new AbortController().signal;
 async function setup() {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-harness-'));
-  const config: Config = { home, cwd: home, provider: 'responses', baseUrl: 'https://example.test/v1', model: 'main-model', apiKey: 'secret', apiKeyEnv: 'ICY_KEY', permissions: 'read-only', maxModelTurns: 4, maxToolCalls: 5, maxTokens: 10000, maxContextChars: 20000, requestTimeoutMs: 1000 };
+  const config: Config = { home, cwd: home, provider: 'responses', baseUrl: 'https://example.test/v1', model: 'main-model', apiKey: 'secret', apiKeyEnv: 'ICY_KEY', permissions: 'read-only', maxModelTurns: 4, maxToolCalls: 5, maxTokens: 10000, maxContextChars: 20000, requestTimeoutMs: 1000, compactionMinChars: 200 };
   const store = await SessionStore.create(home, { cwd: home, provider: config.provider, model: config.model, baseUrl: config.baseUrl });
   return { home, config, store, cleanup: async () => { await store.close(); await rm(home, { recursive: true, force: true }); } };
 }
@@ -134,25 +134,36 @@ test('cancelling preprocessing does not wait for an unresponsive streaming provi
   } finally { await s.cleanup(); }
 });
 
-test('every fresh input calls the lightweight model, including short, unchanged and over-24000-character input', async () => {
+test('short inputs skip the lightweight model while long and always-on inputs refine', async () => {
   const s = await setup(); let invoked = 0;
+  const factory = () => ({ async complete(messages: Message[]) {
+    invoked++; return { text: JSON.stringify({ prompt: messages[0].content, keywords: [], constraints: [] }), calls: [], tokens: 3 };
+  } });
   try {
-    for (const input of ['你好', 'icy /new', '重新设计界面。'.repeat(4000)]) {
-      const result = await preparePrompt([{ role: 'user', content: input }], { ...s.config, maxTokens: 1000 }, s.store, signal(), () => ({ async complete(messages) {
-        invoked++; return { text: JSON.stringify({ prompt: messages[0].content, keywords: [], constraints: [] }), calls: [], tokens: 3 };
-      } }));
+    for (const input of ['你好', 'icy /new']) {
+      const result = await preparePrompt([{ role: 'user', content: input }], { ...s.config, maxTokens: 1000 }, s.store, signal(), factory);
       const json = JSON.parse(result.messages[0].content);
-      assert.equal(result.stats.semantic, 'applied'); assert.equal(json.task, input); assert.equal(json.schema, 'icy.user-request.v2');
-      assert.ok(json.keywords.every((k: string) => !json.task.includes(k))); assert.ok(json.original_ref);
+      assert.equal(result.stats.semantic, 'skipped'); assert.equal(json.task, input); assert.equal(json.schema, 'icy.user-request.v2');
+      assert.deepEqual(json.keywords, []); assert.equal(json.original_ref, undefined);
     }
-    assert.equal(invoked, 3);
+    assert.equal(invoked, 0);
+    const history: Message[] = [{ role: 'user', content: '你好' }];
+    const skipped = await preparePrompt(history, s.config, s.store, signal(), factory);
+    const cached = await preparePrompt(history, s.config, s.store, signal(), () => { assert.fail('must reuse skipped compaction'); });
+    assert.equal(skipped.stats.semantic, 'skipped'); assert.equal(cached.stats.semantic, 'cached'); assert.equal(invoked, 0);
+    const longInput = '重新设计界面。'.repeat(4000);
+    const refined = await preparePrompt([{ role: 'user', content: longInput }], { ...s.config, maxTokens: 1000 }, s.store, signal(), factory);
+    const refinedJson = JSON.parse(refined.messages[0].content);
+    assert.equal(invoked, 1); assert.equal(refined.stats.semantic, 'applied'); assert.equal(refinedJson.task, longInput); assert.ok(refinedJson.original_ref);
+    const always = await preparePrompt([{ role: 'user', content: '你好' }], { ...s.config, compactionMinChars: 0 }, s.store, signal(), factory);
+    assert.equal(invoked, 2); assert.equal(always.stats.semantic, 'applied');
   } finally { await s.cleanup(); }
 });
 
 test('fenced or wrapped JSON from the small model is accepted', async () => {
   const s = await setup();
   try {
-    const result = await preparePrompt([{ role: 'user', content: '请读取 README.md。' }], s.config, s.store, signal(), () => ({ async complete() {
+    const result = await preparePrompt([{ role: 'user', content: '请读取 README.md。' }], { ...s.config, compactionMinChars: 0 }, s.store, signal(), () => ({ async complete() {
       return { text: "```json\n{\"prompt\":\"读取 README.md。\",\"keywords\":[],\"constraints\":[]}\n```", calls: [], tokens: 1 };
     } }));
     const json = JSON.parse(result.messages[0].content);
@@ -172,7 +183,7 @@ test('keywords index only terms missing from the refined task', async () => {
   const s = await setup();
   try {
     const input = '请用 TypeScript 给 icy 开发一个支持中文搜索的 AI Agent 界面。';
-    const result = await preparePrompt([{ role: 'user', content: input }], s.config, s.store, signal(), () => ({ async complete() {
+    const result = await preparePrompt([{ role: 'user', content: input }], { ...s.config, compactionMinChars: 0 }, s.store, signal(), () => ({ async complete() {
       return { text: JSON.stringify({ prompt: '用 TypeScript 实现搜索界面。', keywords: ['AI Agent'], constraints: [] }), calls: [], tokens: 1 };
     } }));
     const json = JSON.parse(result.messages[0].content);

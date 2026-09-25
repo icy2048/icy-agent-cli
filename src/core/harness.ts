@@ -7,7 +7,7 @@ import type { SessionStore } from '../sessions/store.js';
 export interface PromptStats {
   mode: 'model' | 'local' | 'off'; beforeChars: number; afterChars: number;
   savedChars: number; compactedToolResults: number; inputChanged: boolean; fallback: boolean;
-  semantic: 'off' | 'cached' | 'applied' | 'invalid' | 'failed';
+  semantic: 'off' | 'cached' | 'applied' | 'invalid' | 'failed' | 'skipped';
   semanticModel?: string; preprocessingTokens: number; preprocessingEstimated: boolean;
 }
 
@@ -40,7 +40,11 @@ export async function preparePrompt(history: Message[], config: Config, store: S
     if (stats.mode === 'model' && current?.role === 'user') {
       stats.semanticModel = config.compactionModel ?? 'gpt-5.6-luna';
       if (current.preparedRequest) stats.semantic = 'cached';
-      else {
+      else if (current.content.length < config.compactionMinChars) {
+        stats.semantic = 'skipped';
+        preparedRequest = assembleRequest(current.content, current.content);
+        messages[latest].content = JSON.stringify(preparedRequest);
+      } else {
         const semantic = await compactSemantically(current.content, config, signal, semanticFactory);
         stats.semantic = semantic.outcome; stats.preprocessingTokens = semantic.tokens; stats.preprocessingEstimated = semantic.estimated;
         stats.fallback = ['failed', 'invalid'].includes(semantic.outcome);

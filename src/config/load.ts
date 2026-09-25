@@ -15,6 +15,7 @@ const schema = z.object({
   thinkingExpanded: z.boolean().optional(),
   promptCompaction: z.enum(['model', 'local', 'off']).optional(),
   compactionModel: z.string().min(1).optional(),
+  compactionMinChars: z.number().int().min(0).max(100_000).default(200),
   permissions: z.enum(['read-only', 'workspace-edit']).default('workspace-edit'),
   maxModelTurns: z.number().int().min(1).max(100).default(20),
   maxToolCalls: z.number().int().min(1).max(200).default(50),
