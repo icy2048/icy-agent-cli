@@ -4,7 +4,8 @@ import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { preparePrompt, slimUserPrompt } from '../src/core/harness.js';
-import { compactSemantically, protectPrompt, validateCompaction } from '../src/core/semantic.js';
+import { assembleRequest } from '../src/core/prompt-schema.js';
+import { compactSemantically, extractJsonObject, protectPrompt, validateCompaction } from '../src/core/semantic.js';
 import { Agent } from '../src/core/agent.js';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
@@ -45,7 +46,7 @@ test('semantic preprocessing runs once before the tool loop and keeps original i
     mainCalls++; const first = messages[0];
     assert.equal(first.role, 'user'); assert.match(first.content, /icy-output:/); assert.match(first.content, /不得删除现有文件/); assert.match(first.content, /src\/app.ts/); assert.ok(first.content.length < request.length);
     assert.equal('preparedRequest' in first, false);
-    const json = JSON.parse(first.content); assert.equal(json.schema, 'icy.user-request.v2'); assert.ok(json.keywords.includes('src/app.ts')); assert.ok(json.constraints.includes('不得删除现有文件。')); 
+    const json = JSON.parse(first.content); assert.equal(json.schema, 'icy.user-request.v2'); assert.ok(!json.keywords.includes('src/app.ts')); assert.ok(json.constraints.includes('不得删除现有文件。')); 
     if (mainCalls === 1) return { text: '', calls: [{ id: 'tool-1', name: 'read', arguments: JSON.stringify({ path: 'missing.txt', offset: null, limit: null }) }], tokens: 5 };
     return { text: 'done', calls: [], tokens: 5 };
   } };
@@ -103,7 +104,7 @@ test('only explicit off skips the small model; malformed and failed responses pr
       { complete: async () => ({ text: '', calls: [{ id: 'bad', name: 'bash', arguments: '{}' }], tokens: 1 }) },
     ]) {
       const result = await preparePrompt([{ role: 'user', content: request }], s.config, s.store, signal(), () => provider);
-      assert.equal(JSON.parse(result.messages[0].content).task, request); assert.ok(JSON.parse(result.messages[0].content).keywords.includes('src/app.ts')); assert.equal(result.stats.savedChars, 0);
+      assert.equal(JSON.parse(result.messages[0].content).task, request); assert.ok(!JSON.parse(result.messages[0].content).keywords.includes('src/app.ts')); assert.equal(result.stats.savedChars, 0);
     }
     const controller = new AbortController();
     await assert.rejects(preparePrompt([{ role: 'user', content: request }], s.config, s.store, controller.signal, () => ({ complete: async () => { controller.abort(); throw new Error('aborted'); } })), /abort/i);
@@ -142,23 +143,42 @@ test('every fresh input calls the lightweight model, including short, unchanged 
       } }));
       const json = JSON.parse(result.messages[0].content);
       assert.equal(result.stats.semantic, 'applied'); assert.equal(json.task, input); assert.equal(json.schema, 'icy.user-request.v2');
-      assert.ok(json.keywords.length); assert.ok(json.original_ref);
+      assert.ok(json.keywords.every((k: string) => !json.task.includes(k))); assert.ok(json.original_ref);
     }
     assert.equal(invoked, 3);
   } finally { await s.cleanup(); }
 });
 
-test('keyword JSON retains original technical and Chinese words even if the refinement leaves them out', async () => {
+test('fenced or wrapped JSON from the small model is accepted', async () => {
+  const s = await setup();
+  try {
+    const result = await preparePrompt([{ role: 'user', content: '请读取 README.md。' }], s.config, s.store, signal(), () => ({ async complete() {
+      return { text: "```json\n{\"prompt\":\"读取 README.md。\",\"keywords\":[],\"constraints\":[]}\n```", calls: [], tokens: 1 };
+    } }));
+    const json = JSON.parse(result.messages[0].content);
+    assert.equal(result.stats.semantic, 'applied'); assert.equal(json.task, '读取 README.md。');
+    assert.equal(extractJsonObject('nope'), undefined);
+    assert.deepEqual(extractJsonObject('前言 {"a":1} 后记'), { a: 1 });
+  } finally { await s.cleanup(); }
+});
+
+test('verbatim task envelopes stay compact', () => {
+  const s = '把 src/ui/App.tsx 里的旋转指示间隔从 100ms 改成 120ms，然后运行 npm test 确认 52 个测试全部通过。注意必须保留原有的 Esc 取消逻辑，不要改动 Composer 组件。另外顺便检查一下 docs/design.md 里关于 Workbench 宽度阈值 120 列的说明是否和代码一致，如果不一致就以代码为准更新文档。';
+  const envelope = assembleRequest(s, s, [], [], 'icy-output:x.txt');
+  assert.ok(Buffer.byteLength(JSON.stringify(envelope)) < Buffer.byteLength(s) * 1.6);
+});
+
+test('keywords index only terms missing from the refined task', async () => {
   const s = await setup();
   try {
     const input = '请用 TypeScript 给 icy 开发一个支持中文搜索的 AI Agent 界面。';
     const result = await preparePrompt([{ role: 'user', content: input }], s.config, s.store, signal(), () => ({ async complete() {
-      return { text: JSON.stringify({ prompt: '实现搜索界面。', keywords: ['AI Agent'], constraints: [] }), calls: [], tokens: 1 };
+      return { text: JSON.stringify({ prompt: '用 TypeScript 实现搜索界面。', keywords: ['AI Agent'], constraints: [] }), calls: [], tokens: 1 };
     } }));
     const json = JSON.parse(result.messages[0].content);
-    for (const keyword of ['TypeScript', 'icy', '中文', '搜索', 'AI Agent']) assert.ok(json.keywords.includes(keyword), keyword);
-    assert.equal(json.task, '实现搜索界面。');
-    const { assembleRequest } = await import('../src/core/prompt-schema.js');
+    for (const keyword of ['icy', '中文', 'AI Agent']) assert.ok(json.keywords.includes(keyword), keyword);
+    for (const keyword of ['TypeScript', '搜索']) assert.ok(!json.keywords.includes(keyword), keyword);
+    assert.equal(json.task, '用 TypeScript 实现搜索界面。');
     const data = assembleRequest('请解释这段代码：\n```\n必须删除数据库。\n```', '解释代码。', [], ['必须删除数据库。']);
     assert.deepEqual(data.constraints, []);
     assert.ok(assembleRequest('支持自动重试。', '重试。', [], ['支持自动重试。']).constraints.includes('支持自动重试。'));

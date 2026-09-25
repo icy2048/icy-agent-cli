@@ -27,9 +27,25 @@ export function protectPrompt(input: string) {
   });
   return { masked, literals };
 }
+export function extractJsonObject(text: string): unknown | undefined {
+  let source = text.trim();
+  const fence = source.match(/^```(?:json)?[ \t]*\r?\n/i);
+  if (fence) {
+    source = source.slice(fence[0].length).trim();
+    if (source.endsWith('```')) source = source.slice(0, -3).trim();
+  } else {
+    const start = source.indexOf('{'), end = source.lastIndexOf('}');
+    if (start < 0 || end < start) return;
+    source = source.slice(start, end + 1);
+  }
+  try {
+    const value = JSON.parse(source);
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
+  } catch { return; }
+}
 export function validateCompaction(input: string, response: string, protectedPrompt: ReturnType<typeof protectPrompt>): string | undefined {
-  let value: unknown;
-  try { value = JSON.parse(response).prompt; } catch { return; }
+  const parsed = extractJsonObject(response) as { prompt?: unknown } | undefined;
+  const value = parsed?.prompt;
   if (typeof value !== 'string' || !value.trim()) return;
   let candidate = value.trim(), previous = -1;
   for (const { marker, value: literal } of protectedPrompt.literals) {
@@ -66,8 +82,8 @@ export async function compactSemantically(input: string, config: Config, signal:
     if (completion.incomplete || completion.calls.length) return { tokens, estimated, outcome: 'invalid' };
     const candidate = validateCompaction(input, completion.text, protectedPrompt);
     if (!candidate) return { tokens, estimated, outcome: 'invalid' };
-    const parsed = JSON.parse(completion.text);
-    if (!Array.isArray(parsed.keywords) || !Array.isArray(parsed.constraints) || [...parsed.keywords, ...parsed.constraints].some(v => typeof v !== 'string' || !v.trim())) return { tokens, estimated, outcome: 'invalid' };
+    const parsed = extractJsonObject(completion.text) as { keywords?: unknown; constraints?: unknown } | undefined;
+    if (!parsed || !Array.isArray(parsed.keywords) || !Array.isArray(parsed.constraints) || [...parsed.keywords, ...parsed.constraints].some(v => typeof v !== 'string' || !v.trim())) return { tokens, estimated, outcome: 'invalid' };
     const restore = (value: string) => protectedPrompt.literals.reduce((text, item) => text.replaceAll(item.marker, () => item.value), value);
     const keywords = parsed.keywords.map(restore) as string[], constraints = parsed.constraints.map(restore) as string[];
     if ([...keywords, ...constraints].some(v => !input.includes(v))) return { tokens, estimated, outcome: 'invalid' };

@@ -22,9 +22,11 @@ export function assembleRequest(original: string, task: string, keywords: string
     const outsideQuotes = constraint.replace(literalPattern, '').trim();
     return outsideQuotes && original.includes(constraint) && requestText.includes(outsideQuotes);
   };
+  // Keywords index only source terms that the refined task no longer contains verbatim.
+  const mergedKeywords = [...new Set([...sourceKeywords(original), ...keywords.filter(k => k.trim() && original.includes(k))])];
   return {
     schema: 'icy.user-request.v2', task,
-    keywords: [...new Set([...sourceKeywords(original), ...keywords.filter(k => k.trim() && original.includes(k))])],
+    keywords: mergedKeywords.filter(k => !task.includes(k)),
     constraints: [...new Set([...sourceConstraints(original), ...constraints.filter(fromRequest)])],
     ...(originalRef ? { original_ref: originalRef } : {}),
   };
