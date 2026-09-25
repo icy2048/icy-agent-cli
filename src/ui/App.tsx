@@ -114,7 +114,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
         setEntries([{ kind: 'notice', text: '新对话已开启，原会话已保留。' }]);
         setChanges([]); setTask(''); setStream(''); setTurn(0); setTokens('—'); setStatus('Ready');
         history.current = []; historyIndex.current = 0;
-      } catch (e) { notice(errorText(e)); }
+      } catch (e) { notice(errorText(e)); setStatus('Stopped'); }
       finally { busy.current = false; setRunning(false); if (exitAfterCancel.current) exitSaved(); }
       return;
     }
@@ -123,7 +123,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     history.current.push(prompt); historyIndex.current = history.current.length;
     busy.current = true; setRunning(true); setStatus('准备中'); setTurn(0); setTokens('—'); setChanges([]);
     controller.current = new AbortController();
-    try { await agent.run(prompt, controller.current.signal); } catch (e) { notice(errorText(e)); }
+    try { await agent.run(prompt, controller.current.signal); } catch (e) { notice(errorText(e)); setStatus('Stopped'); }
     finally { busy.current = false; setRunning(false); controller.current = null; if (exitAfterCancel.current) exitSaved(); }
   };
   useEffect(() => {

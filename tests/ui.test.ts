@@ -176,6 +176,8 @@ test('describeCall summarizes tool calls and diffs', async () => {
   assert.equal(describeCall({ id: '1', name: 'read', arguments: JSON.stringify({ path: 'README.md' }) }), 'read README.md');
   const diff = '--- a/src/ui/App.tsx\n+++ b/src/ui/App.tsx\n@@ -1,1 +1,3 @@\n-old\n+new1\n+new2\n+new3';
   assert.equal(describeCall({ id: '2', name: 'edit', arguments: JSON.stringify({ path: 'src/ui/App.tsx' }) }, { ok: true, content: '', durationMs: 5, diff }), 'edit src/ui/App.tsx +3 −1');
+  const tricky = '--- a/x\n+++ b/x\n@@ -1,1 +1,1 @@\n---minus\n+++plus';
+  assert.match(describeCall({ id: '5', name: 'write', arguments: JSON.stringify({ path: 'x' }) }, { ok: true, content: '', durationMs: 5, diff: tricky }), /\+1 −1$/);
   const command = `echo ${'x'.repeat(70)}\n\t tail`;
   const summary = describeCall({ id: '3', name: 'bash', arguments: JSON.stringify({ command }) });
   const commandPart = summary.slice('bash '.length);

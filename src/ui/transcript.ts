@@ -18,10 +18,12 @@ export function describeCall(call: ToolCall, result?: ToolResult): string {
     if (typeof args.path !== 'string' || !args.path) return call.name;
     let summary = `${call.name} ${args.path}`;
     if ((call.name === 'write' || call.name === 'edit') && typeof result?.diff === 'string') {
-      let added = 0; let removed = 0;
+      let added = 0; let removed = 0; let inHunk = false;
       for (const line of result.diff.split('\n')) {
-        if (line.startsWith('+') && !line.startsWith('+++')) added++;
-        else if (line.startsWith('-') && !line.startsWith('---')) removed++;
+        if (line.startsWith('@@')) inHunk = true;
+        else if (!inHunk) continue;
+        else if (line.startsWith('+')) added++;
+        else if (line.startsWith('-')) removed++;
       }
       summary += ` +${added} −${removed}`;
     }
