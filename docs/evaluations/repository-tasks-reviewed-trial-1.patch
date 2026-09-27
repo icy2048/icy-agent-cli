@@ -1,0 +1,164 @@
+diff --git a/README.md b/README.md
+index 4295f8c..cd18d6b 100644
+--- a/README.md
++++ b/README.md
+@@ -30,7 +30,7 @@ icy --version
+ 
+ `--cwd <目录>` 指定工作区，默认是启动目录。`run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。执行成功的退出码为 0；遇到未批准的 shell 为 2，取消为 130，其他运行失败为 1。非交互模式没有授权弹窗，因此通常应进入 Workbench 后用 `/verify npm test` 审批并验收；`--verify` 不绕过 shell 权限。
+ 
+-`icy sessions --json` 输出逐行会话摘要。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
++`icy sessions --json` 输出逐行会话摘要；可用 `--status running|awaiting_approval|cancelled|limited|failed|answered|verified|interrupted|legacy` 和 `--cwd <目录>` 组合过滤（工作区按解析后的绝对路径比较）。过滤时无法读取或无法确定匹配的坏快照会被排除；不加过滤仍保留错误摘要。`--status` 只适用于 `sessions`，而 `--cwd` 在其他模式仍表示运行工作区。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
+ 
+ ## 模型配置
+ 
+diff --git a/src/cli.tsx b/src/cli.tsx
+index 5334934..72e13f3 100644
+--- a/src/cli.tsx
++++ b/src/cli.tsx
+@@ -1,8 +1,10 @@
+ #!/usr/bin/env node
+ import { parseArgs } from 'node:util';
+ import { readFile, realpath } from 'node:fs/promises';
++import { realpathSync } from 'node:fs';
+ import process from 'node:process';
+ import path from 'node:path';
++import { fileURLToPath } from 'node:url';
+ import React from 'react';
+ import { render } from 'ink';
+ import { loadConfig, initConfig } from './config/load.js';
+@@ -22,7 +24,7 @@ const help = `icy — AI agent CLI
+   icy run "目标"              单次非交互运行
+   icy run "目标" --json       输出 NDJSON 事件
+   icy --resume <会话ID>        恢复会话，不重放中断的工具
+-  icy sessions [--json]       查看已有会话、目标与状态
++  icy sessions [--json] [--status <状态>] [--cwd <目录>] 查看已有会话、目标与状态
+   icy run --resume <ID> --continue  用新的运行预算继续原任务
+   icy run --resume <ID> --verify "命令"  执行用户指定验收（沿用 bash 审批）
+   icy --demo                  离线只读演示，不调用模型
+@@ -42,15 +44,17 @@ bash 需批准（包括列目录和搜索）。非交互模式不执行未批准
+ export async function main(argv = process.argv.slice(2)) {
+   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
+     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' }, plain: { type: 'boolean' }, demo: { type: 'boolean' }, 'read-only': { type: 'boolean' },
+-    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
++    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, status: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
+   } });
+   if (values.help) { process.stdout.write(help); return; }
+   if (values.version) { const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); process.stdout.write(pkg.version + '\n'); return; }
++  if (values.status !== undefined && positionals[0] !== 'sessions') throw new Error('--status 只能用于 sessions。');
+   const overrides = Object.fromEntries(Object.entries({ model: values.model, provider: values.provider, baseUrl: values['base-url'], permissions: values['read-only'] || values.demo ? 'read-only' : undefined }).filter(([, value]) => value !== undefined));
+-  let config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
++  const configCwd = positionals[0] === 'sessions' ? path.resolve(values.cwd || process.cwd()) : await realpath(values.cwd || process.cwd());
++  let config = await loadConfig(configCwd, overrides);
+   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
+   if (positionals[0] === 'sessions') {
+-    const sessions = await listSessions(config.home);
++    const sessions = await listSessions(config.home, { cwd: values.cwd, status: values.status });
+     if (values.json) for (const session of sessions) process.stdout.write(JSON.stringify({ type: 'session_summary', ...session }) + '\n');
+     else process.stdout.write(sessions.length ? sessions.map(s => s.error ? `${s.id} · 无法读取：${s.error}` : `${s.id} · ${s.status} · ${s.updatedAt}\n  ${s.model} · ${s.cwd}\n  ${s.goal || '空会话'}`).join('\n') + '\n' : '暂无会话。\n');
+     return;
+@@ -112,4 +116,5 @@ export async function main(argv = process.argv.slice(2)) {
+   } finally { await agent.store.close(); }
+ }
+ 
+-main().catch(error => { process.stderr.write(`icy: ${redact(errorText(error))}\n`); process.exitCode = 1; });
++const invokedAsCli = process.argv[1] && (path.basename(process.argv[1]) === 'cli.js' || (() => { try { return realpathSync(process.argv[1]!) === realpathSync(fileURLToPath(import.meta.url)); } catch { return false; } })());
++if (invokedAsCli) main().catch(error => { process.stderr.write(`icy: ${redact(errorText(error))}\n`); process.exitCode = 1; });
+diff --git a/src/sessions/list.ts b/src/sessions/list.ts
+index 1d38b42..52d9f4f 100644
+--- a/src/sessions/list.ts
++++ b/src/sessions/list.ts
+@@ -8,8 +8,15 @@ export interface SessionSummary {
+   goal?: string; status?: string; error?: string;
+ }
+ 
++export type SessionStatus = 'running' | 'awaiting_approval' | 'cancelled' | 'limited' | 'failed' | 'answered' | 'verified' | 'interrupted' | 'legacy';
++export interface SessionListOptions { cwd?: string; status?: SessionStatus | string }
++
++const sessionStatuses = new Set<SessionStatus>(['running', 'awaiting_approval', 'cancelled', 'limited', 'failed', 'answered', 'verified', 'interrupted', 'legacy']);
++
+ /** Read-only discovery: listing never acquires locks, migrates, or recovers a session. */
+-export async function listSessions(home: string): Promise<SessionSummary[]> {
++export async function listSessions(home: string, options: SessionListOptions = {}): Promise<SessionSummary[]> {
++  if (options.status !== undefined && !sessionStatuses.has(options.status as SessionStatus)) throw new Error(`未知会话状态：${options.status}`);
++  const wantedCwd = options.cwd === undefined ? undefined : path.resolve(options.cwd);
+   let entries;
+   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
+   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+@@ -17,10 +24,13 @@ export async function listSessions(home: string): Promise<SessionSummary[]> {
+     try {
+       const data = parseSessionData(JSON.parse(await readFile(path.join(home, 'sessions', entry.name, 'session.json'), 'utf8')), entry.name);
+       const task = 'task' in data ? data.task as { goal?: string; status?: string } | undefined : undefined;
++      const status = task?.status ?? 'legacy';
++      if (wantedCwd !== undefined && data.cwd !== wantedCwd) return undefined;
++      if (options.status !== undefined && status !== options.status) return undefined;
+       const first = data.messages.find(m => m.role === 'user');
+-      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
+-    } catch (error) { return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
++      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status };
++    } catch (error) { if (wantedCwd !== undefined || options.status !== undefined) return undefined; return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
+   }));
+-  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries, (_key, value) => typeof value === 'string' ? redact(value) : value));
++  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries.filter(summary => summary !== undefined), (_key, value) => typeof value === 'string' ? redact(value) : value));
+   return safe.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id));
+ }
+diff --git a/tests/session-filters.test.ts b/tests/session-filters.test.ts
+new file mode 100644
+index 0000000..f704861
+--- /dev/null
++++ b/tests/session-filters.test.ts
+@@ -0,0 +1,55 @@
++import assert from 'node:assert/strict';
++import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
++import os from 'node:os';
++import path from 'node:path';
++import { test } from 'node:test';
++import { listSessions } from '../src/sessions/list.js';
++import { main } from '../src/cli.js';
++
++const stamp = '2025-01-01T00:00:00.000Z';
++function snapshot(id: string, cwd: string, status?: string) {
++  return { version: 2, id, cwd, provider: 'responses', model: 'test', baseUrl: 'https://example.test/v1', messages: [{ role: 'user', content: id, calls: [] }], updatedAt: stamp, runs: [], ...(status ? { task: { id: `task-${id}`, goal: id, status, remaining: [], completed: [], mutationRevision: 0, verificationChecks: [], verificationRecords: [] } } : {}) };
++}
++async function homeWith(items: Record<string, unknown>) {
++  const home = await mkdtemp(path.join(os.tmpdir(), 'icy-session-filter-'));
++  await mkdir(path.join(home, 'sessions'));
++  for (const [id, value] of Object.entries(items)) { await mkdir(path.join(home, 'sessions', id)); await writeFile(path.join(home, 'sessions', id, 'session.json'), JSON.stringify(value)); }
++  return home;
++}
++
++test('combines cwd and status filters and recognizes legacy', async () => {
++  const cwd = path.resolve('filter-workspace');
++  const home = await homeWith({ answered: snapshot('answered', cwd, 'answered'), other: snapshot('other', cwd, 'failed'), legacy: { version: 1, id: 'legacy', cwd, provider: 'responses', model: 'test', baseUrl: 'https://example.test/v1', messages: [], updatedAt: stamp } });
++  assert.deepEqual((await listSessions(home, { cwd: './filter-workspace', status: 'answered' })).map(s => s.id), ['answered']);
++  assert.deepEqual((await listSessions(home, { status: 'legacy' })).map(s => s.id), ['legacy']);
++});
++
++test('rejects unknown status and omits uncertain corrupt snapshots only when filtering', async () => {
++  const cwd = path.resolve('filter-workspace');
++  const home = await homeWith({ good: snapshot('good', cwd, 'answered'), broken: { nope: true } });
++  await assert.rejects(() => listSessions(home, { status: 'bogus' }), /未知会话状态/);
++  assert.equal((await listSessions(home)).some(s => s.id === 'broken' && 'error' in s), true);
++  assert.equal((await listSessions(home, { status: 'answered' })).some(s => s.id === 'broken'), false);
++});
++
++test('listing has no side effects and CLI applies both filters', async () => {
++  const cwd = path.resolve('filter-workspace');
++  await mkdir(cwd, { recursive: true });
++  const home = await homeWith({ yes: snapshot('yes', cwd, 'answered'), no: snapshot('no', cwd, 'failed') });
++  const before = await readFile(path.join(home, 'sessions', 'yes', 'session.json'), 'utf8');
++  const oldHome = process.env.ICY_HOME; process.env.ICY_HOME = home;
++  const chunks: string[] = []; const oldWrite = process.stdout.write; process.stdout.write = ((chunk: string) => { chunks.push(chunk); return true; }) as typeof process.stdout.write;
++  try { await main(['sessions', '--json', '--status', 'answered', '--cwd', './filter-workspace']); } finally { process.stdout.write = oldWrite; if (oldHome === undefined) delete process.env.ICY_HOME; else process.env.ICY_HOME = oldHome; }
++  assert.equal(chunks.join('').includes('"id":"yes"'), true); assert.equal(chunks.join('').includes('"id":"no"'), false);
++});
++
++test('sessions treats a nonexistent cwd as an empty filter and rejects status elsewhere before config work', async () => {
++  const home = await homeWith({ answer: snapshot('answer', path.resolve('somewhere'), 'answered') });
++  const oldHome = process.env.ICY_HOME; process.env.ICY_HOME = home;
++  const chunks: string[] = []; const oldWrite = process.stdout.write; process.stdout.write = ((chunk: string) => { chunks.push(chunk); return true; }) as typeof process.stdout.write;
++  try {
++    await main(['sessions', '--json', '--status', 'answered', '--cwd', path.join(home, 'does-not-exist')]);
++  } finally { process.stdout.write = oldWrite; if (oldHome === undefined) delete process.env.ICY_HOME; else process.env.ICY_HOME = oldHome; }
++  assert.equal(chunks.join(''), '');
++  await assert.rejects(() => main(['config', 'init', '--status', 'answered']), /--status 只能用于 sessions/);
++});
