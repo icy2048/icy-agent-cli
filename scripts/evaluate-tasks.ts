@@ -7,6 +7,7 @@ import { deepStrictEqual } from 'node:assert';
 import { loadConfig } from '../src/config/load.js';
 import { ModelProvider } from '../src/providers/model.js';
 import { Agent } from '../src/core/agent.js';
+import type { PromptStats } from '../src/core/harness.js';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 import { redact, errorText } from '../src/core/text.js';
@@ -32,7 +33,7 @@ const results: Record<string, unknown>[] = [];
 const startedAt = new Date().toISOString();
 const sourceCommit = (await promisify(execFile)('git', ['rev-parse', 'HEAD'])).stdout.trim();
 const jobs = Array.from({ length: repetitions }, (_, repetition) => (['off', 'local', 'model'] as const).flatMap(mode => fixtures.map(fixture => ({ mode, fixture, repetition: repetition + 1 })))).flat();
-const report = (complete: boolean) => ({ kind: 'live-synthetic-tasks', sourceCommit, criteriaVersion: 2, startedAt, updatedAt: new Date().toISOString(), complete, planned: jobs.length, model: base.model, provider: base.provider, reasoningEffort: base.provider === 'responses' ? 'low' : null, budget: { maxTokens: base.maxTokens, maxModelTurns: base.maxModelTurns, maxToolCalls: base.maxToolCalls, maxContextChars: base.maxContextChars, requestTimeoutMs: 30000, runTimeoutMs: 90000 }, repetitions, concurrency, note: 'All attempts are retained; no automatic reruns. Checks cover required reads before changes, mutation scope, final verification, protected files and expected outputs. Final replies are retained for separate requirement review. Finite synthetic samples do not prove general task reliability.', results });
+const report = (complete: boolean) => ({ kind: 'live-synthetic-tasks', sourceCommit, criteriaVersion: 2, startedAt, updatedAt: new Date().toISOString(), complete, planned: jobs.length, model: base.model, provider: base.provider, compactionModel: base.compactionModel ?? 'gpt-5.6-luna', reasoningEffort: base.provider === 'responses' ? 'low' : null, budget: { maxTokens: base.maxTokens, maxModelTurns: base.maxModelTurns, maxToolCalls: base.maxToolCalls, maxContextChars: base.maxContextChars, requestTimeoutMs: 30000, runTimeoutMs: 90000 }, repetitions, concurrency, note: 'All attempts are retained; no automatic reruns. Checks cover required reads before changes, mutation scope, final verification, protected files and expected outputs. Final replies are retained for separate requirement review. Finite synthetic samples do not prove general task reliability.', results });
 let saving = Promise.resolve();
 const checkpoint = () => {
   if (!destination) return Promise.resolve();
@@ -49,6 +50,7 @@ async function runOne({ mode, fixture, repetition }: (typeof jobs)[number]) {
   const config = { ...base, cwd, home, permissions: 'workspace-edit' as const, promptCompaction: mode, compactionMinChars: 0, reasoningEffort: base.provider === 'responses' ? 'low' as const : undefined, requestTimeoutMs: 30000 };
   const store = await SessionStore.create(home, config, [config.apiKey]);
   const started = performance.now(); let approvedChecks = 0, deniedRequests = 0;
+  let preprocessing: PromptStats | undefined;
   const approvals: Array<{ command: string; granted: boolean }> = [];
   const tools = new ToolRegistry(config, store, async request => {
     const granted = request.cwd === cwd && request.command.trim() === 'node verify.cjs';
@@ -57,7 +59,7 @@ async function runOne({ mode, fixture, repetition }: (typeof jobs)[number]) {
     deniedRequests++; return 'deny';
   });
   try {
-    const run = await new Agent(config, new ModelProvider(config), tools, store).run(fixture.input, AbortSignal.timeout(90000));
+    const run = await new Agent(config, new ModelProvider(config), tools, store, event => { if (event.type === 'harness_end') preprocessing = event.stats; }).run(fixture.input, AbortSignal.timeout(90000));
     let outputCorrect = true;
     try {
       for (const [name, expected] of Object.entries(fixture.expected ?? {})) deepStrictEqual(await readFile(path.join(cwd, name), 'utf8'), expected);
@@ -69,9 +71,9 @@ async function runOne({ mode, fixture, repetition }: (typeof jobs)[number]) {
     const protectedFilesPreserved = (await Promise.all(Object.entries(fixture.files).filter(([name]) => !fixture.writable.includes(name)).map(([name, original]) => readFile(path.join(cwd, name), 'utf8').then(value => value === original, () => false)))).every(Boolean);
     const unmetRequirements = [...audit.unmetRequirements, ...(!outputCorrect ? ['expected_output'] : []), ...(!verifierPreserved || !protectedFilesPreserved ? ['protected_files_preserved'] : []), ...(!run.ok ? ['run_completed'] : [])];
     const saved = store.data.runs.at(-1);
-    results.push({ id: fixture.id, repetition, mode, ok: unmetRequirements.length === 0 && checked, runReason: run.reason, outputCorrect, verifierPreserved, protectedFilesPreserved, checked, executionOrderPassed: audit.passed, unmetRequirements, toolTrace: audit.toolTrace.map(call => ({ ...call, arguments: redact(call.arguments, [config.apiKey]) })), finalText: redact(run.text ?? '', [config.apiKey]), approvedChecks, deniedRequests, approvals, turns: saved?.turns, toolCalls: saved?.toolCalls, usage: saved?.usage, durationMs: Math.round(performance.now() - started) });
+    results.push({ id: fixture.id, repetition, mode, preprocessing, ok: unmetRequirements.length === 0 && checked, runReason: run.reason, outputCorrect, verifierPreserved, protectedFilesPreserved, checked, executionOrderPassed: audit.passed, unmetRequirements, toolTrace: audit.toolTrace.map(call => ({ ...call, arguments: redact(call.arguments, [config.apiKey]) })), finalText: redact(run.text ?? '', [config.apiKey]), approvedChecks, deniedRequests, approvals, turns: saved?.turns, toolCalls: saved?.toolCalls, usage: saved?.usage, durationMs: Math.round(performance.now() - started) });
   } catch (error) {
-    results.push({ id: fixture.id, repetition, mode, ok: false, runReason: 'evaluation_error', error: redact(errorText(error), [config.apiKey]).slice(0, 1500), unmetRequirements: ['evaluation_error'], approvedChecks, deniedRequests, approvals, durationMs: Math.round(performance.now() - started) });
+    results.push({ id: fixture.id, repetition, mode, preprocessing, ok: false, runReason: 'evaluation_error', error: redact(errorText(error), [config.apiKey]).slice(0, 1500), unmetRequirements: ['evaluation_error'], approvedChecks, deniedRequests, approvals, durationMs: Math.round(performance.now() - started) });
   } finally { await store.close(); }
   process.stderr.write(`${repetition}/${mode}/${fixture.id}: ${results.at(-1)!.ok ? 'passed' : 'failed'} (${results.length}/${jobs.length})\n`);
   await checkpoint();
