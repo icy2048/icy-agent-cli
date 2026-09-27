@@ -118,10 +118,16 @@ export class ModelProvider implements Provider {
       if (event.type === 'error') throw new Error(event.message);
       if (event.type === 'response.completed' || event.type === 'response.incomplete' || event.type === 'response.failed') {
         const r = event.response;
+        if (!r || !Array.isArray(r.output)) {
+          const detail = typeof r?.error?.message === 'string' ? r.error.message : 'terminal response is missing its output array';
+          throw new Error(`invalid_response: ${detail}`);
+        }
+        const completed = event.type === 'response.completed' && r.status === 'completed';
+        const incomplete = completed ? undefined : r.error?.message || r.incomplete_details?.reason || (r.status === 'completed' ? event.type : r.status) || 'incomplete';
         const text = r.output.filter(o => o.type === 'message').flatMap(o => o.content.map(c => c.type === 'output_text' ? c.text : c.type === 'refusal' ? c.refusal : '')).join('');
         const summary = r.output.filter(o => o.type === 'reasoning').flatMap(o => (o.summary ?? []).map(s => s.text)).join('\n\n');
         const usage = r.usage ? modelUsage(r.usage.total_tokens, r.usage.input_tokens, r.usage.output_tokens, r.usage.input_tokens_details?.cached_tokens) : undefined;
-        response = { text, reasoning: summary || reasoning, calls: r.output.filter(o => o.type === 'function_call').map(o => ({ id: o.call_id, name: o.name, arguments: o.arguments })), opaque: r.output, tokens: usage?.totalTokens, usage, incomplete: r.status === 'completed' ? undefined : r.error?.message || r.incomplete_details?.reason || r.status || 'incomplete' };
+        response = { text, reasoning: summary || reasoning, calls: r.output.filter(o => o.type === 'function_call').map(o => ({ id: o.call_id, name: o.name, arguments: o.arguments })), opaque: r.output, tokens: usage?.totalTokens, usage, incomplete };
       }
     }
     if (!response) throw new Error('stream_interrupted: 服务未返回完整响应，未执行工具。');

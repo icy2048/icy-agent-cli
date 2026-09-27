@@ -253,6 +253,7 @@ async function resumeEvaluation() {
   delete report.evaluationStopped; delete report.stoppedAt; delete report.partialLastRun;
   const runtimeFiles = [...new Set((await exec('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard', 'src'], { cwd: source })).stdout.split('\0').filter(Boolean))].sort();
   report.runtimeSourceFiles = runtimeFiles;
+  report.runtimeSourceCommit = (await exec('git', ['rev-parse', 'HEAD'], { cwd: source })).stdout.trim();
   report.runtimeSourceHash = digest((await Promise.all(runtimeFiles.map(async file => `${file}:${digest(await readFile(path.join(source, file)))}`))).join('\n'));
   const save = () => writeFile(destination, JSON.stringify(report, null, 2) + '\n');
   await save();

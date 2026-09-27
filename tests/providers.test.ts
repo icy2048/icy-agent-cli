@@ -65,6 +65,28 @@ test('Responses preserves opaque reasoning items and function call IDs on the ne
   } finally { await s.close(); }
 });
 
+test('Responses rejects missing terminal output with a useful upstream or protocol error', async () => {
+  for (const item of [
+    { event: { type: 'response.failed', response: { status: 'failed', error: { message: 'upstream overloaded' } } }, expected: /invalid_response: upstream overloaded/ },
+    { event: { type: 'response.completed', response: { status: 'completed' } }, expected: /invalid_response:.*output/ },
+    { event: { type: 'response.completed' }, expected: /invalid_response:.*output/ },
+  ]) {
+    const s = await server([item.event]);
+    try { await assert.rejects(new ModelProvider(config(s.baseUrl, 'responses')).complete([], [], new AbortController().signal, () => {}), item.expected); }
+    finally { await s.close(); }
+  }
+});
+
+test('Responses failed or incomplete terminal events cannot be upgraded by a conflicting completed status', async () => {
+  for (const type of ['response.failed', 'response.incomplete']) {
+    const s = await server([{ type, response: { status: 'completed', output: [{ type: 'function_call', call_id: 'unsafe', name: 'write', arguments: '{"path":"never.txt","content":"unsafe","expectedHash":null}' }] } }]);
+    try {
+      const result = await new ModelProvider(config(s.baseUrl, 'responses')).complete([], [], new AbortController().signal, () => {});
+      assert.equal(result.incomplete, type, 'the runtime must reject this completion before any tools execute');
+    } finally { await s.close(); }
+  }
+});
+
 test('Responses streams visible summaries separately and falls back to completed summary', async () => {
   const summary = [{ type: 'summary_text', text: 'Inspect the file.' }, { type: 'summary_text', text: 'Verify it.' }];
   const s = await server([
