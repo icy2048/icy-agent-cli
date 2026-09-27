@@ -102,7 +102,12 @@ test('Workbench restores tool details, unknown status, latest task and historica
   try {
     Object.defineProperty(ui.stdout, 'columns', { configurable: true, value: 120 });
     Object.defineProperty(ui.stdout, 'rows', { configurable: true, value: 65 });
-    ui.stdout.emit('resize'); await tick();
+    const deadline = Date.now() + 3000;
+    while (!ui.lastFrame()?.includes('会话变更')) {
+      assert.ok(Date.now() < deadline, `Timed out waiting for resized Workbench:\n${ui.lastFrame()}`);
+      // Mount effects can subscribe after the first synthetic resize event.
+      ui.stdout.emit('resize'); await tick();
+    }
     assert.match(ui.lastFrame()!, /会话变更/); assert.match(ui.lastFrame()!, /note.txt/);
     assert.match(ui.lastFrame()!, /执行结果未知/); assert.match(ui.lastFrame()!, /未执行/);
     assert.match(ui.lastFrame()!, /3 次工具调用/); assert.match(ui.lastFrame()!, /修改并验证 note.txt/);
