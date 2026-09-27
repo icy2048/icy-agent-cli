@@ -1,0 +1,131 @@
+{
+  "kind": "audited-task-summary",
+  "complete": true,
+  "sourceReport": "repeated-tasks-vllm.json",
+  "sourceReportSha256": "74df38ae51979bbd8034587a8d6fd2c18cfc0681015dacfb2e498b17a862fe69",
+  "replyReview": "repeated-tasks-vllm-response-review.json",
+  "sourceCommit": "a5dc1861dd9e798fdc13557a03ba53b42564f250",
+  "criteriaVersion": 2,
+  "model": "qwen3.8-27b",
+  "provider": "chat-completions",
+  "reasoningEffort": null,
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50,
+    "maxContextChars": 120000,
+    "requestTimeoutMs": 30000,
+    "runTimeoutMs": 90000
+  },
+  "modes": {
+    "off": {
+      "attempts": 15,
+      "passed": 15,
+      "passRate": 1.0,
+      "outputCorrect": 15,
+      "executionAuditPassed": 15,
+      "successfulVerification": 15,
+      "missingReplies": 0,
+      "unmetExecutionRequirements": {},
+      "reportedOrEstimatedTokens": 125338,
+      "attemptsIncludingEstimates": 0,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 119973,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "outputTokens": {
+          "availableSum": 5365,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        }
+      },
+      "durationMsTotal": 162891,
+      "durationMsMedian": 10434,
+      "approvals": 15,
+      "denials": 0
+    },
+    "local": {
+      "attempts": 15,
+      "passed": 15,
+      "passRate": 1.0,
+      "outputCorrect": 15,
+      "executionAuditPassed": 15,
+      "successfulVerification": 15,
+      "missingReplies": 0,
+      "unmetExecutionRequirements": {},
+      "reportedOrEstimatedTokens": 128735,
+      "attemptsIncludingEstimates": 0,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 122897,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "outputTokens": {
+          "availableSum": 5838,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        }
+      },
+      "durationMsTotal": 167303,
+      "durationMsMedian": 10522,
+      "approvals": 15,
+      "denials": 0
+    },
+    "model": {
+      "attempts": 15,
+      "passed": 15,
+      "passRate": 1.0,
+      "outputCorrect": 15,
+      "executionAuditPassed": 15,
+      "successfulVerification": 15,
+      "missingReplies": 0,
+      "unmetExecutionRequirements": {},
+      "reportedOrEstimatedTokens": 153254,
+      "attemptsIncludingEstimates": 15,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        },
+        "outputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        }
+      },
+      "durationMsTotal": 184597,
+      "durationMsMedian": 12275,
+      "approvals": 15,
+      "denials": 0
+    }
+  },
+  "failures": [],
+  "limitations": [
+    "All 45 attempts remain unchanged; no retries replace failures. Passing combines execution/output assertions and explicit final-reply review.",
+    "Reported/estimated totals include preprocessing. Where the runtime supplies only an estimate, input/output/cache breakdowns are unavailable, not zero; available sums are not complete per-mode totals.",
+    "Different criteria and runtime versions prevent direct success-rate comparisons with historical cohorts. Finite synthetic samples do not prove general reliability.",
+    "Sequential runs reduce local model-evaluation contention but do not control upstream latency or service conditions.",
+    "Preprocessing events were not recorded in this cohort; the default compaction model was identified by source/config review. A separately recorded cohort sets both models to Qwen and captures preprocessing outcomes."
+  ],
+  "evaluationRequirementSatisfied": false,
+  "comparisonScope": "Fallback-path cohort: main model was Qwen, but compactionModel was not set and defaulted to gpt-5.6-luna, which is not advertised by this vLLM service. Preserve all 45 successes as fallback evidence, not the intended configured-compaction comparison."
+}

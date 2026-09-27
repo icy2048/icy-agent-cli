@@ -1,0 +1,46 @@
+{
+  "kind": "local-vllm-connection-check",
+  "recordedAt": "2026-09-27T17:41:25.330891+00:00",
+  "sourceCommit": "a5dc1861dd9e798fdc13557a03ba53b42564f250",
+  "configurationSource": "Pi agent local-vllm provider",
+  "endpointClass": "RFC1918 IPv4 HTTP, explicitly enabled in user configuration",
+  "provider": "chat-completions",
+  "model": "qwen3.8-27b",
+  "modelListHttpStatus": 200,
+  "advertisedModelIds": [
+    "qwen3.8-27b-131k",
+    "qwen3.8-27b"
+  ],
+  "streamingProbe": {
+    "model": "qwen3.8-27b",
+    "provider": "chat-completions",
+    "text": "OK",
+    "usage": {
+      "totalTokens": 553,
+      "inputTokens": 551,
+      "outputTokens": 2
+    },
+    "reasoningChars": 0
+  },
+  "credentialStorage": "User-private file with 0600 permissions; no credential copied into repository",
+  "previousConfiguration": "Backed up in the local icy home before replacement",
+  "compatibilityFixes": [
+    "Private IPv4 HTTP is opt-in in user settings; project settings cannot enable it and public HTTP remains rejected.",
+    "Chat Completions omits tools when no tools are advertised; the server rejected an empty array."
+  ],
+  "reasoning": "No reasoning-effort parameter is sent by this Chat Completions adapter; service defaults apply. Pi thinking-level labels are not claimed as equivalent.",
+  "compactionModel": "qwen3.8-27b",
+  "compactionProbe": {
+    "model": "qwen3.8-27b",
+    "outcome": "applied",
+    "tokens": 434,
+    "estimated": false,
+    "usage": {
+      "totalTokens": 434,
+      "inputTokens": 291,
+      "outputTokens": 143
+    }
+  },
+  "compactionConfiguredAt": "2026-09-27T17:48:28.539772+00:00",
+  "configurationCorrection": "Initial main-model setup omitted compactionModel; corrected before the configured-compaction cohort. The earlier fallback cohort remains separate."
+}

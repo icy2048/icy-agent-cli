@@ -133,3 +133,12 @@
 usage 合计包含预处理及本地估算。部分运行只有估算总数，没有输入/输出/cache 明细；汇总分别记录可用明细合计和缺失次数，不将缺失当作零，也不将余额拒绝时的本地估算当作实际账单。样本只支持上述观察，不证明一般可靠性或费用节省。
 
 `4e5b46f` 的两组双平台 CI 均通过，其中[完整日志](https://github.com/icy88/icy-agent-cli/actions/runs/36336757885)确认两平台各 252 项测试、类型检查、构建、实际 PTY 和安装包。当前产品实现与真实仓库任务审查已闭环；**严格重复比较仍受模型服务余额阻碍，整体目标未完成**。已请求用户恢复额度或更新本机配置；不自动充值，不重启失败批次，不覆盖旧失败。
+
+
+## 2026-09-28：接入 Pi 的 vLLM 并继续补齐
+
+按用户要求将本机主模型切到 Pi 配置中的 Chat Completions / `qwen3.8-27b`；凭据仅保存到本机 0600 私有文件，旧配置已备份。[连接记录](evaluations/vllm-connection.json)保存模型发现、实际流式响应和提炼探针。`a5dc186` 增加仅由用户配置启用的 RFC1918 HTTP 支持，项目不能自行启用，公网 HTTP 仍被拒；无工具 Chat Completions 请求不再发送 vLLM 拒绝的空 tools 数组。配置、模型保存及 Provider 回归通过；`e9af951` [双平台 CI](https://github.com/icy88/icy-agent-cli/actions/runs/36337839369) 各 255 项测试、构建、实际 PTY 和包安装通过。
+
+[第一组 vLLM 原始结果](evaluations/repeated-tasks-vllm.json)为 45/45 通过，回复和操作记录已逐项复核；但最终配置核对发现，主模型切换时漏设 `compactionModel`，语义提炼仍使用服务未提供的默认 `gpt-5.6-luna`。这组只能作为回退路径证据，不能作为正确配置模型提炼的比较，限制写入[汇总](evaluations/repeated-tasks-vllm-summary.json)。
+
+已将主模型和提炼模型都设为 `qwen3.8-27b`，提炼探针返回 applied 和完整输入/输出 usage。`961231e` 为评测新增实际提炼模型及 harness 状态记录，随后执行独立的完整 45 次批次。第一组 vLLM、此前的 Responses 失败记录全部保留，不覆盖或混算。

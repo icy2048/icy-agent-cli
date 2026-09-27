@@ -11,7 +11,7 @@
 | PR 1/5：合法未完成调用分别恢复为未知／未执行，不重放副作用 | `src/sessions/store.ts` 恢复只补结果；`tests/agent-recovery.test.ts` 检查真实写入后的恢复只发起 read；真实仓库报告核对 SIGKILL 标记、未知写入先读及恢复前后文件 hash | 自动化及实际中断证据通过；完整任务见下方 |
 | PR 2：默认 local；显式 model/off 保持；原文不被有损提炼覆盖 | `tests/fidelity.test.ts` 遍历 12 类需求，检查实际发送原文、顺序和引用边界；`tests/config.test.ts`、`tests/harness.test.ts` 检查配置与缓存 | 通过 |
 | PR 2：工具结果中的指令不能升级为用户要求 | fidelity 直接回归在 off/local/model 下检查不可信工具结果仍为 tool 消息，不进入用户消息、语义提炼请求或约束提醒；Provider 将工具结果标为不可信数据 | 通过 |
-| PR 2：保真夹具及 off/local/model 实际任务比较 | [保真报告](evaluations/prompt-fidelity.json) 36 个组合；两组历史记录及[严格执行审计](evaluations/repeated-tasks-summary.json)，包含操作轨迹和逐项回复审查 | 未完成：严格批次 19 通过、5 超时、21 次余额错误；服务从第 25 项起不可用，三轮模式比较证据不足 |
+| PR 2：保真夹具及 off/local/model 实际任务比较 | [保真报告](evaluations/prompt-fidelity.json) 36 个组合；两组历史记录及[严格执行审计](evaluations/repeated-tasks-summary.json)，包含操作轨迹和逐项回复审查 | 进行中：已按用户要求接入 Pi vLLM；首组 45/45 属于提炼模型漏配后的回退路径证据，正确配置的完整批次正在独立执行 |
 | 质量门禁：锁文件安装，源码／测试类型检查、测试、构建，Node 22 macOS/Linux | `.github/workflows/ci.yml` 使用 npm ci；`4e5b46f` 的 [双平台 CI](https://github.com/icy88/icy-agent-cli/actions/runs/36336757885) 各通过 252 项测试及全部门禁；已修复 UI 固定等待和 PTY 旧提示误匹配 | 最终提交仍需核对最新 PR 检查 |
 | 质量门禁：CLI 成功 0、审批 2、取消 130、错误 1；NDJSON 纯净；空 home 安装 | `tests/cli.test.ts` 用真实子进程与 HTTP 服务检查退出码、逐行 JSON 和输出通道；`scripts/package-smoke.mjs` 临时安装后运行 help/version/demo | 通过 |
 | PR 3：每轮 ContextManager；50,000 字符案例连续 20 次读完收尾 | `tests/context.test.ts` 两协议各执行 20 次真实 read，检查每次请求大小、源会话完整和调用顺序；Provider 请求计量含指令与工具 | 通过 |

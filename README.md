@@ -61,7 +61,7 @@ icy --version
 
 密钥由本机环境变量 `ICY_API_KEY` 提供；也可以配置 `apiKeyFile`，路径相对于 `~/.icy`，建议权限 `0600`。环境变量优先于密钥文件。`ICY_HOME` 可改变用户配置与会话目录。
 
-局域网 vLLM 可使用 `chat-completions` 协议和服务实际模型名。若地址为私有 IPv4 的 HTTP（例如 `http://192.168.1.10:8000/v1`），需在本机 `~/.icy/config.json` 中显式设置 `"allowPrivateHttp": true`。只允许 10/8、172.16/12、192.168/16；公网地址仍需 HTTPS，项目配置不能启用此选项。HTTP 在局域网内明文传输请求及凭据；仅为自己信任的服务启用。
+局域网 vLLM 可使用 `chat-completions` 协议和服务实际模型名。如果使用 `promptCompaction: "model"`，还需将 `compactionModel` 设为该服务提供的模型名（可以与主模型相同），避免默认提炼模型不在服务列表中。若地址为私有 IPv4 的 HTTP（例如 `http://192.168.1.10:8000/v1`），需在本机 `~/.icy/config.json` 中显式设置 `"allowPrivateHttp": true`。只允许 10/8、172.16/12、192.168/16；公网地址仍需 HTTPS，项目配置不能启用此选项。HTTP 在局域网内明文传输请求及凭据；仅为自己信任的服务启用。
 
 
 `ICY_PROVIDER`、`ICY_BASE_URL`、`ICY_MODEL` 以及对应命令行参数覆盖模型设置。项目级 `.icy/config.json` 只允许设置模型名、降低运行上限，不能修改密钥来源、服务地址或扩大权限。`/model` 打开配置向导，测试通过后保存并立即生效。下次启动时，命令行参数、环境变量和项目模型设置仍按上述优先级覆盖用户配置。
