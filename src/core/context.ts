@@ -46,13 +46,14 @@ export class ContextManager {
         const excerpt = preview ? `Recent tool output preview:\n${body.slice(0, 1600)}\n[... omitted; read the full reference ...]\n${body.slice(-800)}\n` : '';
         return { ...message, content: JSON.stringify({ ...metadata, compacted: true, content: `${excerpt}Original tool output (${raw.length} characters) stored in ${reference}. Use read to retrieve the original before relying on its details.`, outputRef: reference }) };
       };
-      const messages: Message[] = [];
+      const messages: Message[] = [...history];
       for (let i = 0; i < history.length; i++) {
         signal.throwIfAborted();
         const message = history[i];
-        if (message.role !== 'tool' || !eligible.has(i) || message.content.length <= 4000) { messages.push(message); continue; }
-        messages.push(await externalize(message));
+        if (message.role !== 'tool' || !eligible.has(i) || message.content.length <= 4000) continue;
+        messages[i] = await externalize(message);
         stats.compactedToolResults++;
+        if (measure(appendReminder(messages)) <= this.config.maxContextChars * 0.8) break;
       }
       // Smaller old results also accumulate across restarts. The normal 4,000
       // character threshold is a preference, not an unshrinkable history floor.

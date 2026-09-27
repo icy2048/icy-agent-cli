@@ -231,3 +231,15 @@ test('hundreds of old reads form a bounded archive index while unknown effects a
     assert.deepEqual(history, before);
   } finally { await s.cleanup(); }
 });
+
+test('projection stops externalizing old observations once the target window is reached', async () => {
+  const s = await setup();
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Use the files already read to implement the task.' }];
+    for (let i = 0; i < 8; i++) history.push({ role: 'assistant', content: '', calls: [{ id: `file-${i}`, name: 'read', arguments: JSON.stringify({ path: `${i}.ts` }) }] }, { role: 'tool', id: `file-${i}`, content: JSON.stringify({ ok: true, content: 'x'.repeat(5000) }) });
+    const result = await new ContextManager(s.config, s.store).build(history, new AbortController().signal);
+    assert.ok(result.stats.afterChars <= s.config.maxContextChars * 0.8);
+    assert.equal(result.stats.compactedToolResults, 1);
+    assert.deepEqual(result.messages.slice(3), history.slice(3), 'every other observation remains readable without another tool call');
+  } finally { await s.cleanup(); }
+});

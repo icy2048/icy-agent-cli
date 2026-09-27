@@ -99,7 +99,7 @@ async function worker() {
   try {
     const result = phase === 1 ? await agent.run(goal, controller.signal) : await agent.continue(controller.signal);
     send({ kind: 'result', ...result, injected, run: store.data.runs.at(-1), mutations: await fileState(cwd) });
-  } finally { clearTimeout(timer); await store.close(); }
+  } finally { clearTimeout(timer); await store.close(); if (process.connected) process.disconnect?.(); }
 }
 async function runWorker(cwd: string, home: string, phase: number, id?: string): Promise<{ observations: WorkerResult[]; code: number | null; signal: NodeJS.Signals | null }> {
   const observations: WorkerResult[] = [];
@@ -185,8 +185,15 @@ async function main() {
         const end = result.observations.find(item => item.kind === 'result');
         phases.push({ phase, ...result }); await persist();
         assert.equal(session?.resumeUnchanged, true, 'resume itself must never mutate workspace files');
-        if (phase === 1) assert.equal(end?.reason, 'cancelled');
-        if (phase === 2) assert.equal(result.signal, 'SIGKILL');
+        if (phase === 1 || phase === 2) {
+          const injection = await readFile(path.join(home, `injection-${phase}.json`), 'utf8').then(text => JSON.parse(text), () => undefined);
+          const expectedStop = phase === 1 ? end?.reason === 'cancelled' : result.signal === 'SIGKILL';
+          phases.at(-1)!.injection = injection;
+          if (!injection || !expectedStop) {
+            phases.at(-1)!.protocolFailure = 'The task did not reach the prescribed post-mutation interruption within this run budget.';
+            break;
+          }
+        }
         if (phase >= 3 && end?.ok) {
           try { checks = await acceptance(cwd, path.join(folder, `acceptance-${phase}`)); passed = true; break; }
           catch (error) {

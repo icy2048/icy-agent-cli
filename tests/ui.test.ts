@@ -200,7 +200,9 @@ test('Esc after slash clears the input before submit', async () => {
 
 test('running line shows a spinner and elapsed seconds', async () => {
   let finished = false;
-  const agent = { config: { cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { await new Promise(resolve => setTimeout(resolve, 250)); finished = true; } } as unknown as Agent;
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const agent = { config: { cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { await pending; finished = true; } } as unknown as Agent;
   const ui = render(React.createElement(App, { agent, approval: {} }));
   try {
     await tick(); ui.stdin.write('hello'); await tick(); ui.stdin.write('\r'); await tick();
@@ -208,7 +210,11 @@ test('running line shows a spinner and elapsed seconds', async () => {
     let frame = '', matched = false;
     for (let i = 0; i < 20; i++) { await tick(); frame = ui.lastFrame()!; if (running.test(frame)) { matched = true; break; } }
     assert.ok(matched);
-    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(finished, false);
+    // Hold the run open until the UI has observed it, independent of machine load.
+    for (let i = 0; i < 100 && !/[1-9]\d*s · Esc 取消/.test(ui.lastFrame()!); i++) await tick();
+    assert.match(ui.lastFrame()!, /[1-9]\d*s · Esc 取消/);
+    finish(); await tick();
     assert.equal(finished, true);
-  } finally { ui.unmount(); ui.cleanup(); }
+  } finally { finish(); ui.unmount(); ui.cleanup(); }
 });
