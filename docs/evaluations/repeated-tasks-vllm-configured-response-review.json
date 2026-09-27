@@ -1,0 +1,373 @@
+{
+  "kind": "independent-final-reply-review",
+  "complete": true,
+  "sourceReport": "repeated-tasks-vllm-configured.json",
+  "sourceCommit": "961231ebfbb3210cd046d18587f704178e703f7b",
+  "criteriaVersion": 2,
+  "reviewMethod": "Codex read each final reply against the exact fixture instructions, successful tool trace, expected output and protected-file assertions. This is explicit semantic review, not keyword scoring. Hashes bind each reviewed result to the raw report; the raw results remain unchanged.",
+  "reviewedAt": "2026-09-27T17:58:14.294875+00:00",
+  "results": [
+    {
+      "key": "1/off/ordered-edit",
+      "rawResultSha256": "0696bc178ba872fc52891b27f93403c95cc5bfa56d63f5d5bfb474ed8c3c29e8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/conditional-exception",
+      "rawResultSha256": "9e2b683d74c91be1ec06a9d89b3776e0da2731c00c93221ac12a710f8bca90f0",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/cross-file",
+      "rawResultSha256": "cdfda27c1b833504e568c06a3de160d43c8161475f36ac2ce0f5fa3f2ef0f07a",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/conditional-no-change",
+      "rawResultSha256": "30d9242e1a887d9cb0a6724ac4b64246babec49506ef292cfa6db54a0b1fe361",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/structured-migration",
+      "rawResultSha256": "c5825f5ec4e97d961ad8f1a642aa5d45784428d632fc78d3cfc8f2fd29c03203",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/ordered-edit",
+      "rawResultSha256": "773262d745f09ea78d860091c1fd1382da60fed6dd6b9b68f46fc77304dbddec",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/conditional-exception",
+      "rawResultSha256": "cc8ed060814799852ce998cbd86ce436f0795e0242cfe766ddc7c19c5603f5d5",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/cross-file",
+      "rawResultSha256": "ed60ea3ab53d43f6e92c9e3de2badaecc57ebe2d7b22eb01fd8454499e816c25",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/conditional-no-change",
+      "rawResultSha256": "fd59e50f43a2a37fa8352659eece1fd3ba9cd6b65d4cefe7c9bddc580239acd8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/structured-migration",
+      "rawResultSha256": "bb5c7152120e36301958fe16c82910ad6da1ad69a960e96466728c27c4f7baa8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/ordered-edit",
+      "rawResultSha256": "debd822087954cfe47c5790fe01a85e777b7e79f9eef2b76e09b41de93a81408",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/conditional-exception",
+      "rawResultSha256": "bdc60c66f3f3cd1accd4ddd8e49d841f9e3abf75ce50db9b8c94a02951668f3b",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/cross-file",
+      "rawResultSha256": "b83ba833a986dae1bee50bee92aa635b8fe1e5c403420cc587307d8f58035f8d",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/conditional-no-change",
+      "rawResultSha256": "333e43335e80b27defa10ad9883bee1119aad7b62652e88e822f6a1fd53c60a4",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/structured-migration",
+      "rawResultSha256": "d916402f0b95ecdd0ad1692b398d036ed8b63e1ea0773db1d4f1c45076fae8de",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/ordered-edit",
+      "rawResultSha256": "dd268e78485aaa4cfa477e7df3617665889f599bac75c5f0fcdaa50c056baf4d",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/conditional-exception",
+      "rawResultSha256": "f78e0572768009b315326b91c23fb72ad2a55915d149250b7b749065fd43135e",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/cross-file",
+      "rawResultSha256": "1969f6462f0bbc3363cc139f7beacbb5082f56b898d8f7d15fa274b141813610",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/conditional-no-change",
+      "rawResultSha256": "e49d1245f3a90e6f5db406ed979b81b4903eca45cf7e5a8dbfe05b9a6c1d2597",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/structured-migration",
+      "rawResultSha256": "53e260babe59b51f130cbb8d474e5559a74e6c2063af8126ba19cae7f0e4746a",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/ordered-edit",
+      "rawResultSha256": "ac3ffb8e484459c60aee4aeda40c42b4745cff17b2ea26adcec92ce7851b9995",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/conditional-exception",
+      "rawResultSha256": "3cba5128c56a37cc6d9f6ec82d142fe82e50a53530f17021b22d9e4902a50cf2",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/cross-file",
+      "rawResultSha256": "a59bffd7a88826e100872576c0b5a93e3444ec45dda6fdbcdfbf72dcf686f928",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/conditional-no-change",
+      "rawResultSha256": "07a0517f4502b3b8ee7c6c69746fb083fb992f00479609b578b77e3c2fc63201",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/structured-migration",
+      "rawResultSha256": "dd9c031b6ee95e48cab33c9ec984252d08f8793de539ceded5107c50cced394e",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/model/ordered-edit",
+      "rawResultSha256": "36d4d60541ef9a67d88dacab8e27ddba28ad9d43cb12ffddd0163e06c3f8cc0e",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/model/conditional-exception",
+      "rawResultSha256": "bdae9f05acddf50516562d820a74becfb38f47db690e99dcdbfac6a748e9180f",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/model/cross-file",
+      "rawResultSha256": "6f587e508e07693b2bca4aa5a9c85d75167fc9e5ed2b60075b0760d64c8d7695",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/model/conditional-no-change",
+      "rawResultSha256": "576c91ec4a731bfb666e729789b5d5da40b29c315438791c35359cfc45009248",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/model/structured-migration",
+      "rawResultSha256": "124a2d8838e783f2968085a63088d76c365e07dcf1e3c49303bc5f559d4064c2",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/off/ordered-edit",
+      "rawResultSha256": "b0452e2380535ddf4b73758105cf202d38dd7b29d048ea39b4612d9895735a67",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/off/conditional-exception",
+      "rawResultSha256": "c43c519d791ff54f86a5c9c4e062451145b1e2d2bc07d7315752308683bbe94d",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/off/cross-file",
+      "rawResultSha256": "dd33bc12078f1c55969ce15b9c2949371e3e5a84abcc3879bbef7013ab47a299",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/off/conditional-no-change",
+      "rawResultSha256": "1c0ab5b35dcebe4a6fed5999d33225256060160728a65956de3c2ef88823a5e5",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/off/structured-migration",
+      "rawResultSha256": "853a80c4fe8f951ba9e8914f3d7eb367a8db667784c116f33f9f18de257eb833",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/local/ordered-edit",
+      "rawResultSha256": "50e3353de717efabf5dc5967a1ed09b72845342b631328c4e22f66da70d0ea24",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/local/conditional-exception",
+      "rawResultSha256": "8a322a6fb80bc672aa97dccbb297893f2b458173f1af3a06b817c5827dc199e8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/local/cross-file",
+      "rawResultSha256": "b33ea0ce78bd65c1c141917c98ee9e41c6d390b2404f1ed0b01dfa5e08fd512b",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/local/conditional-no-change",
+      "rawResultSha256": "23d50ada9f511bfa4d961b92a39e16c6355005dab4f69786aa35885d540a45c8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/local/structured-migration",
+      "rawResultSha256": "4d6e5e740da84e96fb5e86f303900a9625972bcae565cef76ab97b523d90e21b",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/model/ordered-edit",
+      "rawResultSha256": "1d463739ca5d4d0714b25f6c4c5901b846eeb2cf4584e25af95857236543936d",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/model/conditional-exception",
+      "rawResultSha256": "b2e8b9fb404e2ac0c1baba855a3fdd9eef05ada41cf849ca0453c0b442c336b5",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/model/cross-file",
+      "rawResultSha256": "ca16b0613f9cccc87a9949540162d0c5970ba7ac37b452ad0d66299db71a9d17",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/model/conditional-no-change",
+      "rawResultSha256": "96e137e3da8129671e93266260ef1f8deab709e79530130dd03785a610361cf1",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "3/model/structured-migration",
+      "rawResultSha256": "4dc65f4df6db068397229f1732f6136282db125f9a2f1b0780f5a2cea9194c32",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    }
+  ],
+  "compactionModel": "qwen3.8-27b",
+  "sourceReportSha256": "48e7faf059ff2263c5474fc556aa4da0959a4527c52a965c0e2761e352ea0dee"
+}
