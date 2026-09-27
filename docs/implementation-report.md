@@ -32,6 +32,8 @@ Workbench 支持 `/task`、`/continue`、`/verify <命令>`、`/todo <事项>`�
 
 最终在隔离的干净源码副本中执行了锁文件安装 `npm ci`、`npm run check`、`npm test`、`npm run build` 和 `npm run test:package`，全部通过：**227 项测试，0 失败、0 跳过**。包测试确认临时安装后的 `--help`、`--version` 与离线 `--demo` 正常；当前工作区也已重新构建。交付前又复验了类型检查、227 项测试、构建与包测试。以上是本地 macOS 结果；远程 Node 22 macOS/Linux 门禁请检查对应提交的 [GitHub Actions](https://github.com/icy88/icy-agent-cli/actions/workflows/ci.yml)，Linux 人工交互验收仍需另行执行。
 
+交付已提交至 [PR #1](https://github.com/icy88/icy-agent-cli/pull/1)。首个交付提交 `c0ee96b` 的 [PR CI](https://github.com/icy88/icy-agent-cli/actions/runs/36326263880) 已在 macOS 和 Ubuntu 上通过全部门禁。该次运行提示旧版 Actions 的 Node 20 运行时已弃用，因此工作流另行更新到官方 Node 24 Actions 并固定提交 SHA；项目测试版本仍为 Node 22，后续提交以 PR 最新检查为准。
+
 真实模型使用合成的临时项目，工具限定当前工作区，shell 仅批准精确的 `node verify.cjs`。验证器由评测端独立检查，不能仅凭模型文字或它修改后的测试判断成功。[实际结果](evaluations/live-tasks.json)使用 Responses、`gpt-5.6-sol`、`reasoningEffort=low`，每次运行沿用 100,000 token / 20 模型轮次 / 50 工具调用预算：
 
 | 模式 | 通过场景 | 累计报告 token | 累计耗时（四舍五入） |
