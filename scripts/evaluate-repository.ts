@@ -146,17 +146,23 @@ assert.deepEqual((await listSessions(home,{cwd,status:'answered'})).map(x=>x.id)
 assert.deepEqual((await listSessions(home,{status:'legacy'})).map(x=>x.id),['legacy']);
 assert.equal((await listSessions(home,{status:'answered'})).length,2);
 assert.equal((await listSessions(home,{cwd})).length,3);
+for(const status of ['running','awaiting_approval','cancelled','limited','failed','answered','verified','interrupted','legacy']) assert.ok((await listSessions(home,{status})).every(item=>item.status===status));
 await assert.rejects(listSessions(home,{status:'typo'}));
 const cli=promisify(execFile), env={PATH:process.env.PATH,HOME:home,ICY_HOME:home,NO_COLOR:'1'};
 const result=await cli(process.execPath,['--import',${JSON.stringify(fileURLToPath(import.meta.resolve('tsx')))},path.join(cwd,'src/cli.tsx'),'sessions','--status','answered','--cwd',cwd,'--json'],{cwd,env,timeout:15000});
 assert.deepEqual(result.stdout.trim().split('\\n').map(s=>JSON.parse(s).id),[ids.here]); assert.equal(result.stderr,'');
+const missingCwd=await cli(process.execPath,['--import',${JSON.stringify(fileURLToPath(import.meta.resolve('tsx')))},path.join(cwd,'src/cli.tsx'),'sessions','--status','answered','--cwd',path.join(home,'missing-workspace'),'--json'],{cwd,env,timeout:15000});
+assert.equal(missingCwd.stdout,'','sessions --cwd must filter by resolved path even when that directory no longer exists');
+const relativeCwd=await cli(process.execPath,['--import',${JSON.stringify(fileURLToPath(import.meta.resolve('tsx')))},path.join(cwd,'src/cli.tsx'),'sessions','--status','answered','--cwd','.','--json'],{cwd,env,timeout:15000});
+assert.deepEqual(relativeCwd.stdout.trim().split('\\n').map(s=>JSON.parse(s).id),[ids.here]);
 await assert.rejects(cli(process.execPath,['--import',${JSON.stringify(fileURLToPath(import.meta.resolve('tsx')))},path.join(cwd,'src/cli.tsx'),'sessions','--status','typo','--json'],{cwd,env,timeout:15000}));
 await assert.rejects(cli(process.execPath,['--import',${JSON.stringify(fileURLToPath(import.meta.resolve('tsx')))},path.join(cwd,'src/cli.tsx'),'run','--status','answered'],{cwd,env,timeout:15000}));
+await assert.rejects(cli(process.execPath,['--import',${JSON.stringify(fileURLToPath(import.meta.resolve('tsx')))},path.join(cwd,'src/cli.tsx'),'config','init','--status','answered'],{cwd,env,timeout:15000}),undefined,'config init must reject --status, which is only allowed with sessions');
 assert.deepEqual(await snapshot(),before); console.log('external acceptance passed');\n`);
-  const env = { PATH: process.env.PATH, HOME: root, NO_COLOR: '1' };
+  const env = { PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ''}`, HOME: root, NO_COLOR: '1' };
   await exec(process.execPath, ['--import', fileURLToPath(import.meta.resolve('tsx')), verifier], { cwd, env, timeout: 30000 });
   const checks: string[] = [];
-  for (const args of [['run', 'check'], ['test'], ['run', 'build']]) {
+  for (const args of [['run', 'check'], ['test'], ['run', 'build'], ['run', 'test:package']]) {
     const result = await exec('npm', args, { cwd, env, timeout: 90000, maxBuffer: 4 * 1024 * 1024 }); checks.push(result.stdout.slice(-1000));
   }
   return checks;
