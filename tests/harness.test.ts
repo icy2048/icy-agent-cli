@@ -68,7 +68,7 @@ test('semantic preprocessing runs once before the tool loop and keeps original i
   } finally { await s.cleanup(); }
 });
 
-test('old tool output compaction preserves IDs, full original results, opaque reasoning and recent observations', async () => {
+test('request preparation leaves complete tool history for per-request ContextManager projection', async () => {
   const s = await setup();
   try {
     const history: Message[] = [{ role: 'user', content: 'old task' }];
@@ -77,16 +77,11 @@ test('old tool output compaction preserves IDs, full original results, opaque re
       history.push({ role: 'tool', id: `c${i}`, content: JSON.stringify({ ok: true, content: 'z'.repeat(8000) }) });
     }
     history.push({ role: 'user', content: 'next task' });
-    const before = JSON.stringify(history);
+    const before = structuredClone(history);
+    s.store.output = async () => { assert.fail('user preparation must not externalize history'); };
     const result = await preparePrompt(history, { ...s.config, promptCompaction: 'local' }, s.store, signal());
-    assert.equal(result.stats.compactedToolResults, 2); assert.ok(result.stats.savedChars > 10000); assert.equal(JSON.stringify(history), before);
-    assert.equal(result.messages.length, history.length);
-    assert.deepEqual(result.messages[1], history[1]);
-    const results = result.messages.filter(m => m.role === 'tool');
-    assert.deepEqual(results.map(m => m.id), ['c0','c1','c2','c3','c4','c5']);
-    const compacted = JSON.parse(results[0].content), id = compacted.outputRef.replace('icy-output:', '');
-    assert.equal(await s.store.readOutput(id), history[2].content); assert.equal(JSON.parse(results[1].content).outputRef, compacted.outputRef);
-    for (const result of results.slice(2)) assert.equal(JSON.parse(result.content).content.length, 8000);
+    assert.equal(result.stats.compactedToolResults, 0);
+    assert.deepEqual(history, before); assert.deepEqual(result.messages, history);
   } finally { await s.cleanup(); }
 });
 

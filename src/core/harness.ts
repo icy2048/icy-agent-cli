@@ -87,28 +87,8 @@ export async function preparePrompt(history: Message[], config: Config, store: S
       }
     }
     stats.inputChanged = messages.some((m, i) => m.role === 'user' && m.content !== original[i].content);
-    const toolIndexes = history.flatMap((m, i) => m.role === 'tool' ? [i] : []);
-    // Keep the latest four observations in full. Preserve every call/result ID and order.
-    const eligible = new Set(toolIndexes.slice(0, -4));
-    const references = new Map<string, string>();
-    for (let i = 0; i < messages.length; i++) {
-      signal.throwIfAborted();
-      const message = messages[i];
-      if (message.role !== 'tool' || !eligible.has(i) || message.content.length <= 4000) continue;
-      const raw = message.content;
-      let reference = references.get(raw);
-      if (!reference) { reference = `icy-output:${await store.output(raw)}`; references.set(raw, reference); }
-      // Summary fields are copied verbatim, never inferred from untrusted output.
-      let metadata: Record<string, unknown> = {};
-      try {
-        const result = JSON.parse(raw);
-        for (const key of ['ok', 'error', 'changedFile', 'durationMs'] as const) {
-          if (typeof result?.[key] === 'boolean' || typeof result?.[key] === 'number' || (typeof result?.[key] === 'string' && result[key].length <= 500)) metadata[key] = result[key];
-        }
-      } catch { /* Non-JSON results remain retrievable verbatim. */ }
-      message.content = JSON.stringify({ ...metadata, compacted: true, content: `Earlier tool output (${raw.length} characters) stored in ${reference}. Use read with this path to retrieve the full original result before relying on its details.`, outputRef: reference });
-      stats.compactedToolResults++;
-    }
+    // ContextManager is the sole owner of history projection. Preparing a user
+    // request must not replace tool observations before the loop can size them.
     signal.throwIfAborted();
     stats.afterChars = JSON.stringify(messages).length;
     if (stats.mode !== 'model' && stats.afterChars >= beforeChars) return { messages: original, stats: { ...stats, afterChars: beforeChars, savedChars: 0, compactedToolResults: 0, inputChanged: false } };

@@ -20,9 +20,11 @@
     "check": "tsc -p tsconfig.check.json",
     "test": "tsx --test tests/*.test.ts",
     "test:package": "node scripts/package-smoke.mjs",
+    "test:pty": "python3 scripts/pty-smoke.py",
     "prepack": "npm run build",
     "eval:prompts": "tsx scripts/evaluate-prompts.ts",
-    "eval:tasks": "tsx scripts/evaluate-tasks.ts"
+    "eval:tasks": "tsx scripts/evaluate-tasks.ts",
+    "eval:repository": "tsx scripts/evaluate-repository.ts"
   },
   "dependencies": {
     "diff": "9.0.0",

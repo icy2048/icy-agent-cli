@@ -25,4 +25,5 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+      - run: npm run test:pty
       - run: npm run test:package

@@ -209,6 +209,7 @@ test('large output uses read references and can reach the tail of a single long 
     await writeFile(path.join(s.cwd, 'large'), '🙂'.repeat(12_000) + 'TAIL_MARKER');
     const result = await s.call('read', { path: 'large', offset: null, limit: null });
     assert.equal(result.truncated, true); assert.ok(result.content.length < 10000);
+    assert.match(result.content, /TAIL_MARKER/);
     const reference = result.content.match(/path="(icy-output:[a-f0-9-]+\.txt)"/)![1];
     let offset = 1, content = '';
     for (let count = 0; count < 10; count++) {
@@ -222,6 +223,23 @@ test('large output uses read references and can reach the tail of a single long 
     assert.equal((await s.call('read', { path: 'icy-output:../session.json', offset: null, limit: null })).ok, false);
     assert.equal((await s.call('write', { path: reference, content: 'bad', expectedHash: null })).ok, false);
     assert.equal((await s.call('edit', { path: reference, oldText: 'a', newText: 'b' })).ok, false);
+  } finally { await s.cleanup(); }
+});
+
+test('failed long commands expose a middle diagnostic and tail while preserving the full redacted output', async () => {
+  const s = await setup(async () => 'once');
+  try {
+    const output = 'begin\n' + 'ordinary output\n'.repeat(2000) + '\nnot ok 1 - useful failure\nAssertionError: expected true\n' + 'more output\n'.repeat(2000) + s.config.apiKey + '\nfinal summary\n';
+    await writeFile(path.join(s.cwd, 'log.txt'), output);
+    const result = await s.call('bash', { command: 'cat log.txt; exit 1', cwd: null, timeoutMs: 1000 });
+    assert.equal(result.ok, false); assert.equal(result.error, 'command_failed');
+    assert.match(result.content, /useful failure/); assert.match(result.content, /final summary/);
+    assert.match(result.content, /Exit code: 1/); assert.ok(result.content.length < 10000);
+    assert.ok(!result.content.includes(s.config.apiKey));
+    const reference = result.content.match(/path="icy-output:([a-f0-9-]+\.txt)"/)![1];
+    const full = await s.store.readOutput(reference);
+    assert.ok(full.length > 50000); assert.match(full, /useful failure/);
+    assert.ok(!full.includes(s.config.apiKey));
   } finally { await s.cleanup(); }
 });
 

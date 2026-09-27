@@ -160,14 +160,17 @@ export class Agent {
       for (let turn = 1; turn <= this.config.maxModelTurns; turn++) {
         signal.throwIfAborted();
         const reminder = modelHistory.slice(modelHistory.findLastIndex(m => m.role === 'user') + 1).some(m => m.role === 'tool') ? reminderMessage(history) : undefined;
-        const taskReminder = options.resume ? { role: 'user' as const, content: `[icy 任务续跑] 用户明确要求继续原任务，本次有新的运行预算。原始目标：\n${this.store.data.task!.goal}\n待办：${JSON.stringify(this.store.data.task!.remaining)}\n先检查已保存的工具结果；未知副作用不能自动重放。` } : reminder;
-        const built = await context.build(modelHistory, signal, taskReminder), request = built.messages;
+        const taskReminder = options.resume ? { role: 'user' as const, content: `[icy 任务续跑] 用户明确要求继续原任务，本次有新的运行预算。原始目标：\n${this.store.data.task!.goal}\n待办：${JSON.stringify(this.store.data.task!.remaining)}\n沿用已保存的结果，优先处理最近未完成的修改或失败检查；不必重读全部历史引用。未知写操作先读取目标文件核对现状，不能盲目重放。` } : reminder;
+        const definitions = this.tools.definitions();
+        // Sessions retain both normalized calls and protocol opaque data. Count
+        // the actual provider request, where only one representation is sent.
+        const measure = (messages: typeof modelHistory) => this.provider.estimateInputChars?.(messages, definitions) ?? JSON.stringify({ messages, tools: definitions }).length;
+        const built = await context.build(modelHistory, signal, taskReminder, measure), request = built.messages;
         await this.event({ type: 'context', stats: built.stats });
         if (built.stats.afterChars > this.config.maxContextChars) return await this.finish('context_limit', false, pending);
         const stop = budget.stopReason();
         if (stop) return await this.finish(stop, false, pending);
-        const definitions = this.tools.definitions();
-        const inputChars = this.provider.estimateInputChars?.(request, definitions) ?? JSON.stringify({ messages: request, tools: definitions }).length;
+        const inputChars = built.stats.afterChars;
         const requestBudget = budget.requestOptions(inputChars);
         if (!requestBudget) return await this.finish('token_budget', false, pending);
         await this.progress({ turns: turn, checkpoint: `before_model:${turn}` });

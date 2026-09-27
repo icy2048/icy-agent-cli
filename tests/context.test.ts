@@ -9,6 +9,7 @@ import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 import type { Config } from '../src/config/load.js';
 import type { AgentEvent, Message, Provider } from '../src/core/types.js';
+import { ModelProvider } from '../src/providers/model.js';
 
 async function setup(provider: Config['provider'] = 'chat-completions') {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-context-'));
@@ -72,5 +73,138 @@ test('uncompressible context and output persistence failures stop without droppi
     assert.equal(built.stats.fallback, true); assert.deepEqual(built.messages, history);
     const off = await new ContextManager({ ...s.config, promptCompaction: 'off' }, s.store).build(history, new AbortController().signal);
     assert.deepEqual(off.messages, history); assert.equal(off.stats.fallback, false);
+  } finally { await s.cleanup(); }
+});
+
+for (const protocol of ['chat-completions', 'responses'] as const) test(`${protocol} limits measure the serialized request rather than duplicate session representations`, async () => {
+  const s = await setup(protocol);
+  try {
+    const call = { id: 'large-write', name: 'write', arguments: JSON.stringify({ path: 'large.ts', content: 'x'.repeat(30000), expectedHash: null }) };
+    const opaque = [{ type: 'function_call', call_id: call.id, name: call.name, arguments: call.arguments }];
+    s.store.data.messages.push({ role: 'user', content: 'Create large.ts' }, { role: 'assistant', content: '', calls: [call], opaque }, { role: 'tool', id: call.id, content: '{"ok":true,"content":"saved"}' });
+    assert.ok(JSON.stringify(s.store.data.messages).length > s.config.maxContextChars);
+    const wire = new ModelProvider(s.config);
+    let called = false;
+    const provider: Provider = {
+      estimateInputChars: (messages, tools) => wire.estimateInputChars(messages, tools),
+      async complete(messages, tools) {
+        called = true;
+        assert.ok(wire.estimateInputChars(messages, tools) < s.config.maxContextChars);
+        const assistant = messages.find(m => m.role === 'assistant');
+        assert.equal(assistant?.role, 'assistant');
+        if (assistant?.role === 'assistant') { assert.deepEqual(assistant.calls, [call]); assert.deepEqual(assistant.opaque, opaque); }
+        return { text: 'Observed saved result.', calls: [], tokens: 1 };
+      },
+    };
+    const result = await new Agent(s.config, provider, new ToolRegistry(s.config, s.store), s.store).run('Check the saved result.', new AbortController().signal);
+    assert.equal(result.ok, true); assert.equal(called, true);
+    const tooMuch = await new ContextManager(s.config, s.store).build([{ role: 'user', content: 'small' }], new AbortController().signal, undefined, messages => JSON.stringify(messages).length + 60000);
+    assert.ok(tooMuch.stats.afterChars > s.config.maxContextChars, 'protocol instructions and tool definitions still count toward the limit');
+  } finally { await s.cleanup(); }
+});
+
+test('oversized recent observations retain previews and readable originals instead of trapping continuation', async () => {
+  const s = await setup('responses');
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Keep every original requirement.' }];
+    for (let i = 0; i < 4; i++) {
+      const call = { id: `recent-${i}`, name: 'read', arguments: JSON.stringify({ path: `${i}.ts`, offset: null, limit: null }) };
+      history.push({ role: 'assistant', content: '', calls: [call], opaque: [{ type: 'reasoning', encrypted_content: 'opaque'.repeat(900) }, { type: 'function_call', call_id: call.id, name: call.name, arguments: call.arguments }] },
+        { role: 'tool', id: call.id, content: JSON.stringify({ ok: true, content: `HEAD-${i}\n${'x'.repeat(10000)}\nTAIL-${i}` }) });
+    }
+    const original = structuredClone(history), provider = new ModelProvider(s.config);
+    const measure = (messages: Message[]) => provider.estimateInputChars(messages, []);
+    assert.ok(measure(history) > s.config.maxContextChars);
+    const context = new ContextManager(s.config, s.store), signal = new AbortController().signal;
+    const built = await context.build(history, signal, undefined, measure);
+    assert.ok(built.stats.afterChars < s.config.maxContextChars); assert.ok(built.stats.recentToolPreviews! > 0);
+    assert.deepEqual(history, original);
+    assert.equal(built.messages[0].content, original[0].content);
+    for (let i = 0; i < 4; i++) {
+      assert.deepEqual(built.messages[i * 2 + 1], original[i * 2 + 1], 'call and opaque data must stay unchanged');
+      const message = built.messages[i * 2 + 2], result = JSON.parse(message.content);
+      assert.match(result.content, new RegExp(`HEAD-${i}`)); assert.match(result.content, new RegExp(`TAIL-${i}`));
+      if (result.outputRef) assert.equal(await s.store.readOutput(result.outputRef.slice('icy-output:'.length)), original[i * 2 + 2].content);
+    }
+    const files = await readdir(path.join(s.store.dir, 'outputs'));
+    assert.deepEqual(await context.build(history, signal, undefined, measure), built);
+    assert.deepEqual(await readdir(path.join(s.store.dir, 'outputs')), files);
+  } finally { await s.cleanup(); }
+});
+
+test('hard-limit pressure can externalize accumulated medium old results and falls back on storage failure', async () => {
+  const s = await setup();
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Original task and constraints.' }];
+    for (let i = 0; i < 22; i++) history.push({ role: 'assistant', content: '', calls: [{ id: `medium-${i}`, name: 'read', arguments: '{}' }] }, { role: 'tool', id: `medium-${i}`, content: JSON.stringify({ ok: true, content: 'm'.repeat(2600) }) });
+    const original = structuredClone(history), context = new ContextManager(s.config, s.store);
+    const built = await context.build(history, new AbortController().signal);
+    assert.ok(built.stats.afterChars <= s.config.maxContextChars);
+    assert.ok(built.stats.compactedToolResults > 0);
+    assert.deepEqual(built.messages.slice(-8), history.slice(-8), 'recent observations remain full when old references suffice');
+    assert.deepEqual(history, original);
+    s.store.output = async () => { throw new Error('disk full'); };
+    const fallback = await new ContextManager(s.config, s.store).build(history, new AbortController().signal);
+    assert.equal(fallback.stats.fallback, true); assert.deepEqual(fallback.messages, history);
+    assert.equal(fallback.stats.compactedToolResults, 0);
+  } finally { await s.cleanup(); }
+});
+
+for (const protocol of ['chat-completions', 'responses'] as const) test(`${protocol} archives complete old exchanges reversibly without orphaning calls or rewriting recent opaque items`, async () => {
+  const s = await setup(protocol);
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Every original condition must remain.' }];
+    for (let i = 0; i < 10; i++) {
+      const call = { id: `write-${i}`, name: 'write', arguments: JSON.stringify({ path: `${i}.ts`, content: 'x'.repeat(7000), expectedHash: null }) };
+      history.push({ role: 'assistant', content: `Wrote ${i}.ts`, calls: [call], opaque: [{ type: 'reasoning', encrypted_content: `encrypted-${i}` }, { type: 'function_call', call_id: call.id, name: call.name, arguments: call.arguments }] }, { role: 'tool', id: call.id, content: JSON.stringify({ ok: i !== 0, error: i === 0 ? 'interrupted_unknown' : undefined, content: 'recorded outcome', changedFile: `${i}.ts` }) });
+      if (i === 2) history.push({ role: 'user', content: 'Additional constraint: do not replay the unknown write.' });
+    }
+    const original = structuredClone(history), wire = new ModelProvider(s.config);
+    const measure = (messages: Message[]) => wire.estimateInputChars(messages, []);
+    const manager = new ContextManager(s.config, s.store), signal = new AbortController().signal;
+    const built = await manager.build(history, signal, undefined, measure);
+    assert.ok(built.stats.archivedExchanges! > 0); assert.ok(built.stats.afterChars <= s.config.maxContextChars);
+    assert.deepEqual(history, original);
+    assert.deepEqual(built.messages.filter(m => m.role === 'user'), history.filter(m => m.role === 'user'));
+    assert.deepEqual(built.messages.slice(-8), history.slice(-8));
+    assert.deepEqual(built.messages.filter(m => m.role === 'assistant').flatMap(m => m.calls.map(c => c.id)), built.messages.filter(m => m.role === 'tool').map(m => m.id));
+    const restored: Message[] = [];
+    for (const message of built.messages) {
+      if (message.role === 'assistant' && message.content.includes('icy.archived-exchange')) {
+        const archive = JSON.parse(message.content);
+        const exact = JSON.parse(await s.store.readOutput(archive.outputRef.slice('icy-output:'.length)));
+        restored.push(...exact);
+        if (archive.outcomes[0]?.id === 'write-0') {
+          assert.equal(archive.outcomes[0].error, 'interrupted_unknown');
+          assert.deepEqual(archive.outcomes[0].request, { path: '0.ts' });
+        }
+      } else restored.push(message);
+    }
+    assert.deepEqual(restored, history, 'every archived byte and opaque object must be recoverable');
+    const files = await readdir(path.join(s.store.dir, 'outputs'));
+    assert.deepEqual(await manager.build(history, signal, undefined, measure), built);
+    assert.deepEqual(await readdir(path.join(s.store.dir, 'outputs')), files);
+    s.store.output = async () => { throw new Error('disk full'); };
+    const fallback = await new ContextManager(s.config, s.store).build(history, signal, undefined, measure);
+    assert.equal(fallback.stats.fallback, true); assert.deepEqual(fallback.messages, history);
+  } finally { await s.cleanup(); }
+});
+
+for (const protocol of ['chat-completions', 'responses'] as const) test(`${protocol} reclaims old exchanges before shrinking any observation in the newest batch`, async () => {
+  const s = await setup(protocol);
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Keep the task and inspect all five freshly read files.' }];
+    for (let i = 0; i < 10; i++) {
+      const call = { id: `old-${i}`, name: 'write', arguments: JSON.stringify({ path: `${i}.ts`, content: 'x'.repeat(7000), expectedHash: null }) };
+      history.push({ role: 'assistant', content: '', calls: [call], opaque: [{ type: 'function_call', call_id: call.id, name: call.name, arguments: call.arguments }] }, { role: 'tool', id: call.id, content: '{"ok":true,"content":"saved"}' });
+    }
+    const calls = Array.from({ length: 5 }, (_, i) => ({ id: `fresh-${i}`, name: 'read', arguments: JSON.stringify({ path: `${i}.ts`, offset: null, limit: null }) }));
+    history.push({ role: 'assistant', content: '', calls, opaque: calls.map(call => ({ type: 'function_call', call_id: call.id, name: call.name, arguments: call.arguments })) });
+    for (const call of calls) history.push({ role: 'tool', id: call.id, content: JSON.stringify({ ok: true, content: `${call.id} ${'z'.repeat(6000)}` }) });
+    const original = structuredClone(history), wire = new ModelProvider(s.config);
+    const result = await new ContextManager(s.config, s.store).build(history, new AbortController().signal, undefined, messages => wire.estimateInputChars(messages, []));
+    assert.ok(result.stats.archivedExchanges! > 0); assert.ok(result.stats.afterChars < s.config.maxContextChars);
+    assert.deepEqual(result.messages.slice(-6), history.slice(-6), 'the model must see all five new observations, including the first one');
+    assert.deepEqual(history, original);
   } finally { await s.cleanup(); }
 });
