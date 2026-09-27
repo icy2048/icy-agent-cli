@@ -39,8 +39,18 @@ function fixture() {
   ui.stdout.emit('resize');
   return { agent, data, task, run, ui, bridge, event: (event: AgentEvent) => listener(event), close: () => { ui.unmount(); ui.cleanup(); } };
 }
-async function command(ui: ReturnType<typeof render>, value: string) {
-  ui.stdin.write(value); await tick(); ui.stdin.write('\r'); await tick();
+async function waitForFrame(ui: ReturnType<typeof render>, matches: (frame: string) => boolean) {
+  const deadline = Date.now() + 3000;
+  while (!matches(ui.lastFrame() ?? '')) {
+    assert.ok(Date.now() < deadline, `Timed out waiting for UI state:\n${ui.lastFrame()}`);
+    await tick();
+  }
+}
+async function command(ui: ReturnType<typeof render>, value: string, response: RegExp) {
+  ui.stdin.write(value);
+  await waitForFrame(ui, frame => frame.includes(value));
+  ui.stdin.write('\r');
+  await waitForFrame(ui, frame => response.test(frame));
 }
 
 test('/task restores status, checkpoint, budget, todos and stale verification records', async () => {
@@ -49,7 +59,7 @@ test('/task restores status, checkpoint, budget, todos and stale verification re
     await tick();
     assert.match(f.ui.lastFrame()!, /达到限制/); assert.match(f.ui.lastFrame()!, /剩余 tokens 100/);
     assert.match(f.ui.lastFrame()!, /max_model_turns/);
-    await command(f.ui, '/task');
+    await command(f.ui, '/task', /目标：保留原始任务目标/);
     const frame = f.ui.lastFrame()!;
     assert.match(frame, /目标：保留原始任务目标/); assert.match(frame, /最近检查点：stopped/);
     assert.match(frame, /1\. 运行测试/); assert.match(frame, /完成修改/);
@@ -68,7 +78,7 @@ test('/continue dispatches explicit continuation and keeps answered distinct fro
     return { ok: true, reason: 'completed' };
   };
   try {
-    await tick(); await command(f.ui, '/continue');
+    await tick(); await command(f.ui, '/continue', /已回答 · 未验证/);
     assert.equal(continued, 1); assert.equal(f.task.goal, '保留原始任务目标');
     assert.match(f.ui.lastFrame()!, /已回答 · 未验证/); assert.doesNotMatch(f.ui.lastFrame()!, /已验证完成/);
     assert.match(f.ui.lastFrame()!, /开启并记录新预算/);
@@ -101,13 +111,13 @@ test('/todo and /done preserve text and use one-based user numbering', async () 
   f.agent.addTodo = async text => { f.task.remaining.push(text); };
   f.agent.completeTodo = async index => { completed.push(index); f.task.completed.push(...f.task.remaining.splice(index, 1)); };
   try {
-    await tick(); await command(f.ui, '/todo 核对中文 与 emoji 🙂');
+    await tick(); await command(f.ui, '/todo 核对中文 与 emoji 🙂', /待办已添加/);
     assert.equal(f.task.remaining.at(-1), '核对中文 与 emoji 🙂');
-    await command(f.ui, '/done 0'); assert.deepEqual(completed, []);
+    await command(f.ui, '/done 0', /从 1 开始的整数/); assert.deepEqual(completed, []);
     assert.match(f.ui.lastFrame()!, /从 1 开始的整数/);
-    await command(f.ui, '/done 2'); assert.deepEqual(completed, [1]);
+    await command(f.ui, '/done 2', /待办 2 已完成/); assert.deepEqual(completed, [1]);
     assert.equal(f.task.completed.at(-1), '核对中文 与 emoji 🙂');
-    await command(f.ui, '/task'); assert.match(f.ui.lastFrame()!, /✓ 核对中文 与 emoji 🙂/);
+    await command(f.ui, '/task', /目标：保留原始任务目标/); assert.match(f.ui.lastFrame()!, /✓ 核对中文 与 emoji 🙂/);
   } finally { f.close(); }
 });
 
@@ -125,10 +135,10 @@ test('/resume preserves the current view on failure and restores the selected se
     return { recovered: 1 };
   };
   try {
-    await tick(); await command(f.ui, '/resume wrong-session');
+    await tick(); await command(f.ui, '/resume wrong-session', /恢复会话需要相同模型和工作区/);
     assert.match(f.ui.lastFrame()!, /original-session/); assert.match(f.ui.lastFrame()!, /保留原始任务目标/);
     assert.match(f.ui.lastFrame()!, /恢复会话需要相同模型和工作区/);
-    await command(f.ui, '/resume next-session');
+    await command(f.ui, '/resume next-session', /restored.txt/);
     assert.match(f.ui.lastFrame()!, /next-session/); assert.match(f.ui.lastFrame()!, /恢复后的目标/);
     assert.match(f.ui.lastFrame()!, /restored.txt/); assert.match(f.ui.lastFrame()!, /已中断/);
     assert.doesNotMatch(f.ui.lastFrame()!, /保留原始任务目标/);
@@ -144,7 +154,7 @@ test('/sessions lists saved IDs, goals, models and timestamps without running th
       version: 1, id: 'saved-session', cwd: '/fixture', provider: 'responses', model: 'saved-model', baseUrl: 'http://localhost',
       messages: [{ role: 'user', content: '保存的会话目标' }], updatedAt: timestamp,
     }));
-    await tick(); await command(f.ui, '/sessions'); await tick();
+    await tick(); await command(f.ui, '/sessions', /保存的会话目标/); await tick();
     assert.match(f.ui.lastFrame()!, /saved-session/); assert.match(f.ui.lastFrame()!, /保存的会话目标/);
     assert.match(f.ui.lastFrame()!, /saved-model/); assert.match(f.ui.lastFrame()!, /2026-09-27/);
     assert.match(f.ui.lastFrame()!, /不会自动执行任务/);
