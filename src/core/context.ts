@@ -1,6 +1,7 @@
 import type { Config } from '../config/load.js';
 import type { SessionStore } from '../sessions/store.js';
 import type { Message } from './types.js';
+import { outputPreview } from '../tools/output.js';
 
 export interface ContextStats {
   beforeChars: number; afterChars: number; estimatedTokens: number;
@@ -24,7 +25,34 @@ export class ContextManager {
     try {
       const toolIndexes = history.flatMap((m, i) => m.role === 'tool' ? [i] : []);
       const latestAssistant = history.findLastIndex(message => message.role === 'assistant');
-      const eligible = new Set(toolIndexes.slice(0, -4).filter(index => index < latestAssistant));
+      // Keep one blocking observation visible across later file/log reads. A
+      // successful retry of the exact command in the same cwd resolves it;
+      // another command's success does not. This is literal outcome tracking,
+      // not a summary or a claim that the overall task has passed.
+      const calls = new Map(history.filter(message => message.role === 'assistant').flatMap(message => message.calls).map(call => [call.id, call]));
+      let failure: { index: number; command: string } | undefined;
+      const commandResults = new Map<string, number>();
+      for (const index of toolIndexes) {
+        const message = history[index] as Extract<Message, { role: 'tool' }>;
+        const call = calls.get(message.id);
+        if (call?.name !== 'bash') continue;
+        try {
+          const args = JSON.parse(call.arguments), result = JSON.parse(message.content);
+          if (typeof args?.command !== 'string') continue;
+          const command = JSON.stringify([args.command, args.cwd ?? null]);
+          if (typeof result?.ok === 'boolean') {
+            commandResults.delete(command);
+            commandResults.set(command, index);
+          }
+          if (result?.ok === false) failure = { index, command };
+          else if (result?.ok === true && failure?.command === command) failure = undefined;
+        } catch { /* Malformed legacy entries cannot establish or resolve a failure. */ }
+      }
+      // Retain the latest outcomes of three distinct commands as well: log
+      // reads must not erase successful checks and cause needless reruns.
+      const protectedResults = new Set([...commandResults.values()].slice(-3));
+      if (failure) protectedResults.add(failure.index);
+      const eligible = new Set(toolIndexes.slice(0, -4).filter(index => index < latestAssistant && !protectedResults.has(index)));
       const recent = toolIndexes.filter(index => !eligible.has(index));
       const externalize = async (message: Extract<Message, { role: 'tool' }>, preview = false): Promise<Message> => {
         const raw = message.content;
@@ -43,7 +71,7 @@ export class ContextManager {
             if (typeof value === 'boolean' || typeof value === 'number' || (typeof value === 'string' && value.length <= 500)) metadata[key] = value;
           }
         } catch { /* Unstructured output remains readable through the reference. */ }
-        const excerpt = preview ? `Recent tool output preview:\n${body.slice(0, 1600)}\n[... omitted; read the full reference ...]\n${body.slice(-800)}\n` : '';
+        const excerpt = preview ? `Recent tool output preview:\n${outputPreview(body, metadata.ok === false)}\n` : '';
         return { ...message, content: JSON.stringify({ ...metadata, compacted: true, content: `${excerpt}Original tool output (${raw.length} characters) stored in ${reference}. Use read to retrieve the original before relying on its details.`, outputRef: reference }) };
       };
       const messages: Message[] = [...history];
@@ -71,7 +99,8 @@ export class ContextManager {
       // even after every output is bounded. Archive only complete exchanges as
       // exact JSON, never split a call/result pair or rewrite retained opaque
       // items. All user requirements and the four most recent tool observations
-      // (including their whole assistant batches) remain in the active view.
+      // (including their whole assistant batches), recent command outcomes and
+      // the current failed command remain in the active view.
       const archived = new Set<number>();
       const active = () => appendReminder(messages.filter((_, i) => !archived.has(i)));
       if (measure(active()) > this.config.maxContextChars) {
@@ -89,6 +118,7 @@ export class ContextManager {
             const observed = new Set<string>();
             while (end < history.length && history[end].role === 'tool') {
               const result = history[end] as Extract<Message, { role: 'tool' }>;
+              if (protectedResults.has(end)) return start;
               if (!ids.has(result.id) || observed.has(result.id)) return start;
               observed.add(result.id); end++;
             }

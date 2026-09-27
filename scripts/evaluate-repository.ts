@@ -12,6 +12,8 @@ import { ModelProvider } from '../src/providers/model.js';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 import { startRun, finishRun } from '../src/core/run-state.js';
+import { redact } from '../src/core/text.js';
+import { outputPreview } from '../src/tools/output.js';
 import type { Message, ToolCall, ToolResult } from '../src/core/types.js';
 
 const exec = promisify(execFile), source = fileURLToPath(new URL('..', import.meta.url));
@@ -33,6 +35,12 @@ CLI icy sessions --status answered --cwd <dir> --json 应同时过滤；--status
 const send = (value: unknown) => { if (process.connected) process.send?.(value); };
 interface Observation { [key: string]: unknown }
 interface WorkerResult { kind: string; [key: string]: unknown }
+function acceptanceFailure(error: unknown, secrets: string[]) {
+  const failure = error as { message?: unknown; stdout?: unknown; stderr?: unknown } | null;
+  const details = [failure?.message, failure?.stdout, failure?.stderr].filter((part): part is string => typeof part === 'string').join('\n');
+  const text = redact(details || 'acceptance failed', secrets);
+  return text.length > 6000 ? outputPreview(text, true) : text;
+}
 async function fileState(cwd: string) {
   return Object.fromEntries(await Promise.all(editable.map(async file => [file, await readFile(path.join(cwd, file)).then(digest, () => null)])));
 }
@@ -197,7 +205,7 @@ async function main() {
         if (phase >= 3 && end?.ok) {
           try { checks = await acceptance(cwd, path.join(folder, `acceptance-${phase}`)); passed = true; break; }
           catch (error) {
-            const message = error instanceof Error ? error.message.slice(-6000) : 'acceptance failed';
+            const message = acceptanceFailure(error, [base.apiKey]);
             phases.at(-1)!.acceptanceFailure = message;
             const { store } = await SessionStore.resume(home, id!, [base.apiKey]);
             try { store.data.messages.push({ role: 'user', content: `外部验收未通过，继续修复原任务，不得修改已有测试或验收脚本。实际失败：\n${message}` }); await store.save(); } finally { await store.close(); }
@@ -244,6 +252,7 @@ async function resumeEvaluation() {
   await save();
   const base = await loadConfig(source);
   for (const item of report.results) {
+    if (item.ok) continue;
     const folder = path.join(root, `trial-${item.trial}`), cwd = path.join(folder, 'repository'), home = path.join(folder, 'home');
     const id = (await readdir(path.join(home, 'sessions')))[0];
     item.passed = false; item.ok = false;
@@ -257,7 +266,7 @@ async function resumeEvaluation() {
       if (end?.ok) {
         try { item.checks = await acceptance(cwd, path.join(folder, `acceptance-rescue-${phase}`)); item.passed=true; break; }
         catch (error) {
-          const message = error instanceof Error ? error.message.slice(-6000) : 'acceptance failed';
+          const message = acceptanceFailure(error, [base.apiKey]);
           item.phases.at(-1).acceptanceFailure = message;
           const {store}=await SessionStore.resume(home,id,[base.apiKey]);
           try { store.data.messages.push({role:'user',content:`外部验收未通过，继续修复原任务，不得修改已有测试或验收脚本。实际失败：\n${message}`});await store.save(); }finally{await store.close();}

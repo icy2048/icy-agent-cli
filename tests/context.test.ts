@@ -243,3 +243,68 @@ test('projection stops externalizing old observations once the target window is 
     assert.deepEqual(result.messages.slice(3), history.slice(3), 'every other observation remains readable without another tool call');
   } finally { await s.cleanup(); }
 });
+
+for (const protocol of ['chat-completions', 'responses'] as const) test(`${protocol} keeps the current failed command diagnostic through subsequent log reads`, async () => {
+  const s = await setup(protocol);
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Fix the failing tests and verify the complete task.' }];
+    const append = (id: string, name: string, args: object, result: object) => {
+      const call = { id, name, arguments: JSON.stringify(args) };
+      history.push({ role: 'assistant', content: '', calls: [call], ...(protocol === 'responses' ? { opaque: [{ type: 'function_call', call_id: id, name, arguments: call.arguments }] } : {}) }, { role: 'tool', id, content: JSON.stringify(result) });
+    };
+    const diagnostic = 'not ok: CLI relative workspace filter must not require the directory to exist';
+    append('failed-check', 'bash', { command: 'npm test', cwd: null }, { ok: false, error: 'command_failed', content: `${'a'.repeat(2100)}\n${diagnostic}\n${'b'.repeat(2100)}` });
+    const failure = structuredClone(history.slice(1));
+    for (let i = 0; i < 100; i++) append(`log-${i}`, 'read', { path: 'icy-output:test-log', offset: i * 100, limit: 100 }, { ok: true, content: `old log page ${i}: ${'x'.repeat(1200)}` });
+    // A passing different command or a command in another directory cannot
+    // resolve the failure that currently blocks this task.
+    append('check-passed', 'bash', { command: 'npm run check', cwd: null }, { ok: true, content: 'passed' });
+    append('other-cwd', 'bash', { command: 'npm test', cwd: 'another-project' }, { ok: true, content: 'passed' });
+    const original = structuredClone(history), provider = new ModelProvider(s.config);
+    const measure = (messages: Message[]) => provider.estimateInputChars(messages, []);
+    const context = new ContextManager(s.config, s.store), signal = new AbortController().signal;
+    const built = await context.build(history, signal, undefined, measure);
+    assert.ok(built.stats.afterChars <= s.config.maxContextChars);
+    assert.deepEqual(built.messages.slice(1, 3), failure, 'retain the complete paired failure, including its central diagnostic');
+    for (const id of ['check-passed', 'other-cwd']) assert.ok(built.messages.some(m => m.role === 'tool' && m.id === id), 'retain recent command outcomes so success is not forgotten either');
+    assert.ok(built.stats.archivedExchanges! > 0, 'later log pages can still be archived around the protected failure');
+    assert.deepEqual(history, original);
+    const calls = built.messages.filter(m => m.role === 'assistant').flatMap(m => m.calls.map(c => c.id));
+    assert.deepEqual(built.messages.filter(m => m.role === 'tool').map(m => m.id), calls);
+    append('rerun-passed', 'bash', { command: 'npm test' }, { ok: true, content: 'all tests passed' });
+    const resolved = await context.build(history, signal, undefined, measure);
+    assert.equal(resolved.messages.some(m => m.role === 'tool' && m.id === 'failed-check'), false, 'the exact successful rerun releases the old failure for archival');
+  } finally { await s.cleanup(); }
+});
+
+test('command observations stay bounded while retaining the latest result for repeated commands', async () => {
+  const s = await setup();
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Use the recorded checks rather than rerunning them after every log read.' }];
+    const append = (id: string, name: string, args: object, content: string) => history.push({ role: 'assistant', content: '', calls: [{ id, name, arguments: JSON.stringify(args) }] }, { role: 'tool', id, content });
+    for (let i = 0; i < 12; i++) append(`check-${i}`, 'bash', { command: `check ${i}` }, JSON.stringify({ ok: true, content: 'passed' }));
+    append('recheck', 'bash', { command: 'check 10' }, JSON.stringify({ ok: true, content: 'passed again' }));
+    for (let i = 0; i < 100; i++) append(`read-${i}`, 'read', { path: `${i}.ts` }, JSON.stringify({ ok: true, content: 'x'.repeat(1200) }));
+    const built = await new ContextManager(s.config, s.store).build(history, new AbortController().signal);
+    const retained = built.messages.filter(m => m.role === 'tool').map(m => m.id);
+    assert.deepEqual(retained.filter(id => id.startsWith('check-') || id === 'recheck'), ['check-9', 'check-11', 'recheck']);
+    assert.ok(built.stats.afterChars <= s.config.maxContextChars);
+  } finally { await s.cleanup(); }
+});
+
+test('large protected command observations keep diagnostic excerpts when the hard limit requires previews', async () => {
+  const s = await setup();
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Fix the failure using the actual diagnostic.' }];
+    const diagnostic = 'not ok 1 - central failure diagnosis';
+    for (let i = 0; i < 7; i++) history.push({ role: 'assistant', content: '', calls: [{ id: `observation-${i}`, name: i < 3 ? 'bash' : 'read', arguments: JSON.stringify(i < 3 ? { command: `check ${i}` } : { path: `${i}.ts` }) }] }, { role: 'tool', id: `observation-${i}`, content: JSON.stringify({ ok: i !== 0, content: i < 3 ? `${'x'.repeat(10000)}\n${i === 0 ? diagnostic : 'command succeeded'}\n${'y'.repeat(10000)}` : 'z'.repeat(6000) }) });
+    const result = await new ContextManager(s.config, s.store).build(history, new AbortController().signal);
+    assert.ok(result.stats.afterChars <= s.config.maxContextChars);
+    const failure = result.messages.find(m => m.role === 'tool' && m.id === 'observation-0');
+    assert.ok(failure);
+    const projected = JSON.parse(failure.content);
+    assert.equal(projected.ok, false);
+    assert.ok(projected.content.includes(diagnostic));
+    assert.equal(await s.store.readOutput(projected.outputRef.slice('icy-output:'.length)), history[2].content);
+  } finally { await s.cleanup(); }
+});
