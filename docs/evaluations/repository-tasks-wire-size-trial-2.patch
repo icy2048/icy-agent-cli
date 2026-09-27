@@ -1,0 +1,86 @@
+diff --git a/README.md b/README.md
+index f80a6b7..64c9927 100644
+--- a/README.md
++++ b/README.md
+@@ -30,7 +30,7 @@ icy --version
+ 
+ `--cwd <目录>` 指定工作区，默认是启动目录。`run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。执行成功的退出码为 0；遇到未批准的 shell 为 2，取消为 130，其他运行失败为 1。非交互模式没有授权弹窗，因此通常应进入 Workbench 后用 `/verify npm test` 审批并验收；`--verify` 不绕过 shell 权限。
+ 
+-`icy sessions --json` 输出逐行会话摘要。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
++`icy sessions --json` 输出逐行会话摘要。可用 `--status running|awaiting_approval|cancelled|limited|failed|answered|verified|interrupted|legacy` 按状态筛选，也可用 `--cwd <目录>` 按会话工作区筛选；两者同时传入时取交集。未知状态会报错，过滤时无法读取的损坏快照不会被列出；不加过滤仍会显示损坏条目的错误摘要。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
+ 
+ ## 模型配置
+ 
+diff --git a/src/cli.tsx b/src/cli.tsx
+index 5334934..9203a92 100644
+--- a/src/cli.tsx
++++ b/src/cli.tsx
+@@ -42,15 +42,16 @@ bash 需批准（包括列目录和搜索）。非交互模式不执行未批准
+ export async function main(argv = process.argv.slice(2)) {
+   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
+     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' }, plain: { type: 'boolean' }, demo: { type: 'boolean' }, 'read-only': { type: 'boolean' },
+-    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
++    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, status: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
+   } });
+   if (values.help) { process.stdout.write(help); return; }
+   if (values.version) { const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); process.stdout.write(pkg.version + '\n'); return; }
++  if (values.status !== undefined && positionals[0] !== 'sessions') throw new Error('--status 只能用于 sessions。');
+   const overrides = Object.fromEntries(Object.entries({ model: values.model, provider: values.provider, baseUrl: values['base-url'], permissions: values['read-only'] || values.demo ? 'read-only' : undefined }).filter(([, value]) => value !== undefined));
+   let config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
+   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
+   if (positionals[0] === 'sessions') {
+-    const sessions = await listSessions(config.home);
++    const sessions = await listSessions(config.home, { cwd: values.cwd, status: values.status });
+     if (values.json) for (const session of sessions) process.stdout.write(JSON.stringify({ type: 'session_summary', ...session }) + '\n');
+     else process.stdout.write(sessions.length ? sessions.map(s => s.error ? `${s.id} · 无法读取：${s.error}` : `${s.id} · ${s.status} · ${s.updatedAt}\n  ${s.model} · ${s.cwd}\n  ${s.goal || '空会话'}`).join('\n') + '\n' : '暂无会话。\n');
+     return;
+diff --git a/src/sessions/list.ts b/src/sessions/list.ts
+index 1d38b42..122cdb4 100644
+--- a/src/sessions/list.ts
++++ b/src/sessions/list.ts
+@@ -8,8 +8,23 @@ export interface SessionSummary {
+   goal?: string; status?: string; error?: string;
+ }
+ 
++export interface SessionListOptions {
++  cwd?: string;
++  status?: string;
++}
++
++export const sessionStatuses = ['running', 'awaiting_approval', 'cancelled', 'limited', 'failed', 'answered', 'verified', 'interrupted', 'legacy'] as const;
++export type SessionStatus = typeof sessionStatuses[number];
++
++function parseStatus(value: string): SessionStatus {
++  if ((sessionStatuses as readonly string[]).includes(value)) return value as SessionStatus;
++  throw new Error(`未知会话状态：${value}。支持：${sessionStatuses.join(', ')}。`);
++}
++
+ /** Read-only discovery: listing never acquires locks, migrates, or recovers a session. */
+-export async function listSessions(home: string): Promise<SessionSummary[]> {
++export async function listSessions(home: string, options: SessionListOptions = {}): Promise<SessionSummary[]> {
++  const wantedCwd = options.cwd === undefined ? undefined : path.resolve(options.cwd);
++  const wantedStatus = options.status === undefined ? undefined : parseStatus(options.status);
+   let entries;
+   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
+   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+@@ -17,10 +32,17 @@ export async function listSessions(home: string): Promise<SessionSummary[]> {
+     try {
+       const data = parseSessionData(JSON.parse(await readFile(path.join(home, 'sessions', entry.name, 'session.json'), 'utf8')), entry.name);
+       const task = 'task' in data ? data.task as { goal?: string; status?: string } | undefined : undefined;
++      const status = task?.status ?? 'legacy';
++      if (wantedCwd !== undefined && path.resolve(data.cwd) !== wantedCwd) return undefined;
++      if (wantedStatus !== undefined && status !== wantedStatus) return undefined;
+       const first = data.messages.find(m => m.role === 'user');
+-      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
+-    } catch (error) { return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
++      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status };
++    } catch (error) {
++      // A corrupt entry is useful in an unfiltered listing, but cannot safely match filters.
++      if (wantedCwd !== undefined || wantedStatus !== undefined) return undefined;
++      return { id: entry.name, error: redact(errorText(error)).slice(0, 240) };
++    }
+   }));
+-  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries, (_key, value) => typeof value === 'string' ? redact(value) : value));
++  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries.filter((summary): summary is SessionSummary => summary !== undefined), (_key, value) => typeof value === 'string' ? redact(value) : value));
+   return safe.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id));
+ }

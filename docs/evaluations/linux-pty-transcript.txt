@@ -1,0 +1,217 @@
+=== Chinese input ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+ 输入目标，icy 会决定下一步。/help 查看命令。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ❯ 创建中文文件🙂 
+
+  Ready · turn 0 · tokens —                               Ctrl+T 思考 · / 命令
+
+=== Verification approval ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+ command:
+ test "$(cat note.txt)" = "你好🙂"
+
+ cwd: /fixture/workspace
+ timeout: 60s
+
+
+
+
+ ┌────────────────────────────────────────────────────────────────────────────┐
+ │ 允许执行命令？                                                             │
+ │ 命令预览 1/1 · PgUp/PgDn 翻页                                              │
+ │ Y 允许一次 · A 本会话允许 · N 拒绝                                         │
+ │ bash 在主机执行，可访问工作区之外的资源。                                  │
+ └────────────────────────────────────────────────────────────────────────────┘
+
+  Awaiting approval · turn 0 · tokens 0 · 0s              Ctrl+T 思考 · / 命令
+
+=== Verified completion ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+ ▌ 创建中文文件🙂
+
+   ✓ write note.txt +1 −0 (5ms)
+
+ ▌ 已根据实际工具结果结束本轮。请使用 /verify 登记验收。
+
+   ! 待办已添加。使用 /task 查看编号。
+
+   ! 待办 1 已完成。
+
+ ▌ 用户指定验收命令：test "$(cat note.txt)" = "你好🙂"
+
+   ✓ bash test "$(cat note.txt)" = "你好🙂" (5ms)
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ❯   输入你的目标…
+
+  已验证完成 · turn 0 · tokens 0                          Ctrl+T 思考 · / 命令
+
+=== Cancelled process ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+   ! 新对话已开启，原会话已保留。
+
+ ▌ 执行长命令，然后观察取消
+
+   ✗ bash printf begun > slow.txt; sleep 20; printf finished >> slow.… 
+   (746ms)
+    
+   Exit code: signal
+
+   ! 已停止：cancelled
+
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ❯   输入你的目标…
+
+  已取消 · turn 1 · tokens 30                             Ctrl+T 思考 · / 命令
+
+=== Restored cancelled state ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+ ▌ 执行长命令，然后观察取消
+
+   ✗ bash printf begun > slow.txt; sleep 20; printf finished >> slow.… 
+   (746ms)
+    
+   Exit code: signal
+
+
+
+
+
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ❯   输入你的目标…
+
+  已取消 · turn 1 · tokens 30                             Ctrl+T 思考 · / 命令
+
+=== Restored verification ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+ ▌ 创建中文文件🙂
+
+   ✓ write note.txt +1 −0 (5ms)
+
+ ▌ 已根据实际工具结果结束本轮。请使用 /verify 登记验收。
+
+ ▌ 用户指定验收命令：test "$(cat note.txt)" = "你好🙂"
+
+   ✓ bash test "$(cat note.txt)" = "你好🙂" (5ms)
+
+   ! 已恢复会话 ebb2b741-e980-4bfb-b49d-1adbd1f946e0；0 
+   个未完成调用已标记。/task 查看状态，/continue 以新预算继续。
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ❯   输入你的目标…
+
+  已验证完成 · turn 0 · tokens 0                          Ctrl+T 思考 · / 命令
+
+=== Denied command ===
+✳ icy · linux-pty-fixture                                            workspace
+ 127.0.0.1:40087 · workspace-edit
+
+   ! 新对话已开启，原会话已保留。
+
+ ▌ 拒绝这个命令
+
+   ✗ bash touch denied.txt (556ms)
+   {"command":"touch denied.txt","cwd":null,"timeoutMs":60000}
+   permission_denied
+
+   ▸ 思考中…
+
+ ▌ 已根据实际工具结果结束本轮。请使用 /verify 登记验收。
+
+
+
+
+
+ ──────────────────────────────────────────────────────────────────────────────
+  ❯ ⠦ 执行中 0s · Esc 取消
+
+  执行中 · turn 2 · tokens 60 · 0s                        Ctrl+T 思考 · / 命令
+
+=== Wide layout and discovery ===
+✳ icy · linux-pty-fixture                                                                                                        workspace
+ 127.0.0.1:40087 · workspace-edit
+
+   ! 新对话已开启，原会话已保留。                                                                               │ CURRENT TASK
+                                                                                                                │ 拒绝这个命令
+ ▌ 拒绝这个命令                                                                                                 │ 已回答 · 未验证
+                                                                                                                │ 检查点 stopped
+   ✗ bash touch denied.txt (556ms)                                                                              │ 剩余 tokens 99,940
+   {"command":"touch denied.txt","cwd":null,"timeoutMs":60000}                                                  │ 停止：completed
+   permission_denied                                                                                            │
+                                                                                                                │ 执行
+ ▌ 已根据实际工具结果结束本轮。请使用 /verify 登记验收。                                                        │ 模型请求 2
+                                                                                                                │ Tokens 60
+   ! 2d122b16-2e4e-415b-9652-015930488f26                                                                       │ 1 次工具调用 / 会话
+   拒绝这个命令 · linux-pty-fixture · 2026-09-27T15:00:01.988Z                                                  │
+   工作区：/fixture/workspace                                                                                   │ 会话变更
+                                                                                                                │ —
+   ebb2b741-e980-4bfb-b49d-1adbd1f946e0                                                                         │
+   创建中文文件🙂 · linux-pty-fixture · 2026-09-27T14:59:38.287Z                                                │ 会话
+   工作区：/fixture/workspace                                                                                   │ 2d122b16-2e4e-415b-9652-…
+                                                                                                                │
+   54b202a5-26d0-4e6c-ab0f-7f38f010dba7                                                                         │
+   执行长命令，然后观察取消 · linux-pty-fixture · 2026-09-27T14:59:37.144Z                                      │
+   工作区：/fixture/workspace                                                                                   │
+                                                                                                                │
+   /resume <会话 ID> 恢复；不会自动执行任务。                                                                   │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+                                                                                                                │
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────── │
+  ❯   输入你的目标…                                                                                             │
+
+  已回答 · 未验证 · turn 2 · tokens 60                                                                                Ctrl+T 思考 · / 命令

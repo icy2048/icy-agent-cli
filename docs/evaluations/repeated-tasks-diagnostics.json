@@ -1,0 +1,1266 @@
+{
+  "kind": "live-synthetic-tasks",
+  "startedAt": "2026-09-27T15:31:36.331Z",
+  "updatedAt": "2026-09-27T15:51:08.237Z",
+  "complete": true,
+  "planned": 45,
+  "model": "gpt-5.6-sol",
+  "provider": "responses",
+  "reasoningEffort": "low",
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50
+  },
+  "repetitions": 3,
+  "concurrency": 2,
+  "note": "All attempts are retained; no automatic reruns. Finite synthetic samples do not prove general task reliability.",
+  "results": [
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6250,
+        "estimated": false,
+        "inputTokens": 5881,
+        "outputTokens": 369,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 51561
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5761,
+        "estimated": false,
+        "inputTokens": 5423,
+        "outputTokens": 338,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 65099
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7469,
+        "estimated": false,
+        "inputTokens": 6939,
+        "outputTokens": 530,
+        "cachedInputTokens": 3072
+      },
+      "durationMs": 71343
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3689,
+        "estimated": false,
+        "inputTokens": 3487,
+        "outputTokens": 202,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 68722
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7338,
+        "estimated": false,
+        "inputTokens": 6801,
+        "outputTokens": 537,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 22870
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6290,
+        "estimated": false,
+        "inputTokens": 5911,
+        "outputTokens": 379,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 58945
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5796,
+        "estimated": false,
+        "inputTokens": 5438,
+        "outputTokens": 358,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 81582
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7415,
+        "estimated": false,
+        "inputTokens": 6892,
+        "outputTokens": 523,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 53851
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3701,
+        "estimated": false,
+        "inputTokens": 3495,
+        "outputTokens": 206,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 60461
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7199,
+        "estimated": false,
+        "inputTokens": 6724,
+        "outputTokens": 475,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 87348
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 8825,
+        "estimated": true
+      },
+      "durationMs": 74319
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 8192,
+        "estimated": true
+      },
+      "durationMs": 69217
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "model",
+      "ok": false,
+      "runReason": "cancelled",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 1,
+      "approvals": [
+        {
+          "command": "pwd && ls -la",
+          "granted": false
+        },
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 13450,
+        "estimated": true
+      },
+      "durationMs": 90020
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "model",
+      "ok": false,
+      "runReason": "cancelled",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 9117,
+        "estimated": true
+      },
+      "durationMs": 90017
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "model",
+      "ok": false,
+      "runReason": "cancelled",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 14549,
+        "estimated": true
+      },
+      "durationMs": 90019
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5751,
+        "estimated": false,
+        "inputTokens": 5410,
+        "outputTokens": 341,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 26492
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7247,
+        "estimated": false,
+        "inputTokens": 6772,
+        "outputTokens": 475,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 75224
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6237,
+        "estimated": false,
+        "inputTokens": 5864,
+        "outputTokens": 373,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 86761
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7278,
+        "estimated": false,
+        "inputTokens": 6775,
+        "outputTokens": 503,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 42454
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3783,
+        "estimated": false,
+        "inputTokens": 3533,
+        "outputTokens": 250,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 44347
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6327,
+        "estimated": false,
+        "inputTokens": 5918,
+        "outputTokens": 409,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 32048
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5887,
+        "estimated": false,
+        "inputTokens": 5503,
+        "outputTokens": 384,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 52235
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 13,
+      "usage": {
+        "tokens": 10258,
+        "estimated": false,
+        "inputTokens": 9561,
+        "outputTokens": 697,
+        "cachedInputTokens": 3072
+      },
+      "durationMs": 62500
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3699,
+        "estimated": false,
+        "inputTokens": 3496,
+        "outputTokens": 203,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 49571
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6970,
+        "estimated": false,
+        "inputTokens": 6487,
+        "outputTokens": 483,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 33859
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7271,
+        "estimated": false,
+        "inputTokens": 6771,
+        "outputTokens": 500,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 53318
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 7853,
+        "estimated": false,
+        "inputTokens": 7214,
+        "outputTokens": 639,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 45247
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": 14,
+      "usage": {
+        "tokens": 14544,
+        "estimated": false,
+        "inputTokens": 13555,
+        "outputTokens": 989,
+        "cachedInputTokens": 3072
+      },
+      "durationMs": 70215
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 8870,
+        "estimated": false,
+        "inputTokens": 8083,
+        "outputTokens": 787,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 27941
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 4719,
+        "estimated": false,
+        "inputTokens": 4227,
+        "outputTokens": 492,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 69095
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5694,
+        "estimated": false,
+        "inputTokens": 5363,
+        "outputTokens": 331,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 24612
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6368,
+        "estimated": false,
+        "inputTokens": 5938,
+        "outputTokens": 430,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 47682
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7420,
+        "estimated": false,
+        "inputTokens": 6891,
+        "outputTokens": 529,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 41429
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3818,
+        "estimated": false,
+        "inputTokens": 3552,
+        "outputTokens": 266,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 54031
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7260,
+        "estimated": false,
+        "inputTokens": 6762,
+        "outputTokens": 498,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 53836
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5703,
+        "estimated": false,
+        "inputTokens": 5388,
+        "outputTokens": 315,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 39050
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6373,
+        "estimated": false,
+        "inputTokens": 5941,
+        "outputTokens": 432,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 25414
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3753,
+        "estimated": false,
+        "inputTokens": 3497,
+        "outputTokens": 256,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 15551
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7356,
+        "estimated": false,
+        "inputTokens": 6861,
+        "outputTokens": 495,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 32076
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7221,
+        "estimated": false,
+        "inputTokens": 6740,
+        "outputTokens": 481,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 39729
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 6933,
+        "estimated": false,
+        "inputTokens": 6446,
+        "outputTokens": 487,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 33007
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 8053,
+        "estimated": true
+      },
+      "durationMs": 42501
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": 8,
+      "usage": {
+        "tokens": 11935,
+        "estimated": false,
+        "inputTokens": 11283,
+        "outputTokens": 652,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 34783
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 4829,
+        "estimated": false,
+        "inputTokens": 4463,
+        "outputTokens": 366,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 21689
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 9531,
+        "estimated": false,
+        "inputTokens": 8702,
+        "outputTokens": 829,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 25966
+    }
+  ]
+}

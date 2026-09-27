@@ -1,0 +1,59 @@
+diff --git a/src/cli.tsx b/src/cli.tsx
+index 5334934..8f93e11 100644
+--- a/src/cli.tsx
++++ b/src/cli.tsx
+@@ -42,10 +42,11 @@ bash 需批准（包括列目录和搜索）。非交互模式不执行未批准
+ export async function main(argv = process.argv.slice(2)) {
+   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
+     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' }, plain: { type: 'boolean' }, demo: { type: 'boolean' }, 'read-only': { type: 'boolean' },
+-    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
++    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, status: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
+   } });
+   if (values.help) { process.stdout.write(help); return; }
+   if (values.version) { const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); process.stdout.write(pkg.version + '\n'); return; }
++  if (values.status !== undefined && positionals[0] !== 'sessions') throw new Error('--status 只能用于 sessions。');
+   const overrides = Object.fromEntries(Object.entries({ model: values.model, provider: values.provider, baseUrl: values['base-url'], permissions: values['read-only'] || values.demo ? 'read-only' : undefined }).filter(([, value]) => value !== undefined));
+   let config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
+   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
+diff --git a/src/sessions/list.ts b/src/sessions/list.ts
+index 1d38b42..17b244c 100644
+--- a/src/sessions/list.ts
++++ b/src/sessions/list.ts
+@@ -8,8 +8,17 @@ export interface SessionSummary {
+   goal?: string; status?: string; error?: string;
+ }
+ 
++export const sessionStatuses = ['running', 'awaiting_approval', 'cancelled', 'limited', 'failed', 'answered', 'verified', 'interrupted', 'legacy'] as const;
++export type SessionStatus = typeof sessionStatuses[number];
++export interface SessionListOptions { cwd?: string; status?: SessionStatus | string }
++
+ /** Read-only discovery: listing never acquires locks, migrates, or recovers a session. */
+-export async function listSessions(home: string): Promise<SessionSummary[]> {
++export async function listSessions(home: string, options: SessionListOptions = {}): Promise<SessionSummary[]> {
++  if (options.status !== undefined && !(sessionStatuses as readonly string[]).includes(options.status)) {
++    throw new Error(`未知会话状态：${options.status}`);
++  }
++  const filterCwd = options.cwd === undefined ? undefined : path.resolve(options.cwd);
++  const filtered = filterCwd !== undefined || options.status !== undefined;
+   let entries;
+   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
+   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+@@ -17,10 +26,15 @@ export async function listSessions(home: string): Promise<SessionSummary[]> {
+     try {
+       const data = parseSessionData(JSON.parse(await readFile(path.join(home, 'sessions', entry.name, 'session.json'), 'utf8')), entry.name);
+       const task = 'task' in data ? data.task as { goal?: string; status?: string } | undefined : undefined;
++      const status = task?.status ?? 'legacy';
++      if (filterCwd !== undefined && data.cwd !== filterCwd) return undefined;
++      if (options.status !== undefined && status !== options.status) return undefined;
+       const first = data.messages.find(m => m.role === 'user');
+-      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
+-    } catch (error) { return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
++      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status };
++    } catch (error) {
++      return filtered ? undefined : { id: entry.name, error: redact(errorText(error)).slice(0, 240) };
++    }
+   }));
+-  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries, (_key, value) => typeof value === 'string' ? redact(value) : value));
++  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries.filter((summary): summary is SessionSummary => summary !== undefined), (_key, value) => typeof value === 'string' ? redact(value) : value));
+   return safe.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id));
+ }
