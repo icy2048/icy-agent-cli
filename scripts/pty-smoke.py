@@ -70,9 +70,12 @@ class Terminal:
         # A checkpoint can reach disk before React renders an editable prompt.
         # Wait for the current frame, rather than matching an older idle frame.
         self.wait(lambda: "输入你的目标" in ANSI.sub("", self.raw.rsplit(b"\x1b[?2026h", 1)[-1].decode("utf-8", errors="replace")), "editable prompt")
+        # Ink may paint the restored view before its input effect enables raw
+        # mode. A canonical terminal echo is not a rendered Composer draft.
+        self.wait(lambda: not (termios.tcgetattr(self.fd)[3] & (termios.ICANON | termios.ECHO)), "raw input ready")
         start = len(self.raw)
         os.write(self.fd, text.encode())
-        self.wait(lambda: text in self.screen(start), f"draft {text}")
+        self.wait(lambda: re.search(r"❯\s*" + re.escape(text) + r"(?:\s|$)", self.screen(start)), f"draft {text}")
         os.write(self.fd, b"\r")
 
     def key(self, value):

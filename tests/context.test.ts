@@ -208,3 +208,26 @@ for (const protocol of ['chat-completions', 'responses'] as const) test(`${proto
     assert.deepEqual(history, original);
   } finally { await s.cleanup(); }
 });
+
+test('hundreds of old reads form a bounded archive index while unknown effects and fresh observations remain visible', async () => {
+  const s = await setup('responses');
+  try {
+    const history: Message[] = [{ role: 'user', content: 'Continue the same task; do not repeat an unknown write.' }];
+    for (let i = 0; i < 180; i++) {
+      const call = { id: `historical-${i}`, name: i === 0 ? 'write' : 'read', arguments: JSON.stringify({ path: 'target.ts', offset: 1, limit: 100 }) };
+      history.push({ role: 'assistant', content: '', calls: [call], opaque: [{ type: 'reasoning', encrypted_content: 'r'.repeat(800) }, { type: 'function_call', call_id: call.id, name: call.name, arguments: call.arguments }] }, { role: 'tool', id: call.id, content: JSON.stringify({ ok: i !== 0, error: i === 0 ? 'interrupted_unknown' : undefined, content: 'x'.repeat(2500) }) });
+    }
+    const before = structuredClone(history), provider = new ModelProvider(s.config);
+    const built = await new ContextManager(s.config, s.store).build(history, new AbortController().signal, undefined, messages => provider.estimateInputChars(messages, []));
+    assert.ok(built.stats.afterChars < 20000, 'old read indexes must not crowd out useful work');
+    assert.deepEqual(built.messages.slice(-8), history.slice(-8));
+    const indexes = built.messages.filter(m => m.role === 'assistant' && m.content.includes('icy.archived-exchange'));
+    assert.equal(indexes.length, 1);
+    const index = JSON.parse(indexes[0].content);
+    assert.equal(index.exchangeCount, 176); assert.equal(index.toolResultCount, 176);
+    assert.equal(index.outcomes.find((entry: {id: string}) => entry.id === 'historical-0').error, 'interrupted_unknown');
+    assert.ok(index.outcomes.length <= 4);
+    assert.deepEqual(JSON.parse(await s.store.readOutput(index.outputRef.slice('icy-output:'.length))), history.slice(1, -8));
+    assert.deepEqual(history, before);
+  } finally { await s.cleanup(); }
+});

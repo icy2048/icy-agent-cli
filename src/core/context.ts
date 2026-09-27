@@ -79,21 +79,35 @@ export class ContextManager {
           signal.throwIfAborted();
           const message = history[i];
           if (message.role !== 'assistant' || i === latestAssistant) continue;
-          const ids = new Set(message.calls.map(call => call.id));
-          if (ids.size !== message.calls.length) continue;
-          let end = i + 1;
-          const observed = new Set<string>();
-          while (end < history.length && history[end].role === 'tool') {
-            const result = history[end] as Extract<Message, { role: 'tool' }>;
-            if (!ids.has(result.id) || observed.has(result.id)) break;
-            observed.add(result.id); end++;
+          const completeEnd = (start: number) => {
+            const assistant = history[start];
+            if (assistant?.role !== 'assistant' || start === latestAssistant) return start;
+            const ids = new Set(assistant.calls.map(call => call.id));
+            if (ids.size !== assistant.calls.length) return start;
+            let end = start + 1;
+            const observed = new Set<string>();
+            while (end < history.length && history[end].role === 'tool') {
+              const result = history[end] as Extract<Message, { role: 'tool' }>;
+              if (!ids.has(result.id) || observed.has(result.id)) return start;
+              observed.add(result.id); end++;
+            }
+            return observed.size === ids.size && end <= protectedFrom ? end : start;
+          };
+          let end = completeEnd(i), exchangeCount = 1;
+          if (end === i) continue;
+          // A reference per old read still grows without bound. Group adjacent
+          // complete exchanges, but never cross a user message or a recent batch.
+          while (end < history.length) {
+            const next = completeEnd(end);
+            if (next === end) break;
+            end = next; exchangeCount++;
           }
-          if (observed.size !== ids.size || end > protectedFrom || end <= i) continue;
           const exchange = history.slice(i, end), raw = JSON.stringify(exchange);
+          const archivedCalls = new Map(exchange.filter(entry => entry.role === 'assistant').flatMap(entry => entry.calls).map(call => [call.id, call]));
           let reference = this.references.get(raw);
           if (!reference) { reference = `icy-output:${await this.store.output(raw)}`; this.references.set(raw, reference); }
           const outcomes = exchange.filter((entry): entry is Extract<Message, { role: 'tool' }> => entry.role === 'tool').map(entry => {
-            const call = message.calls.find(call => call.id === entry.id)!;
+            const call = archivedCalls.get(entry.id)!;
             const request: Record<string, unknown> = {};
             try {
               const args = JSON.parse(call.arguments);
@@ -112,9 +126,21 @@ export class ContextManager {
               return outcome;
             } catch { return { id: entry.id, tool: call.name, request, outcome: 'see original' }; }
           });
-          messages[i] = { role: 'assistant', calls: [], content: JSON.stringify({ kind: 'icy.archived-exchange', outputRef: reference, outcomes }) };
+          // Mechanical index only: keep every unknown result, the latest
+          // mutation per file, the last failed command, and three latest actions.
+          const selected = new Set(outcomes.slice(-3));
+          const mutations = new Map<string, (typeof outcomes)[number]>();
+          let lastFailedCommand: (typeof outcomes)[number] | undefined;
+          for (const outcome of outcomes) {
+            if (outcome.error === 'interrupted_unknown') selected.add(outcome);
+            if (typeof outcome.changedFile === 'string') mutations.set(outcome.changedFile, outcome);
+            if (outcome.tool === 'bash' && outcome.ok === false) lastFailedCommand = outcome;
+          }
+          for (const mutation of mutations.values()) selected.add(mutation);
+          if (lastFailedCommand) selected.add(lastFailedCommand);
+          messages[i] = { role: 'assistant', calls: [], content: JSON.stringify({ kind: 'icy.archived-exchange', outputRef: reference, exchangeCount, toolResultCount: outcomes.length, outcomes: outcomes.filter(outcome => selected.has(outcome)) }) };
           for (let index = i + 1; index < end; index++) archived.add(index);
-          stats.archivedExchanges = (stats.archivedExchanges ?? 0) + 1;
+          stats.archivedExchanges = (stats.archivedExchanges ?? 0) + exchangeCount;
           if (measure(active()) <= this.config.maxContextChars * 0.8) break;
           i = end - 1;
         }
