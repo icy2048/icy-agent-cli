@@ -1,0 +1,71 @@
+{
+  "kind": "independent-final-requirement-review",
+  "complete": true,
+  "reviewedAt": "2026-09-27T17:14:05.805Z",
+  "runtimeSourceCommit": "ad9871e3bad339ba7497326bf60e0adb9c4d780c",
+  "automatedReport": "repository-tasks-final.json",
+  "reviewMethod": "Source and new-test inspection against the original full task, combined with independent CLI/library/snapshot checks, full tests, build, installed-package checks, tool-pairing and mutation-scope audits. No candidate feature code was manually edited by the reviewer.",
+  "limitations": "Two explicit review-feedback stages and multiple recorded continuation budgets were needed. These are recovered tasks, not two first-attempt autonomous successes. Historical failures remain in separate reports.",
+  "trials": [
+    {
+      "trial": 1,
+      "passed": true,
+      "patch": "repository-tasks-final-trial-1.patch",
+      "fileHashes": {
+        "src/sessions/list.ts": "0e75725880443fff75977154e967f4b5afdf3b090cc64e9db44a58f27409fd8a",
+        "src/cli.tsx": "a3cae70095be2e633cc73574de57368b8b44ede41efb301e32fffda478006bcd",
+        "README.md": "4bcc733c3f7be78added27c63d4f8925d68a21e9858f923f1b0226a284c57e56",
+        "tests/session-filters.test.ts": "76fe84c1842445f7fb7a552b146972c885a9d7d95c4e61b42540952eb0511ff4"
+      },
+      "checks": {
+        "composedCwdAndStatusFilter": true,
+        "allStatusesAndUnknownStatus": true,
+        "legacyAndCorruptSnapshots": true,
+        "unchangedDefaultListing": true,
+        "relativeAndMissingCwd": true,
+        "statusRestrictedToSessions": true,
+        "listingDoesNotMigrateWriteOrLockSnapshots": true,
+        "newBehaviorTestsCoverRequiredCases": true,
+        "documentationUpdated": true,
+        "checkTestBuildAndInstalledCli": true,
+        "interruptionAndUnknownWriteRecovery": true,
+        "editableScopePreserved": true
+      },
+      "testReview": "The new test compares directory entries and raw contents for valid, v1 and corrupt snapshots before and after unfiltered/filtered listSessions plus filtered CLI execution.",
+      "runCount": 12,
+      "reportedOrEstimatedTokens": 939404,
+      "includesEstimates": true,
+      "recordedRunDurationMs": 1453693
+    },
+    {
+      "trial": 2,
+      "passed": true,
+      "patch": "repository-tasks-final-trial-2.patch",
+      "fileHashes": {
+        "src/sessions/list.ts": "c95a69babb56b7ff3bbd25ec9baa26b286037a70e3a201a98831db05e91960a0",
+        "src/cli.tsx": "a1312f71eebe371d8f81d8e9ef0590f28752c1c77cd4faa49604a0f991163dc9",
+        "README.md": "ac7922cb3ade7383e8b5a4f28854c62184fdbcfe12cc500e75b47cc0a9ea3782",
+        "tests/session-filters.test.ts": "9b46ed8c102e7a571aefe4744cb72cdd21475bb2ea7f755056d25884b1e6c5ed"
+      },
+      "checks": {
+        "composedCwdAndStatusFilter": true,
+        "allStatusesAndUnknownStatus": true,
+        "legacyAndCorruptSnapshots": true,
+        "unchangedDefaultListing": true,
+        "relativeAndMissingCwd": true,
+        "statusRestrictedToSessions": true,
+        "listingDoesNotMigrateWriteOrLockSnapshots": true,
+        "newBehaviorTestsCoverRequiredCases": true,
+        "documentationUpdated": true,
+        "checkTestBuildAndInstalledCli": true,
+        "interruptionAndUnknownWriteRecovery": true,
+        "editableScopePreserved": true
+      },
+      "testReview": "The new fixtureState helper compares directory entries and raw contents before/after normal and combined-filter listing, and separately around the CLI. Legacy status and invalid JSON are covered; the external verifier additionally checks v1 bytes remain unchanged.",
+      "runCount": 11,
+      "reportedOrEstimatedTokens": 946043,
+      "includesEstimates": true,
+      "recordedRunDurationMs": 1619316
+    }
+  ]
+}

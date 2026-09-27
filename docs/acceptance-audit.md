@@ -11,8 +11,8 @@
 | PR 1/5：合法未完成调用分别恢复为未知／未执行，不重放副作用 | `src/sessions/store.ts` 恢复只补结果；`tests/agent-recovery.test.ts` 检查真实写入后的恢复只发起 read；真实仓库报告核对 SIGKILL 标记、未知写入先读及恢复前后文件 hash | 自动化及实际中断证据通过；完整任务见下方 |
 | PR 2：默认 local；显式 model/off 保持；原文不被有损提炼覆盖 | `tests/fidelity.test.ts` 遍历 12 类需求，检查实际发送原文、顺序和引用边界；`tests/config.test.ts`、`tests/harness.test.ts` 检查配置与缓存 | 通过 |
 | PR 2：工具结果中的指令不能升级为用户要求 | fidelity 直接回归在 off/local/model 下检查不可信工具结果仍为 tool 消息，不进入用户消息、语义提炼请求或约束提醒；Provider 将工具结果标为不可信数据 | 通过 |
-| PR 2：保真夹具及 off/local/model 实际任务比较 | [保真报告](evaluations/prompt-fidelity.json) 36 个组合；两组独立保存的 45 次真实模型任务，各含 5 类 × 3 模式 × 3 次；记录失败、usage、耗时及审批 | 通过；分别 43/45、42/45，属于中间版本，不报告为当前版本成功率 |
-| 质量门禁：锁文件安装，源码／测试类型检查、测试、构建，Node 22 macOS/Linux | `.github/workflows/ci.yml` 使用 npm ci；`ad9871e` 的 [双平台 CI](https://github.com/icy88/icy-agent-cli/actions/runs/36334804141) 各通过 250 项测试 | 通过；交付文档提交仍需核对最新 PR 检查 |
+| PR 2：保真夹具及 off/local/model 实际任务比较 | [保真报告](evaluations/prompt-fidelity.json) 36 个组合；两组独立保存的 45 次真实模型任务，各含 5 类 × 3 模式 × 3 次；记录失败、usage、耗时及审批 | 历史门禁分别 43/45、42/45；顺序与修改范围证据不足，当前严格 45 次评测及回复审查待完成 |
+| 质量门禁：锁文件安装，源码／测试类型检查、测试、构建，Node 22 macOS/Linux | `.github/workflows/ci.yml` 使用 npm ci；`a477d8a` 的 [双平台 CI](https://github.com/icy88/icy-agent-cli/actions/runs/36335921823) 各通过 252 项测试；另一次 Ubuntu `/todo` UI 测试在界面更新前断言失败，正在修复测试时序 | 最终提交仍需核对最新 PR 检查 |
 | 质量门禁：CLI 成功 0、审批 2、取消 130、错误 1；NDJSON 纯净；空 home 安装 | `tests/cli.test.ts` 用真实子进程与 HTTP 服务检查退出码、逐行 JSON 和输出通道；`scripts/package-smoke.mjs` 临时安装后运行 help/version/demo | 通过 |
 | PR 3：每轮 ContextManager；50,000 字符案例连续 20 次读完收尾 | `tests/context.test.ts` 两协议各执行 20 次真实 read，检查每次请求大小、源会话完整和调用顺序；Provider 请求计量含指令与工具 | 通过 |
 | PR 3：可回读引用、缓存、不覆盖源历史、保留配对和 opaque 顺序 | `tests/context.test.ts` 重建完整归档并与原历史逐项比较，检查引用缓存和原对象不变；`tests/runtime.test.ts` 分页回读 Unicode 长输出及尾部 | 通过；旧 opaque 随完整交换归档，活动 opaque 保持原样及顺序 |
@@ -26,6 +26,25 @@
 | PR 6：会话入口、模型／工作区匹配、切换失败保留当前会话；展示阶段与预算 | `tests/cli-resume.test.ts`、agent-recovery、ui-task；`src/ui/transcript.ts` 显示检查点、原因和新预算来源；Linux PTY 实际切换与恢复 | 通过 |
 | 模块边界：Registry / PermissionPolicy / Executor | 三个模块职责分离；`tests/permissions.test.ts` 核对精确 command/cwd/timeout、会话隔离、取消及审批后目录替换 | 通过 |
 | 补充缺口：真正 Linux 交互终端 | [Linux 证据](evaluations/linux-pty.json) 和[终端记录](evaluations/linux-pty-transcript.txt)；POSIX PTY 自动门禁在两个平台运行 | 通过；由 Codex 操作，不是真人可用性研究 |
-| 补充缺口：真实仓库跨文件任务，取消、SIGKILL、恢复，最终独立验收 | 两个原会话已通过补齐后的功能、恢复与安装验收；[独立审查](evaluations/repository-review-findings.json) 仍发现正常列举无副作用的新增回归缺失，当前正补齐测试 | **待完成；不能由其他门禁代替** |
+| 补充缺口：真实仓库跨文件任务，取消、SIGKILL、恢复，最终独立验收 | [最终运行记录](evaluations/repository-tasks-final.json) 两项均通过；[源码与新增测试复核](evaluations/repository-final-review.json) 核对原任务全部要求，含正常列举的目录条目和原始内容比较 | 通过；经过两轮明确审查反馈及多次独立预算续跑 |
 
-真实仓库任务要求的会话过滤功能属于评测候选输出，仅保留为 patch 证据，没有合入本项目功能。其安装入口等审查问题也发生在评测副本中；当前项目安装门禁已通过。最终需要同时确认功能、新增测试、文档、原文件保护、未知副作用核对和补齐后的安装验收。
+## 可复现场景索引
+
+原计划的任务夹具分布在以下 12 类场景中。确定性控制流夹具由 `npm test` 执行；真实模型场景由 `scripts/evaluate-tasks.ts` 和 `scripts/evaluate-repository.ts` 的显式 `--live` 模式执行，结果分开记录。12 类场景和额外的 12 条需求保真文本不是同一个统计口径。
+
+| 场景 | 可执行夹具 |
+| --- | --- |
+| 仓库文件阅读 | cli HTTP fixture、实际 read 工具、临时 README |
+| 跨文件修改 | live `cross-file` |
+| 先读、修改、再验证 | live `ordered-edit`；执行审查检查读写及验证顺序 |
+| 中文与结构化迁移 | live `structured-migration`，保留中文、数组顺序、false、0、空字符串 |
+| 条件与例外分支 | live `conditional-exception` |
+| 条件不成立时保持原文件且不重写 | live `conditional-no-change` |
+| 长输出与循环上下文 | runtime 长输出分页、context 20 轮实际读取 |
+| 模型响应中断／失败 | providers、provider-timeout HTTP 终止与持续流夹具 |
+| 用户取消 | cli SIGINT/SIGTERM、agent-recovery 实际写入后取消 |
+| 批准与拒绝 | permissions、cli 审批退出码、实际 PTY 的 Y/N 流程 |
+| 损坏会话与锁恢复 | session 非法快照矩阵与失败重试 |
+| 进程崩溃后恢复原任务 | repository 实际 SIGKILL；session-verification-recovery 不同执行阶段 |
+
+真实仓库任务要求的会话过滤功能属于评测候选输出，仅保留为 patch 证据，没有合入本项目功能。其安装入口等审查问题也发生在评测副本中；当前项目安装门禁已通过。最终复核已确认功能、新增测试、文档、原文件保护、未知副作用核对和补齐后的安装验收。
