@@ -42,7 +42,22 @@ export class ModelProvider implements Provider {
     const limits = [this.options.maxOutputTokens, budget?.maxOutputTokens].filter((value): value is number => value !== undefined);
     if (limits.some(value => !Number.isSafeInteger(value) || value <= 0)) throw new Error('Invalid output token limit.');
     const maxOutputTokens = limits.length ? Math.min(...limits) : undefined;
-    return this.config.provider === 'responses' ? this.responses(messages, tools, signal, onDelta, onReasoning, maxOutputTokens) : this.chat(messages, tools, signal, onDelta, onReasoning, maxOutputTokens);
+    // SDK fetch timeouts end when headers arrive. Keep a deadline alive until
+    // the whole stream finishes, including retries and any partial tool response.
+    const deadline = new AbortController();
+    const effectiveSignal = AbortSignal.any([signal, deadline.signal]);
+    const timer = setTimeout(() => deadline.abort(), this.config.requestTimeoutMs);
+    timer.unref();
+    try {
+      const result = await (this.config.provider === 'responses'
+        ? this.responses(messages, tools, effectiveSignal, onDelta, onReasoning, maxOutputTokens)
+        : this.chat(messages, tools, effectiveSignal, onDelta, onReasoning, maxOutputTokens));
+      effectiveSignal.throwIfAborted();
+      return result;
+    } catch (error) {
+      if (deadline.signal.aborted && !signal.aborted) throw new Error(`model_request_timeout: ${this.config.requestTimeoutMs}ms`);
+      throw error;
+    } finally { clearTimeout(timer); }
   }
   private chatRequest(messages: Message[], tools: ToolDefinition[], maxOutputTokens?: number): ChatCompletionCreateParamsStreaming {
     const input: ChatCompletionMessageParam[] = [{ role: 'system', content: this.options.instructions ?? instructions }, ...messages.map((m): ChatCompletionMessageParam => {
