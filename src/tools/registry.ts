@@ -34,8 +34,10 @@ const page = (content: string, offset: number | null, limit: number | null) => {
 export class ToolRegistry {
   private allowed = new Set<string>();
   private denied = new Set<string>();
+  private approvalListener?: (waiting: boolean) => Promise<void>;
   constructor(readonly config: Config, private store: SessionStore, private approve?: Approve) {}
   forSession(config: Config, store: SessionStore) { return new ToolRegistry(config, store, this.approve); }
+  setApprovalListener(listener?: (waiting: boolean) => Promise<void>) { this.approvalListener = listener; }
   definitions(): ToolDefinition[] {
     return Object.entries(schemas).filter(([name]) => this.config.permissions !== 'read-only' || name === 'read').map(([name, schema]) => ({ name, description: descriptions[name as keyof typeof schemas], parameters: z.toJSONSchema(schema.strict()) }));
   }
@@ -111,7 +113,11 @@ export class ToolRegistry {
           if (this.denied.has(key)) throw new Error('permission_denied');
           if (!this.allowed.has(key)) {
             if (!this.approve) throw new Error('approval_required');
-            const choice = await this.approve(request, signal); signal.throwIfAborted();
+            await this.approvalListener?.(true);
+            let choice;
+            try { choice = await this.approve(request, signal); }
+            finally { await this.approvalListener?.(false); }
+            signal.throwIfAborted();
             if (choice === 'deny') { this.denied.add(key); throw new Error('permission_denied'); }
             if (choice === 'session') this.allowed.add(key);
           }

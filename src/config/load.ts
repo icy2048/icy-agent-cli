@@ -33,7 +33,7 @@ export async function loadConfig(cwd: string, overrides: Record<string, unknown>
   const user = await readJson(path.join(home, 'config.json'));
   const ui = await readJson(path.join(home, 'ui.json'));
   const project = await readJson(path.join(cwd, '.icy/config.json'));
-  const defaults = schema.parse(user);
+  const defaults = schema.parse({ promptCompaction: 'local', ...user });
   const safeProject: Record<string, unknown> = {};
   if (typeof project.model === 'string') safeProject.model = project.model;
   for (const key of ['maxModelTurns', 'maxToolCalls', 'maxTokens', 'maxContextChars'] as const) {
@@ -68,6 +68,6 @@ export async function saveThinkingPreference(home: string, thinkingExpanded: boo
 export async function initConfig(home: string): Promise<string> {
   await mkdir(home, { recursive: true, mode: 0o700 });
   const file = path.join(home, 'config.json');
-  await writeFile(file, JSON.stringify({ provider: 'chat-completions', baseUrl: 'https://api.openai.com/v1', model: '', apiKeyEnv: 'ICY_API_KEY', permissions: 'workspace-edit', maxModelTurns: 20, maxToolCalls: 50 }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  await writeFile(file, JSON.stringify({ provider: 'chat-completions', baseUrl: 'https://api.openai.com/v1', model: '', apiKeyEnv: 'ICY_API_KEY', permissions: 'workspace-edit', promptCompaction: 'local', maxModelTurns: 20, maxToolCalls: 50 }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   return file;
 }

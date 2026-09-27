@@ -15,7 +15,7 @@ import type { AgentEvent, Message, Provider } from '../src/core/types.js';
 const signal = () => new AbortController().signal;
 async function setup() {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-harness-'));
-  const config: Config = { home, cwd: home, provider: 'responses', baseUrl: 'https://example.test/v1', model: 'main-model', apiKey: 'secret', apiKeyEnv: 'ICY_KEY', permissions: 'read-only', maxModelTurns: 4, maxToolCalls: 5, maxTokens: 10000, maxContextChars: 20000, requestTimeoutMs: 1000, compactionMinChars: 200 };
+  const config: Config = { home, cwd: home, provider: 'responses', baseUrl: 'https://example.test/v1', model: 'main-model', apiKey: 'secret', apiKeyEnv: 'ICY_KEY', permissions: 'read-only', promptCompaction: 'model', maxModelTurns: 4, maxToolCalls: 5, maxTokens: 10000, maxContextChars: 20000, requestTimeoutMs: 1000, compactionMinChars: 200 };
   const store = await SessionStore.create(home, { cwd: home, provider: config.provider, model: config.model, baseUrl: config.baseUrl });
   return { home, config, store, cleanup: async () => { await store.close(); await rm(home, { recursive: true, force: true }); } };
 }
@@ -44,7 +44,7 @@ test('semantic preprocessing runs once before the tool loop and keeps original i
   const events: AgentEvent[] = [];
   const main: Provider = { async complete(messages) {
     mainCalls++; const first = messages[0];
-    assert.equal(first.role, 'user'); assert.match(first.content, /icy-output:/); assert.match(first.content, /不得删除现有文件/); assert.match(first.content, /src\/app.ts/); assert.ok(first.content.length < request.length);
+    assert.equal(first.role, 'user'); assert.match(first.content, /icy-output:/); assert.match(first.content, /不得删除现有文件/); assert.match(first.content, /src\/app.ts/); assert.equal(JSON.parse(first.content).original, request);
     assert.equal('preparedRequest' in first, false);
     const json = JSON.parse(first.content); assert.equal(json.schema, 'icy.user-request.v2'); assert.ok(!json.keywords.includes('src/app.ts')); assert.ok(json.constraints.includes('不得删除现有文件。')); 
     if (mainCalls === 1) return { text: '', calls: [{ id: 'tool-1', name: 'read', arguments: JSON.stringify({ path: 'missing.txt', offset: null, limit: null }) }], tokens: 5 };
@@ -90,7 +90,7 @@ test('old tool output compaction preserves IDs, full original results, opaque re
   } finally { await s.cleanup(); }
 });
 
-test('only explicit off skips the small model; malformed and failed responses preserve original task and keywords', async () => {
+test('explicit off skips the small model; malformed and failed responses preserve original task and keywords', async () => {
   const s = await setup();
   try {
     for (const config of [{ ...s.config, promptCompaction: 'off' as const }]) {
@@ -141,7 +141,7 @@ test('short inputs skip the lightweight model while long and always-on inputs re
   } });
   try {
     for (const input of ['你好', 'icy /new']) {
-      const result = await preparePrompt([{ role: 'user', content: input }], { ...s.config, maxTokens: 1000 }, s.store, signal(), factory);
+      const result = await preparePrompt([{ role: 'user', content: input }], { ...s.config, maxTokens: 100000 }, s.store, signal(), factory);
       const json = JSON.parse(result.messages[0].content);
       assert.equal(result.stats.semantic, 'skipped'); assert.equal(json.task, input); assert.equal(json.schema, 'icy.user-request.v2');
       assert.deepEqual(json.keywords, []); assert.equal(json.original_ref, undefined);
@@ -152,7 +152,7 @@ test('short inputs skip the lightweight model while long and always-on inputs re
     const cached = await preparePrompt(history, s.config, s.store, signal(), () => { assert.fail('must reuse skipped compaction'); });
     assert.equal(skipped.stats.semantic, 'skipped'); assert.equal(cached.stats.semantic, 'cached'); assert.equal(invoked, 0);
     const longInput = '重新设计界面。'.repeat(4000);
-    const refined = await preparePrompt([{ role: 'user', content: longInput }], { ...s.config, maxTokens: 1000 }, s.store, signal(), factory);
+    const refined = await preparePrompt([{ role: 'user', content: longInput }], { ...s.config, maxTokens: 100000 }, s.store, signal(), factory);
     const refinedJson = JSON.parse(refined.messages[0].content);
     assert.equal(invoked, 1); assert.equal(refined.stats.semantic, 'applied'); assert.equal(refinedJson.task, longInput); assert.ok(refinedJson.original_ref);
     const always = await preparePrompt([{ role: 'user', content: '你好' }], { ...s.config, compactionMinChars: 0 }, s.store, signal(), factory);

@@ -21,7 +21,7 @@ async function server(events: unknown[]) {
   const baseUrl = `http://127.0.0.1:${(http.address() as {port:number}).port}/v1`;
   return { requests, baseUrl, close: () => new Promise<void>((resolve, reject) => http.close(e => e ? reject(e) : resolve())) };
 }
-const config = (baseUrl: string, provider: 'chat-completions' | 'responses' = 'chat-completions'): Config => ({ baseUrl, provider, model: 'fixture-model', apiKey: 'fixture-key', apiKeyEnv: 'ICY_KEY', home: '/unused', cwd: '/unused', permissions: 'read-only', maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100000, maxContextChars: 100000, requestTimeoutMs: 1000 });
+const config = (baseUrl: string, provider: 'chat-completions' | 'responses' = 'chat-completions'): Config => ({ baseUrl, provider, model: 'fixture-model', apiKey: 'fixture-key', apiKeyEnv: 'ICY_KEY', home: '/unused', cwd: '/unused', permissions: 'read-only', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100000, maxContextChars: 100000, requestTimeoutMs: 1000 });
 function advertisedTools(baseUrl: string) {
   const c = { ...config(baseUrl), permissions: 'workspace-edit' as const };
   const store = new SessionStore(c.home, { version: 1, id: 'fixture', cwd: c.cwd, provider: c.provider, model: c.model, baseUrl, messages: [], updatedAt: '' });

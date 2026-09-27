@@ -51,7 +51,7 @@ test('model configuration saves a private credential file and preserves unrelate
 
 test('switching models opens a new session and keeps the previous session intact; failed save keeps current model', async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-switch-'));
-  const config: Config = { home, cwd: home, model: 'old-model', apiKey: 'old-key', apiKeyEnv: 'ICY_API_KEY', baseUrl: 'https://old.test/v1', provider: 'responses', permissions: 'read-only', promptCompaction: 'off', maxModelTurns: 2, maxToolCalls: 3, maxTokens: 10000, maxContextChars: 10000, requestTimeoutMs: 1000 };
+  const config: Config = { home, cwd: home, model: 'old-model', apiKey: 'old-key', apiKeyEnv: 'ICY_API_KEY', baseUrl: 'https://old.test/v1', provider: 'responses', permissions: 'read-only', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 2, maxToolCalls: 3, maxTokens: 10000, maxContextChars: 10000, requestTimeoutMs: 1000 };
   const store = await SessionStore.create(home, { cwd: home, model: config.model, provider: config.provider, baseUrl: config.baseUrl });
   store.data.messages.push({ role: 'user', content: 'old conversation' }); await store.save();
   const provider = { complete: async () => ({ text: 'new provider', calls: [] }) };

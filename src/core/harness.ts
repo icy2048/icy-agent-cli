@@ -1,6 +1,6 @@
 import type { Config } from '../config/load.js';
 import { assembleRequest } from './prompt-schema.js';
-import type { Message, PreparedRequest } from './types.js';
+import type { Message, PreparedRequest, Usage } from './types.js';
 import { compactSemantically, type SemanticProviderFactory } from './semantic.js';
 import type { SessionStore } from '../sessions/store.js';
 
@@ -9,6 +9,7 @@ export interface PromptStats {
   savedChars: number; compactedToolResults: number; inputChanged: boolean; fallback: boolean;
   semantic: 'off' | 'cached' | 'applied' | 'invalid' | 'failed' | 'skipped';
   semanticModel?: string; preprocessingTokens: number; preprocessingEstimated: boolean;
+  preprocessingUsage?: Usage;
 }
 
 /** Conservative formatting cleanup, never paraphrases or truncates user requirements. */
@@ -19,8 +20,13 @@ export function slimUserPrompt(input: string): string {
 }
 
 /** Only protocol data enters the provider; UI metadata stays in the session. */
+export function requestContent(original: string, prepared: PreparedRequest): string {
+  // A vocabulary index cannot preserve action order, conditions or intent.
+  // Keep the source authoritative even when a user explicitly opts into refinement.
+  return JSON.stringify({ ...prepared, ...(prepared.task !== original ? { original } : {}) });
+}
 export function modelMessage(message: Message, compact = false, structured = false): Message {
-  if (message.role === 'user') return { role: 'user', content: structured ? JSON.stringify(message.preparedRequest ?? assembleRequest(message.content, message.preparedContent ?? message.content)) : compact ? slimUserPrompt(message.content) : message.content };
+  if (message.role === 'user') return { role: 'user', content: structured ? requestContent(message.content, message.preparedRequest ?? assembleRequest(message.content, message.preparedContent ?? message.content)) : compact ? slimUserPrompt(message.content) : message.content };
   if (message.role === 'tool') return { role: 'tool', id: message.id, content: message.content };
   return { role: 'assistant', content: message.content, calls: message.calls, ...(message.opaque ? { opaque: message.opaque } : {}) };
 }
@@ -54,7 +60,7 @@ export async function preparePrompt(history: Message[], config: Config, store: S
   signal.throwIfAborted();
   const original = history.map(m => modelMessage(m));
   const beforeChars = JSON.stringify(original).length;
-  const stats: PromptStats = { mode: config.promptCompaction ?? 'model', beforeChars, afterChars: beforeChars, savedChars: 0, compactedToolResults: 0, inputChanged: false, fallback: false, semantic: 'off', preprocessingTokens: 0, preprocessingEstimated: false };
+  const stats: PromptStats = { mode: config.promptCompaction ?? 'local', beforeChars, afterChars: beforeChars, savedChars: 0, compactedToolResults: 0, inputChanged: false, fallback: false, semantic: 'off', preprocessingTokens: 0, preprocessingEstimated: false };
   if (stats.mode === 'off') return { messages: original, stats };
   try {
     const messages = history.map(m => modelMessage(m, true, stats.mode === 'model'));
@@ -67,16 +73,17 @@ export async function preparePrompt(history: Message[], config: Config, store: S
       else if (current.content.length < config.compactionMinChars) {
         stats.semantic = 'skipped';
         preparedRequest = assembleRequest(current.content, current.content);
-        messages[latest].content = JSON.stringify(preparedRequest);
+        messages[latest].content = requestContent(current.content, preparedRequest);
       } else {
         const semantic = await compactSemantically(current.content, config, signal, semanticFactory);
         stats.semantic = semantic.outcome; stats.preprocessingTokens = semantic.tokens; stats.preprocessingEstimated = semantic.estimated;
+        stats.preprocessingUsage = semantic.usage;
         stats.fallback = ['failed', 'invalid'].includes(semantic.outcome);
         let originalRef: string | undefined;
         try { originalRef = `icy-output:${await store.output(current.content)}`; }
         catch { stats.fallback = true; stats.semantic = 'failed'; }
         preparedRequest = assembleRequest(current.content, stats.fallback ? current.content : (semantic.text ?? current.content), semantic.keywords, semantic.constraints, originalRef);
-        messages[latest].content = JSON.stringify(preparedRequest);
+        messages[latest].content = requestContent(current.content, preparedRequest);
       }
     }
     stats.inputChanged = messages.some((m, i) => m.role === 'user' && m.content !== original[i].content);
@@ -109,7 +116,7 @@ export async function preparePrompt(history: Message[], config: Config, store: S
     if (preparedRequest && current?.role === 'user') current.preparedRequest = preparedRequest;
     return { messages, stats };
   } catch (error) {
-    signal.throwIfAborted();
+    if (signal.aborted) throw error;
     // A preprocessing failure must not prevent the original request from running.
     const fallback = stats.mode === 'model' ? history.map(m => m.role === 'user' ? { role: 'user' as const, content: JSON.stringify(assembleRequest(m.content, m.content)) } : modelMessage(m)) : original;
     return { messages: fallback, stats: { ...stats, semantic: stats.semantic === 'applied' ? 'failed' : stats.semantic, afterChars: JSON.stringify(fallback).length, savedChars: 0, compactedToolResults: 0, inputChanged: false, fallback: true } };

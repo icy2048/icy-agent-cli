@@ -11,20 +11,25 @@ export interface ToolResult {
   durationMs?: number; changedFile?: string; diff?: string;
 }
 export interface ToolDefinition { name: string; description: string; parameters: Record<string, unknown> }
+export interface Usage { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number; totalTokens: number }
+export interface RequestBudget { maxOutputTokens: number }
 export interface Completion {
-  text: string; calls: ToolCall[]; opaque?: unknown[]; tokens?: number; incomplete?: string; reasoning?: string;
+  text: string; calls: ToolCall[]; opaque?: unknown[]; tokens?: number; usage?: Usage; incomplete?: string; reasoning?: string;
 }
 export interface Provider {
+  estimateInputChars?(messages: Message[], tools: ToolDefinition[]): number;
   complete(messages: Message[], tools: ToolDefinition[], signal: AbortSignal,
-    onDelta: (text: string) => void, onReasoning?: (text: string) => void): Promise<Completion>;
+    onDelta: (text: string) => void, onReasoning?: (text: string) => void, budget?: RequestBudget): Promise<Completion>;
 }
 export type ApprovalDecision = 'once' | 'session' | 'deny';
 export interface ApprovalRequest { command: string; cwd: string; timeoutMs: number }
 export type Approve = (request: ApprovalRequest, signal: AbortSignal) => Promise<ApprovalDecision>;
 export type AgentEvent =
+  | { type: 'task'; task?: import('./run-state.js').TaskState; run?: import('./run-state.js').RunState }
   | { type: 'user'; text: string }
   | { type: 'harness_start' }
   | { type: 'harness_end'; stats: import('./harness.js').PromptStats }
+  | { type: 'context'; stats: import('./context.js').ContextStats }
   | { type: 'turn'; turn: number; reminderChars?: number }
   | { type: 'delta'; text: string }
   | { type: 'reasoning_delta'; text: string }
@@ -32,6 +37,6 @@ export type AgentEvent =
   | { type: 'assistant'; text: string }
   | { type: 'tool_start'; call: ToolCall }
   | { type: 'tool_end'; call: ToolCall; result: ToolResult }
-  | { type: 'usage'; tokens: number; estimated: boolean }
+  | { type: 'usage'; tokens: number; estimated: boolean; usage?: Usage }
   | { type: 'done'; reason: string; ok: boolean };
 export interface RunResult { ok: boolean; reason: string; text?: string }

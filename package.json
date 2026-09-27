@@ -17,9 +17,12 @@
   "scripts": {
     "dev": "tsx src/cli.tsx",
     "build": "node scripts/clean.mjs && tsc && node scripts/executable.mjs",
-    "check": "tsc --noEmit",
+    "check": "tsc -p tsconfig.check.json",
     "test": "tsx --test tests/*.test.ts",
-    "prepack": "npm run build"
+    "test:package": "node scripts/package-smoke.mjs",
+    "prepack": "npm run build",
+    "eval:prompts": "tsx scripts/evaluate-prompts.ts",
+    "eval:tasks": "tsx scripts/evaluate-tasks.ts"
   },
   "dependencies": {
     "diff": "9.0.0",

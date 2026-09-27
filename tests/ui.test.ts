@@ -122,7 +122,7 @@ test('model wizard imports a service, searches models, tests then applies withou
   let applied = '', verified = false;
   const config = { model: 'old', baseUrl: 'http://localhost', provider: 'responses', apiKey: '' } as import('../src/config/load.js').Config;
   const ui = render(React.createElement(ModelWizard, { config, width: 80, onClose: () => {}, onApply: async p => { assert.equal(verified, true); applied = p.model; }, services: {
-    discover: async () => [{ name: 'Imported', model: 'initial', provider: 'responses', baseUrl: 'https://example.test', apiKey: secret }],
+    discover: async () => [{ name: 'Imported', model: 'initial', provider: 'responses' as const, baseUrl: 'https://example.test', apiKey: secret }],
     list: async () => ['target-model', 'other-model'], verify: async () => { verified = true; },
   } }));
   try {

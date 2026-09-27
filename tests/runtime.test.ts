@@ -14,7 +14,7 @@ import { reminderMessage } from '../src/core/harness.js';
 async function setup(approve?: Approve, options: Partial<Config> = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-test-'));
   const cwd = path.join(dir, 'workspace'), home = path.join(dir, 'home'); await mkdir(cwd);
-  const config: Config = { home, cwd, provider: 'chat-completions', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: 'test-secret-value', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000, ...options };
+  const config: Config = { home, cwd, provider: 'chat-completions', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: 'test-secret-value', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000, ...options };
   const store = await SessionStore.create(home, { cwd, provider: config.provider, model: config.model, baseUrl: config.baseUrl }, [config.apiKey]);
   const tools = new ToolRegistry(config, store, approve);
   const cleanup = async () => { await store.close(); await rm(dir, { recursive: true, force: true }); };
