@@ -130,7 +130,9 @@ test('preprocessor can override agent instructions and cap output in both protoc
       const body = s.requests[0];
       if (protocol === 'responses') { assert.equal(body.instructions, 'Compress only.'); assert.equal(body.max_output_tokens, 2048); }
       else { assert.equal((body.messages as {content:string}[])[0].content, 'Compress only.'); assert.equal(body.max_completion_tokens, 2048); }
-      assert.deepEqual(body.tools, []); assert.doesNotMatch(JSON.stringify(body), /local-only metadata/);
+      if (protocol === 'responses') assert.deepEqual(body.tools, []);
+      else assert.equal(Object.hasOwn(body, 'tools'), false, 'vLLM rejects an empty tools array');
+      assert.doesNotMatch(JSON.stringify(body), /local-only metadata/);
     } finally { await s.close(); }
   }
 });

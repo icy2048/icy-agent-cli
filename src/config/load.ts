@@ -7,6 +7,7 @@ import { z } from 'zod';
 const schema = z.object({
   provider: z.enum(['chat-completions', 'responses']).default('chat-completions'),
   baseUrl: z.string().url().default('https://api.openai.com/v1'),
+  allowPrivateHttp: z.boolean().optional(),
   model: z.string().default(''),
   apiKeyEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).default('ICY_API_KEY'),
   apiKeyFile: z.string().optional(),
@@ -41,7 +42,7 @@ export async function loadConfig(cwd: string, overrides: Record<string, unknown>
   }
   const env = Object.fromEntries(Object.entries({ model: process.env.ICY_MODEL, baseUrl: process.env.ICY_BASE_URL, provider: process.env.ICY_PROVIDER }).filter(([, v]) => v !== undefined));
   const config = schema.parse({ ...defaults, ...(typeof ui.thinkingExpanded === 'boolean' ? { thinkingExpanded: ui.thinkingExpanded } : {}), ...safeProject, ...env, ...overrides });
-  validateBaseUrl(config.baseUrl);
+  validateBaseUrl(config.baseUrl, config.allowPrivateHttp);
   let apiKey = process.env[config.apiKeyEnv] || '';
   if (!apiKey && config.apiKeyFile) {
     const keyFile = path.resolve(home, config.apiKeyFile);
@@ -51,10 +52,14 @@ export async function loadConfig(cwd: string, overrides: Record<string, unknown>
   }
   return { ...config, baseUrl: config.baseUrl.replace(/\/$/, ''), home, cwd: path.resolve(cwd), apiKey };
 }
-export function validateBaseUrl(value: string): string {
+export function validateBaseUrl(value: string, allowPrivateHttp = false): string {
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash) throw new Error('API 地址不能包含凭据、查询参数或 fragment。');
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('远程 API 必须使用 HTTPS；本机服务可用 HTTP。');
+  const parts = url.hostname.split('.').map(Number);
+  const privateV4 = parts.length === 4 && parts.every(n => Number.isInteger(n) && n >= 0 && n <= 255)
+    && (parts[0] === 10 || (parts[0] === 172 && parts[1]! >= 16 && parts[1]! <= 31) || (parts[0] === 192 && parts[1] === 168));
+  const httpAllowed = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || (allowPrivateHttp && privateV4);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && httpAllowed)) throw new Error('远程 API 必须使用 HTTPS；本机服务可用 HTTP，私有 IPv4 服务需在用户配置启用 allowPrivateHttp。');
   return url.href.replace(/\/$/, '');
 }
 export async function saveThinkingPreference(home: string, thinkingExpanded: boolean): Promise<void> {

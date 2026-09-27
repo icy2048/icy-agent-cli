@@ -31,3 +31,33 @@ test('thinking preference survives reload without modifying model credentials', 
     assert.equal(await readFile(path.join(dir, 'config.json'), 'utf8'), original);
   } finally { if (previous === undefined) delete process.env.ICY_HOME; else process.env.ICY_HOME = previous; await rm(dir, { recursive: true, force: true }); }
 });
+
+test('private HTTP requires explicit user opt-in and never allows public hosts or credential URLs', async () => {
+  const { validateBaseUrl } = await import('../src/config/load.js');
+  for (const host of ['10.0.0.1', '172.16.0.1', '172.31.255.254', '192.168.19.143']) {
+    assert.throws(() => validateBaseUrl(`http://${host}:8888/v1`), /HTTPS/);
+    assert.equal(validateBaseUrl(`http://${host}:8888/v1`, true), `http://${host}:8888/v1`);
+  }
+  for (const host of ['172.15.0.1', '172.32.0.1', '192.169.0.1', '8.8.8.8', 'vllm.example', '169.254.169.254']) {
+    assert.throws(() => validateBaseUrl(`http://${host}/v1`, true), /HTTPS/);
+  }
+  assert.throws(() => validateBaseUrl('http://user:secret@192.168.1.1/v1', true), /凭据/);
+  assert.throws(() => validateBaseUrl('http://192.168.1.1/v1?key=secret', true), /凭据/);
+  assert.throws(() => validateBaseUrl('ftp://192.168.1.1/v1', true), /HTTPS/);
+  assert.equal(validateBaseUrl('http://localhost:8000/v1'), 'http://localhost:8000/v1');
+});
+
+test('project configuration cannot opt into private HTTP but user configuration can', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'icy-private-http-')), previous = process.env.ICY_HOME;
+  process.env.ICY_HOME = path.join(dir, 'home');
+  try {
+    await mkdir(process.env.ICY_HOME); await mkdir(path.join(dir, '.icy'));
+    const user = { baseUrl: 'http://192.168.1.10:8000/v1', model: 'local', apiKeyEnv: 'ICY_TEST_UNUSED' };
+    await writeFile(path.join(process.env.ICY_HOME, 'config.json'), JSON.stringify(user));
+    await writeFile(path.join(dir, '.icy/config.json'), JSON.stringify({ allowPrivateHttp: true }));
+    await assert.rejects(loadConfig(dir), /HTTPS/);
+    await writeFile(path.join(process.env.ICY_HOME, 'config.json'), JSON.stringify({ ...user, allowPrivateHttp: true }));
+    const config = await loadConfig(dir);
+    assert.equal(config.baseUrl, user.baseUrl); assert.equal(config.allowPrivateHttp, true);
+  } finally { if (previous === undefined) delete process.env.ICY_HOME; else process.env.ICY_HOME = previous; await rm(dir, { recursive: true, force: true }); }
+});

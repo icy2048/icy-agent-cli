@@ -67,3 +67,18 @@ test('switching models opens a new session and keeps the previous session intact
     assert.equal((await agent.run('hello', new AbortController().signal)).text, 'new provider');
   } finally { await agent.store.close(); await rm(home, { recursive: true, force: true }); }
 });
+
+test('private HTTP profile opt-in survives save and is removed when switching back', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'icy-private-profile-'));
+  const local = { ...profile, baseUrl: 'http://192.168.1.10:8000/v1', allowPrivateHttp: true };
+  try {
+    assert.equal(profileConfig({} as Config, local).allowPrivateHttp, true);
+    assert.throws(() => profileConfig({ allowPrivateHttp: true } as Config, { ...local, allowPrivateHttp: undefined }), /HTTPS/);
+    await saveModelProfile(home, local);
+    let saved = JSON.parse(await readFile(path.join(home, 'config.json'), 'utf8'));
+    assert.equal(saved.allowPrivateHttp, true); assert.equal(saved.baseUrl, local.baseUrl);
+    await saveModelProfile(home, profile);
+    saved = JSON.parse(await readFile(path.join(home, 'config.json'), 'utf8'));
+    assert.equal(saved.allowPrivateHttp, undefined); assert.equal(saved.baseUrl, profile.baseUrl);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});

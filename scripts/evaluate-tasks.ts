@@ -32,7 +32,7 @@ const results: Record<string, unknown>[] = [];
 const startedAt = new Date().toISOString();
 const sourceCommit = (await promisify(execFile)('git', ['rev-parse', 'HEAD'])).stdout.trim();
 const jobs = Array.from({ length: repetitions }, (_, repetition) => (['off', 'local', 'model'] as const).flatMap(mode => fixtures.map(fixture => ({ mode, fixture, repetition: repetition + 1 })))).flat();
-const report = (complete: boolean) => ({ kind: 'live-synthetic-tasks', sourceCommit, criteriaVersion: 2, startedAt, updatedAt: new Date().toISOString(), complete, planned: jobs.length, model: base.model, provider: base.provider, reasoningEffort: 'low', budget: { maxTokens: base.maxTokens, maxModelTurns: base.maxModelTurns, maxToolCalls: base.maxToolCalls, maxContextChars: base.maxContextChars, requestTimeoutMs: 30000, runTimeoutMs: 90000 }, repetitions, concurrency, note: 'All attempts are retained; no automatic reruns. Checks cover required reads before changes, mutation scope, final verification, protected files and expected outputs. Final replies are retained for separate requirement review. Finite synthetic samples do not prove general task reliability.', results });
+const report = (complete: boolean) => ({ kind: 'live-synthetic-tasks', sourceCommit, criteriaVersion: 2, startedAt, updatedAt: new Date().toISOString(), complete, planned: jobs.length, model: base.model, provider: base.provider, reasoningEffort: base.provider === 'responses' ? 'low' : null, budget: { maxTokens: base.maxTokens, maxModelTurns: base.maxModelTurns, maxToolCalls: base.maxToolCalls, maxContextChars: base.maxContextChars, requestTimeoutMs: 30000, runTimeoutMs: 90000 }, repetitions, concurrency, note: 'All attempts are retained; no automatic reruns. Checks cover required reads before changes, mutation scope, final verification, protected files and expected outputs. Final replies are retained for separate requirement review. Finite synthetic samples do not prove general task reliability.', results });
 let saving = Promise.resolve();
 const checkpoint = () => {
   if (!destination) return Promise.resolve();
@@ -46,7 +46,7 @@ async function runOne({ mode, fixture, repetition }: (typeof jobs)[number]) {
   for (const [name, contents] of Object.entries(fixture.files)) await writeFile(path.join(cwd, name), contents);
   const verifier = `const fs=require('node:fs'),assert=require('node:assert/strict');\nconst text=${JSON.stringify(fixture.expected ?? {})};\nfor(const [p,v] of Object.entries(text))assert.equal(fs.readFileSync(p,'utf8'),v);\nconst json=${JSON.stringify(fixture.expectedJson ?? {})};\nfor(const [p,v] of Object.entries(json))assert.deepEqual(JSON.parse(fs.readFileSync(p,'utf8')),v);\nconsole.log('fixture checks passed');\n`;
   await writeFile(path.join(cwd, 'verify.cjs'), verifier);
-  const config = { ...base, cwd, home, permissions: 'workspace-edit' as const, promptCompaction: mode, compactionMinChars: 0, reasoningEffort: 'low' as const, requestTimeoutMs: 30000 };
+  const config = { ...base, cwd, home, permissions: 'workspace-edit' as const, promptCompaction: mode, compactionMinChars: 0, reasoningEffort: base.provider === 'responses' ? 'low' as const : undefined, requestTimeoutMs: 30000 };
   const store = await SessionStore.create(home, config, [config.apiKey]);
   const started = performance.now(); let approvedChecks = 0, deniedRequests = 0;
   const approvals: Array<{ command: string; granted: boolean }> = [];

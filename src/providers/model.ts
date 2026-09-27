@@ -65,7 +65,7 @@ export class ModelProvider implements Provider {
       if (m.role === 'tool') return { role: 'tool', tool_call_id: m.id, content: m.content };
       return { role: 'assistant', content: m.content || null, ...(m.calls.length ? { tool_calls: m.calls.map(c => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: c.arguments } })) } : {}) };
     })];
-    return { model: this.config.model, messages: input, ...(maxOutputTokens !== undefined ? { max_completion_tokens: maxOutputTokens } : {}), tools: tools.map(t => ({ type: 'function', function: { ...t } })), stream: true, stream_options: { include_usage: true } };
+    return { model: this.config.model, messages: input, ...(maxOutputTokens !== undefined ? { max_completion_tokens: maxOutputTokens } : {}), ...(tools.length ? { tools: tools.map(t => ({ type: 'function' as const, function: { ...t } })) } : {}), stream: true, stream_options: { include_usage: true } };
   }
   private async chat(messages: Message[], tools: ToolDefinition[], signal: AbortSignal, onDelta: (text: string) => void, onReasoning?: (text: string) => void, maxOutputTokens?: number): Promise<Completion> {
     const stream = await this.client.chat.completions.create(this.chatRequest(messages, tools, maxOutputTokens), { signal });

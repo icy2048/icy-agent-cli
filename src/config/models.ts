@@ -12,6 +12,7 @@ import { clean, redact, errorText } from '../core/text.js';
 export interface ModelProfile {
   name: string; baseUrl: string; provider: Config['provider']; model: string; apiKey: string;
   reasoningEffort?: Config['reasoningEffort']; reasoningSummary?: boolean;
+  allowPrivateHttp?: boolean;
 }
 export interface ModelServices {
   discover(): Promise<ModelProfile[]>;
@@ -44,7 +45,7 @@ export async function discoverCCProfiles(database = path.join(homedir(), '.cc-sw
   return profiles;
 }
 export async function listModels(profile: ModelProfile, signal: AbortSignal): Promise<string[]> {
-  const base = validateBaseUrl(profile.baseUrl);
+  const base = validateBaseUrl(profile.baseUrl, profile.allowPrivateHttp);
   const response = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${profile.apiKey}` }, signal: AbortSignal.any([signal, AbortSignal.timeout(12000)]), redirect: 'error' });
   if (!response.ok) throw new Error(`模型列表不可用（HTTP ${response.status}），可以手动填写模型名。`);
   const body = await response.json() as { data?: { id?: unknown }[] };
@@ -54,7 +55,7 @@ export async function listModels(profile: ModelProfile, signal: AbortSignal): Pr
 export function profileConfig(config: Config, profile: ModelProfile): Config {
   if (!profile.model.trim()) throw new Error('请填写模型名。');
   if (!profile.apiKey.trim()) throw new Error('请填写 API key。');
-  return { ...config, baseUrl: validateBaseUrl(profile.baseUrl), provider: profile.provider, model: profile.model.trim(), apiKey: profile.apiKey.trim(), reasoningEffort: profile.reasoningEffort, reasoningSummary: profile.reasoningSummary };
+  return { ...config, baseUrl: validateBaseUrl(profile.baseUrl, profile.allowPrivateHttp), allowPrivateHttp: profile.allowPrivateHttp, provider: profile.provider, model: profile.model.trim(), apiKey: profile.apiKey.trim(), reasoningEffort: profile.reasoningEffort, reasoningSummary: profile.reasoningSummary };
 }
 export async function verifyModel(profile: ModelProfile, config: Config, signal: AbortSignal): Promise<void> {
   const candidate = profileConfig(config, profile);
@@ -64,14 +65,14 @@ export async function verifyModel(profile: ModelProfile, config: Config, signal:
   } catch (e) { throw new Error(redact(errorText(e), [profile.apiKey])); }
 }
 export async function saveModelProfile(home: string, profile: ModelProfile): Promise<void> {
-  validateBaseUrl(profile.baseUrl);
+  validateBaseUrl(profile.baseUrl, profile.allowPrivateHttp);
   let previous: Record<string, unknown> = {};
   try { previous = JSON.parse(await readFile(path.join(home, 'config.json'), 'utf8')); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
   await mkdir(path.join(home, 'credentials'), { recursive: true, mode: 0o700 });
   const keyFile = `credentials/model-${randomUUID()}.key`, temp = path.join(home, `config-${randomUUID()}.tmp`);
   try {
     await writeFile(path.join(home, keyFile), profile.apiKey.trim(), { mode: 0o600, flag: 'wx' });
-    const next = { ...previous, provider: profile.provider, baseUrl: profile.baseUrl, model: profile.model.trim(), apiKeyEnv: 'ICY_API_KEY', apiKeyFile: keyFile, reasoningEffort: profile.reasoningEffort, reasoningSummary: profile.reasoningSummary };
+    const next = { ...previous, provider: profile.provider, baseUrl: profile.baseUrl, allowPrivateHttp: profile.allowPrivateHttp, model: profile.model.trim(), apiKeyEnv: 'ICY_API_KEY', apiKeyFile: keyFile, reasoningEffort: profile.reasoningEffort, reasoningSummary: profile.reasoningSummary };
     delete (next as Record<string, unknown>).apiKey;
     await writeFile(temp, JSON.stringify(next, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
     await rename(temp, path.join(home, 'config.json'));

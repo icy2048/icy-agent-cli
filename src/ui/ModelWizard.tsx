@@ -12,11 +12,11 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
 }) {
   const [step, setStep] = useState<Step>('source'), [index, setIndex] = useState(0);
   const [profiles, setProfiles] = useState<ModelProfile[]>([]), [models, setModels] = useState<string[]>([]);
-  const [draft, setDraft] = useState<ModelProfile>({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions' });
+  const [draft, setDraft] = useState<ModelProfile>({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions', allowPrivateHttp: config.allowPrivateHttp });
   const [input, setInput] = useState(''), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [discoveryNote, setDiscoveryNote] = useState('');
   const abort = useRef(new AbortController()), operation = useRef(false), listing = useRef<AbortController | undefined>(undefined);
-  const current: ModelProfile = { name: '当前服务', baseUrl: config.baseUrl, provider: config.provider, model: config.model, apiKey: config.apiKey, reasoningEffort: config.reasoningEffort, reasoningSummary: config.reasoningSummary };
+  const current: ModelProfile = { name: '当前服务', baseUrl: config.baseUrl, provider: config.provider, model: config.model, apiKey: config.apiKey, reasoningEffort: config.reasoningEffort, reasoningSummary: config.reasoningSummary, allowPrivateHttp: config.allowPrivateHttp };
   useEffect(() => {
     void services.discover().then(p => { if (!abort.current.signal.aborted) setProfiles(p); }).catch(() => setDiscoveryNote('未能读取 CC Switch，可继续使用当前服务或手动配置。')).finally(() => setLoading(false));
     return () => abort.current.abort();
@@ -52,7 +52,7 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
   const select = () => {
     if (step === 'source') {
       if (selected < sources.length) void pickProfile(sources[selected]);
-      else { setDraft({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions' }); move('url'); }
+      else { setDraft({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions', allowPrivateHttp: config.allowPrivateHttp }); move('url'); }
     } else if (step === 'protocol') { void pickProfile({ ...draft, provider: selected === 1 ? 'responses' : 'chat-completions' }); }
     else if (step === 'models') {
       if (selected === options.length - 1) move('source');
@@ -62,7 +62,7 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
   };
   const submit = (value: string) => {
     try {
-      if (step === 'url') { setDraft({ ...draft, baseUrl: validateBaseUrl(value.trim()) }); move('key'); }
+      if (step === 'url') { setDraft({ ...draft, baseUrl: validateBaseUrl(value.trim(), config.allowPrivateHttp) }); move('key'); }
       else if (step === 'key') { if (!value.trim()) throw new Error('请输入 API key。'); setDraft({ ...draft, apiKey: value.trim() }); move('protocol'); }
       else if (step === 'manual-model') { if (!value.trim()) throw new Error('请输入模型名。'); setDraft({ ...draft, model: value.trim() }); move('confirm'); }
       else if (step === 'models') select();
