@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, type SpawnOptions } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer, type ServerResponse } from 'node:http';
 import { access, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
@@ -8,6 +8,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { SessionData } from '../src/sessions/store.js';
+import { listSessions } from '../src/sessions/list.js';
+import { resolveWorkspacePath } from '../src/tools/paths.js';
 
 const cli = fileURLToPath(new URL('../src/cli.tsx', import.meta.url));
 type Event = { type: string; [key: string]: unknown };
@@ -40,11 +42,11 @@ async function fixture(reply: (response: ServerResponse, request: Record<string,
   http.listen(0, '127.0.0.1'); await once(http, 'listening');
   const address = http.address(); assert.ok(address && typeof address !== 'string');
   await writeFile(path.join(home, 'config.json'), JSON.stringify({ provider: 'chat-completions', baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'offline-resume', apiKeyEnv: 'ICY_FIXTURE_KEY', promptCompaction: 'off', requestTimeoutMs: 1000 }));
-  async function run(args: string[], credentials = true) {
-    const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], {
-      cwd, env: { PATH: process.env.PATH, HOME: userHome, ICY_HOME: home, NO_COLOR: '1', ...(credentials ? { ICY_FIXTURE_KEY: 'offline-fixture-key' } : {}) },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  const childOptions = (credentials: boolean): SpawnOptions => ({
+    cwd, env: { PATH: process.env.PATH, HOME: userHome, ICY_HOME: home, NO_COLOR: '1', ...(credentials ? { ICY_FIXTURE_KEY: 'offline-fixture-key' } : {}) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  async function collect(child: ReturnType<typeof spawn>) {
     let stdout = '', stderr = '';
     child.stdout!.setEncoding('utf8').on('data', chunk => { stdout += chunk; });
     child.stderr!.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
@@ -54,10 +56,16 @@ async function fixture(reply: (response: ServerResponse, request: Record<string,
       child.once('close', code => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
     });
   }
+  async function run(args: string[], credentials = true) {
+    return collect(spawn(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], childOptions(credentials)));
+  }
+  async function probe(args: string[], credentials = false) {
+    return collect(spawn(process.execPath, args, childOptions(credentials)));
+  }
   const snapshot = async (id: string): Promise<SessionData> => JSON.parse(await readFile(path.join(home, 'sessions', id, 'session.json'), 'utf8'));
   const unlocked = (id: string) => assert.rejects(access(path.join(home, 'sessions', id, 'lock')), { code: 'ENOENT' });
   const close = async () => { http.closeAllConnections(); await new Promise<void>((resolve, reject) => http.close(error => error ? reject(error) : resolve())); await rm(dir, { recursive: true, force: true }); };
-  return { cwd, home, requests, run, snapshot, unlocked, close };
+  return { cwd, home, requests, run, probe, snapshot, unlocked, close };
 }
 
 test('CLI sessions works with no credentials and an empty session directory', async () => {
@@ -190,6 +198,8 @@ test('CLI sessions --cwd filters by workspace, tolerates missing directories and
   try {
     // process.cwd() inside the child resolves macOS /var symlinks, so fixtures use the same physical path.
     const real = await realpath(s.cwd);
+    const nativeRealpath = (realpath as typeof realpath & { native?: typeof realpath }).native ?? realpath;
+    const native = await nativeRealpath(s.cwd);
     await seedSession(s.home, 'in-workspace', 'failed', real);
     await seedSession(s.home, 'nested-workspace', 'failed', path.join(real, 'nested', 'deep'));
     await seedSession(s.home, 'elsewhere', 'failed', s.home);
@@ -198,8 +208,14 @@ test('CLI sessions --cwd filters by workspace, tolerates missing directories and
     const diagnostic = (cwd: string) => `--cwd ${cwd}\nunfiltered sessions --json (stored cwds):\n${unfiltered.stdout}`;
     const nestedCwd = path.join('nested', 'deep');
     const nested = await s.run(['sessions', '--cwd', nestedCwd], false);
-    assert.equal(nested.code, 0, diagnostic(nestedCwd)); assert.equal(nested.stderr, '', diagnostic(nestedCwd));
-    assert.match(nested.stdout, /nested-workspace/, diagnostic(nestedCwd)); assert.doesNotMatch(nested.stdout, /in-workspace|elsewhere/, diagnostic(nestedCwd));
+    const nestedPath = path.join(s.cwd, 'nested', 'deep');
+    const probeScript = `console.log(JSON.stringify({ cwd: process.cwd(), resolved: require('path').resolve(process.argv[1]), native: (()=>{try{return require('fs').realpathSync.native(require('path').resolve(process.argv[1]))}catch(e){return 'ERR '+e.code}})(), nativeCwd: require('fs').realpathSync.native(process.cwd()) }))`;
+    const probe = await s.probe(['-e', probeScript, nestedCwd], false);
+    const inProcess = await listSessions(s.home, { cwd: nestedPath });
+    const resolvedWorkspace = await resolveWorkspacePath(nestedPath);
+    const nestedDiagnostic = `${diagnostic(nestedCwd)}\ntest cwd: ${s.cwd}\nrealpath(s.cwd): ${real}\nrealpath.native(s.cwd): ${native}\nprobe child stdout:\n${probe.stdout}\nprobe child stderr:\n${probe.stderr}\nin-process listSessions ids: ${JSON.stringify(inProcess.map(session => session.id))}\nin-process resolveWorkspacePath: ${resolvedWorkspace}\nnested child stderr:\n${nested.stderr}`;
+    assert.equal(nested.code, 0, nestedDiagnostic); assert.equal(nested.stderr, '', nestedDiagnostic);
+    assert.match(nested.stdout, /nested-workspace/, nestedDiagnostic); assert.doesNotMatch(nested.stdout, /in-workspace|elsewhere/, nestedDiagnostic);
     const missingCwd = path.join('gone', 'workspace');
     const missing = await s.run(['sessions', '--cwd', missingCwd], false);
     assert.equal(missing.code, 0, diagnostic(missingCwd)); assert.equal(missing.stderr, '', diagnostic(missingCwd));
