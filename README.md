@@ -4,7 +4,7 @@
 
 ## 安装与快速开始
 
-需要 Node.js 22+。当前实现面向 macOS / Linux 的 POSIX 环境；Windows 暂不支持 shell 工具。
+需要 Node.js 22+。当前实现面向 macOS / Linux 的 POSIX 环境；Windows shell 工具需要 Git for Windows bash。
 
 ```sh
 npm ci
@@ -145,7 +145,7 @@ icy --version
 | `read` | 读取 UTF-8 文本并返回行号和 SHA256；也可免审批列目录（`path` 为目录）或搜索内容（`pattern`）。目录 `depth` 为 1–5（默认 1，1 只列直接子项），最多 500 项；搜索是区分大小写的固定字符串，或 `regex=true` 的 JavaScript 正则（模式最多 200 字符），最多扫描 2,000 个文件、每文件 1 MB、最多 200 条匹配，搜索最多运行 10 秒，正则每文件最多 1 秒。普通文件最多 1 MB。 |
 | `write` | 创建或整体覆盖 UTF-8 文件。覆盖现有文件必须传入此前 `read` 的 SHA256；新文件必须传 `expectedHash: null`。内容最多 1 MB，返回 diff；`icy-output:` 引用不可写。 |
 | `edit` | 按 `path`、`oldText`、`newText` 做精确替换；`oldText` 非空且必须只匹配一次，空格和换行也必须匹配；不是正则或 unified diff，缺失/多次匹配会拒绝。写入前后保留哈希校验；文本参数最多 1 MB。 |
-| `bash` | 使用 `/bin/bash --noprofile --norc -c`，仅用于测试、构建和 `read` 无法完成的命令；每条命令（包括只读命令）都要批准。无交互 stdin，单次最多 60 秒，命令参数最多 20,000 字符；批准等待结束后会重新校验 cwd，超时或取消会终止 POSIX 进程组。 |
+| `bash` | 使用 `/bin/bash --noprofile --norc -c`，仅用于测试、构建和 `read` 无法完成的命令；每条命令（包括只读命令）都要批准。无交互 stdin，单次最多 60 秒，命令参数最多 20,000 字符；批准等待结束后会重新校验 cwd，超时或取消会终止 POSIX 进程组。Windows requires Git for Windows bash；不可用时返回 `bash_unavailable`。 |
 
 文件工具拒绝越出工作区、NUL、符号链接路径和敏感路径。敏感名称包括 `.git`、`.icy`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`credentials`、`id_rsa`、`id_ed25519`、非示例的 `.env*`，以及 `.pem`、`.key`、`.p12`、`.pfx`、`.token` 结尾的文件；`.env.example`、`.env.sample`、`.env.template` 例外。`bash` 的搜索范围和忽略规则由实际命令决定，例如 `rg` 与 `find` 不同；bash 不是文件工具的越界保护替代品。
 
@@ -180,7 +180,7 @@ v1 会话恢复时迁移到 v2，保留原消息、工具结果和 Responses 专
 
 ## 当前边界
 
-shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、Windows 进程树取消、自动上下文摘要、MCP、多 Agent。
+shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、自动上下文摘要、MCP、多 Agent。
 
 ## 开发与验证
 
