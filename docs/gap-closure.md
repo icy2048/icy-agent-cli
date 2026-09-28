@@ -194,3 +194,11 @@ usage 合计包含预处理及本地估算。部分运行只有估算总数，�
 - [独立最终回复审查](evaluations/repeated-tasks-iter4-explore-tuned-response-review.json)由 grok-4.6 逐条对照夹具要求、工具轨迹与产物完成：45 条回复均为 satisfied，无夸大或遗漏，45 个结果哈希与原始记录一致（已另行复核哈希并抽查一条）。
 
 每次合并后本机 macOS 执行 `npm run check`、`npm test`（255→290 项）、`npm run build`、`npm run test:package` 与 `npm run test:pty` 全部通过。这些提交未推送，CI 未运行；未合并 PR、未发布、未升版本号。
+
+## 2026-09-28：Windows 兼容
+
+- **bash**：Windows 使用 Git for Windows 的 `bash.exe`。解析顺序为 `ICY_BASH`、PATH 中排除 `System32\bash.exe`（WSL 启动器）的 `bash.exe`、标准 Git 安装位置。调用仍是 `--noprofile --norc -c`；超时或取消用 `taskkill.exe /T /F` 终止进程树并隐藏窗口（`windowsHide`）。找不到时返回 `bash_unavailable` 和中文安装提示。
+- **路径与文件**：Windows 工作区比较统一驱动器字母大小写和分隔符，供会话/工作区匹配。文件工具拒绝符号链接；junction 也由 `lstat` 识别并拒绝。新文件创建在 Windows 使用带二次存在检查的 `rename` 路径；POSIX 的 hard link 失败时也回退。
+- **凭据限制**：Windows 不强制 `0600`/`0700`；凭据文件安全依赖用户 profile ACL，这是明确限制。终端要求 Windows Terminal 或其他 VT-capable 终端；legacy conhost 未测试，Alt/Shift+Enter 多行输入取决于终端。
+- **测试入口与跳过项**：`scripts/pty-smoke.py` 是 POSIX PTY 门禁。Windows 侧 package smoke 使用 Node 直接启动安装产物并执行离线 `--demo`，不检查 Unix executable bit；`npm test` 跳过 `tests/windows-paths.test.ts` 的 POSIX symlink fixture，原因是 Windows junction 已由 `lstat` 覆盖；workspace fingerprint 不比较 POSIX mode bits。
+- **CI 与状态**：核对 `.github/workflows/ci.yml` 时，当前矩阵只有 `ubuntu-latest`、`macos-latest`，没有 `windows-latest`，因此不能把 Windows CI（包括 offline `--demo` / package smoke）写成已运行；Windows CI 证据为“尚未”。本迭代没有在 Windows 机器做真实交互验收，状态为“尚未”，不链接运行记录。

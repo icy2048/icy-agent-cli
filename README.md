@@ -4,7 +4,7 @@
 
 ## 安装与快速开始
 
-需要 Node.js 22+。当前实现面向 macOS / Linux 的 POSIX 环境；Windows shell 工具需要 Git for Windows bash。
+需要 Node.js 22+。macOS / Linux 使用 POSIX shell；Windows 支持 shell 工具，但需要 Git for Windows bash。
 
 ```sh
 npm ci
@@ -12,6 +12,10 @@ npm run build
 npm link
 icy
 ```
+
+### Windows
+
+需要 Windows Terminal 或其他支持 VT 的终端运行 Ink UI；legacy conhost 未测试。安装 Git for Windows 以提供 `bash.exe`。Alt+Enter / Shift+Enter 多行输入是否可用取决于终端。
 
 常用命令：
 
@@ -82,7 +86,7 @@ icy --version
 | `maxTokens` / `maxContextChars` | 每次运行软 token 预算 / 模型消息字符上限；默认 100,000 / 120,000 |
 | `requestTimeoutMs` | 每次完整模型调用截止时间；默认 120,000 ms |
 
-密钥优先使用 `config.apiKeyEnv` 指定的本机环境变量（默认是 `ICY_API_KEY`），其次读取 `apiKeyFile`；密钥文件建议权限 `0600`，且必须位于 `ICY_HOME` 内。模型向导写入用户配置并把密钥单独保存为 `0600` 凭据文件，不写入项目、会话或日志。模型设置的有效优先级是命令行参数 > `ICY_PROVIDER` / `ICY_BASE_URL` / `ICY_MODEL` > 项目允许字段 > 用户配置和默认值；命令行的 `--provider`、`--base-url`、`--model` 覆盖环境和配置。项目级 `.icy/config.json` 只允许设置模型名和降低 `maxModelTurns`、`maxToolCalls`、`maxTokens`、`maxContextChars`，不能改变密钥来源、服务地址、`allowPrivateHttp` 或扩大权限。
+密钥优先使用 `config.apiKeyEnv` 指定的本机环境变量（默认是 `ICY_API_KEY`），其次读取 `apiKeyFile`；POSIX 上密钥文件建议权限 `0600`，且必须位于 `ICY_HOME` 内。Windows 不强制 `0600`/`0700`，凭据文件安全依赖用户 profile 的 ACL；这是 Windows 限制。模型向导写入用户配置并把密钥单独保存为凭据文件，不写入项目、会话或日志。模型设置的有效优先级是命令行参数 > `ICY_PROVIDER` / `ICY_BASE_URL` / `ICY_MODEL` > 项目允许字段 > 用户配置和默认值；命令行的 `--provider`、`--base-url`、`--model` 覆盖环境和配置。项目级 `.icy/config.json` 只允许设置模型名和降低 `maxModelTurns`、`maxToolCalls`、`maxTokens`、`maxContextChars`，不能改变密钥来源、服务地址、`allowPrivateHttp` 或扩大权限。
 
 远程地址必须使用 HTTPS。本机 `localhost`、`127.0.0.1` 和 `[::1]` 可用 HTTP；私有 IPv4 只有在用户配置显式设置 `allowPrivateHttp: true` 时允许，范围是 `10/8`、`172.16/12`、`192.168/16`，公网 HTTP 仍被拒绝。局域网 vLLM 使用 `chat-completions` 和服务实际模型名；若启用 `promptCompaction: "model"`，还应把 `compactionModel` 设为服务提供的模型名，可以与主模型相同。HTTP 会在局域网明文传输请求和凭据，只为自己信任的服务启用。
 
@@ -145,9 +149,9 @@ icy --version
 | `read` | 读取 UTF-8 文本并返回行号和 SHA256；也可免审批列目录（`path` 为目录）或搜索内容（`pattern`）。目录 `depth` 为 1–5（默认 1，1 只列直接子项），最多 500 项；搜索是区分大小写的固定字符串，或 `regex=true` 的 JavaScript 正则（模式最多 200 字符），最多扫描 2,000 个文件、每文件 1 MB、最多 200 条匹配，搜索最多运行 10 秒，正则每文件最多 1 秒。普通文件最多 1 MB。 |
 | `write` | 创建或整体覆盖 UTF-8 文件。覆盖现有文件必须传入此前 `read` 的 SHA256；新文件必须传 `expectedHash: null`。内容最多 1 MB，返回 diff；`icy-output:` 引用不可写。 |
 | `edit` | 按 `path`、`oldText`、`newText` 做精确替换；`oldText` 非空且必须只匹配一次，空格和换行也必须匹配；不是正则或 unified diff，缺失/多次匹配会拒绝。写入前后保留哈希校验；文本参数最多 1 MB。 |
-| `bash` | 使用 `/bin/bash --noprofile --norc -c`，仅用于测试、构建和 `read` 无法完成的命令；每条命令（包括只读命令）都要批准。无交互 stdin，单次最多 60 秒，命令参数最多 20,000 字符；批准等待结束后会重新校验 cwd，超时或取消会终止 POSIX 进程组。Windows requires Git for Windows bash；不可用时返回 `bash_unavailable`。 |
+| `bash` | POSIX 使用 `/bin/bash --noprofile --norc -c`；Windows 依次使用 `ICY_BASH`、PATH 中的 `bash.exe`（排除 `System32\bash.exe` WSL 启动器）、标准 Git for Windows 安装位置，均以 `--noprofile --norc -c` 调用。无交互 stdin，单次最多 60 秒，参数最多 20,000 字符；Windows 超时或取消用 `taskkill.exe /T /F` 终止进程树并设置 `windowsHide`。找不到时返回 `bash_unavailable`：`bash 不可用：请安装 Git for Windows，或用 ICY_BASH 指定 bash.exe 路径。` |
 
-文件工具拒绝越出工作区、NUL、符号链接路径和敏感路径。敏感名称包括 `.git`、`.icy`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`credentials`、`id_rsa`、`id_ed25519`、非示例的 `.env*`，以及 `.pem`、`.key`、`.p12`、`.pfx`、`.token` 结尾的文件；`.env.example`、`.env.sample`、`.env.template` 例外。`bash` 的搜索范围和忽略规则由实际命令决定，例如 `rg` 与 `find` 不同；bash 不是文件工具的越界保护替代品。
+文件工具拒绝越出工作区、NUL、符号链接路径和敏感路径。Windows 将驱动器字母和分隔符规范化，用于会话/工作区匹配；junction 也由 `lstat` 识别为链接并拒绝。新文件创建在 Windows 直接走带二次存在检查的 `rename` 路径；POSIX 的 hard link 失败时也回退到该路径。敏感名称包括 `.git`、`.icy`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`credentials`、`id_rsa`、`id_ed25519`、非示例的 `.env*`，以及 `.pem`、`.key`、`.p12`、`.pfx`、`.token` 结尾的文件；`.env.example`、`.env.sample`、`.env.template` 例外。`bash` 的搜索范围和忽略规则由实际命令决定，例如 `rg` 与 `find` 不同；bash 不是文件工具的越界保护替代品。
 
 工具结果超过 32 KiB 时保存为 `icy-output:<id>.txt` 并返回有界预览；失败命令还可能返回常见错误行的字面诊断片段，不能保证覆盖所有失败。bash 输出超过 256 KiB 会终止命令。`read` 读取普通文件时 `offset` / `limit` 按行计数；读取输出引用时按 Unicode 字符计数，每页最多 6,000 字符，结果带下一页 offset。输出引用不能用 `write` / `edit` 修改；无需额外工具即可读取，也能读取很长的单行输出。
 
@@ -180,7 +184,7 @@ v1 会话恢复时迁移到 v2，保留原消息、工具结果和 Responses 专
 
 ## 当前边界
 
-shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、自动上下文摘要、MCP、多 Agent。
+shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、自动上下文摘要、MCP、多 Agent。Windows 不执行 POSIX `0600`/`0700` 权限位，凭据安全依赖用户 profile ACL；Windows 实机交互验收尚未进行。
 
 ## 开发与验证
 
@@ -200,7 +204,7 @@ shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命�
 
 `eval:prompts` 的离线夹具包含顺序、条件、例外、否定、验收和引用材料；默认使用确定性假模型，不发送工作区文件或执行主机工具；`--live` 只发送合成夹具到配置的小模型服务。它只报告原文是否保留、字面要求遗漏、字符数、预处理 token 和耗时，不测自主任务完成率，也不证明语义等价。`eval:tasks -- --live` 默认每个样例只执行一次；即使输出正确，也不能据此给出稳定成功率、费用排名或压缩收益。真实模型结果、历史失败、重复批次和上下文诊断保存在 [docs/evaluations/](docs/evaluations/)；限制与审计见 [docs/gap-closure.md](docs/gap-closure.md)。
 
-仓库的 Node 22 macOS/Linux [GitHub Actions 门禁](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)包含锁文件安装、类型检查、测试、构建和包测试；工作流文件的存在不表示对应提交已经通过，发布前应确认远程结果。Linux PTY 有自动门禁，但不替代真人人工交互验收。历史真实 Happy Code 验收曾在独立临时目录完成 `write`、`read`、`edit` 并批准 bash 检查，四个工具成功且检查退出码为 0；这不是当前在线回归承诺。
+仓库的 Node 22 [GitHub Actions 门禁](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)当前矩阵只有 `ubuntu-latest`、`macos-latest`，包含锁文件安装、类型检查、测试、构建、POSIX PTY 和包测试；`.github/workflows/ci.yml` 尚未配置 `windows-latest`，所以 Windows CI 证据为“尚未”，不链接运行记录。`scripts/pty-smoke.py` 是 POSIX PTY 门禁；Windows 侧的 `scripts/package-smoke.mjs` 使用 Node 直接启动安装产物，执行离线 `--demo`，并跳过 Unix executable bit 检查。`npm test` 在 Windows 跳过 `tests/windows-paths.test.ts` 的 POSIX symlink fixture（junction 由 `lstat` 覆盖）；workspace fingerprint 不比较 POSIX mode bits。Linux PTY 有自动门禁，但不替代真人人工交互验收；Windows 实机交互验收尚未进行。
 
 代码入口是 `src/cli.tsx`；运行循环在 `src/core/`，模型协议在 `src/providers/`，工具与权限在 `src/tools/`，会话在 `src/sessions/`，Workbench 在 `src/ui/`。
 
