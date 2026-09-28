@@ -42,8 +42,9 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
     if (operation.current) return;
     operation.current = true; move('testing');
     try {
-      await services.verify(draft, config, abort.current.signal);
+      const result = await services.verify(draft, config, abort.current.signal);
       if (abort.current.signal.aborted) return;
+      if (!result.ok) { setStep('confirm'); setError(result.message); return; }
       setStep('saving'); await onApply(draft);
     } catch (e) {
       if (!abort.current.signal.aborted) { setStep('confirm'); setError(redact(errorText(e), [draft.apiKey])); }
@@ -93,8 +94,8 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
       <Text bold>{clean(draft.model)}</Text><Text>{clean(draft.baseUrl)}</Text><Text dimColor>{draft.provider} · 密钥已就绪</Text>
       <Text> </Text><Text>Enter 测试连接并启用</Text><Text dimColor>发送一次简短测试；通过后保存并开始新会话，旧会话保留。</Text>
     </Box>}
-    {step === 'testing' && <Text color="cyan">正在测试连接… Esc 取消</Text>}
-    {step === 'saving' && <Text color="cyan">正在保存并启用…</Text>}
+    {step === 'testing' && <Box flexDirection="column"><Text color="cyan">测试文本响应…</Text><Text color="cyan">测试工具调用…</Text><Text dimColor>正在测试连接… Esc 取消</Text></Box>}
+    {step === 'saving' && <Box flexDirection="column"><Text color="green">连接测试通过：文本响应与工具调用正常</Text><Text color="cyan">正在保存并启用…</Text></Box>}
     {error && <Text color="yellow">{clean(error).slice(0, 300)}</Text>}
     <Text> </Text><Text dimColor>{step === 'source' && loading ? '正在读取本机配置… · ' : ''}↑↓ 选择 · Enter 确认 · Esc 关闭</Text>
   </Box>;
