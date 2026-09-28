@@ -53,7 +53,7 @@ test('slash menu filters, selects, completes and dismisses without invoking the 
     assert.match(ui.lastFrame()!, /❯ \/help/); assert.match(ui.lastFrame()!, /Tab 补全/);
     ui.stdin.write('\x1b[B'); await tick(); assert.match(ui.lastFrame()!, /❯ \/model/);
     ui.stdin.write('\r'); await tick(); assert.match(ui.lastFrame()!, /模型设置/); assert.match(ui.lastFrame()!, /menu-model · responses/); assert.equal(modelRuns, 0);
-    ui.stdin.write('\x1b'); await tick();
+    ui.stdin.write('\x1b'); await tick(); await tick(); await tick();
     ui.stdin.write('/th'); await tick(); assert.match(ui.lastFrame()!, /❯ \/thinking/); assert.doesNotMatch(ui.lastFrame()!, /❯ \/help/);
     ui.stdin.write('\t'); await tick(); assert.match(ui.lastFrame()!, /\/thinking expanded/); assert.match(ui.lastFrame()!, /\/thinking collapsed/);
     ui.stdin.write('\x1b'); await tick(); assert.doesNotMatch(ui.lastFrame()!, /Tab 补全/);
