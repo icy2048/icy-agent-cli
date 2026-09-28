@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { createServer, type ServerResponse } from 'node:http';
-import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -139,5 +139,82 @@ test('CLI user verification in noninteractive mode requires approval, exits 2 an
     const saved = await s.snapshot(id); assert.equal(saved.runs.length, 2); assert.equal(saved.runs[1].reason, 'approval_required');
     assert.notEqual(saved.task?.status, 'verified'); assert.equal(saved.task?.verificationRecords.at(-1)?.ok, false);
     assert.equal(saved.task?.verificationChecks.at(-1)?.source, 'user'); await s.unlocked(id);
+  } finally { await s.close(); }
+});
+
+const evidence = {
+  verificationChecks: [{ id: 'check-1', source: 'user', command: 'npm test', cwd: '/fixture', createdAt: '2026-09-27T00:00:00.000Z' }],
+  verificationRecords: [{ id: 'record-1', checkId: 'check-1', source: 'user', command: 'npm test', cwd: '/fixture', ok: true, output: '通过', mutationRevision: 0, recordedAt: '2026-09-27T00:00:00.000Z' }],
+};
+
+/** Seed a read-only session fixture with a given task status and workspace; no model, lock or run involved. */
+async function seedSession(home: string, id: string, status: string, cwd: string) {
+  const active = status === 'running' || status === 'awaiting_approval';
+  const task = status === 'legacy' ? undefined : { id: `task-${id}`, goal: `目标 ${id}`, status, remaining: [], completed: [], mutationRevision: 0, ...evidence };
+  const dir = path.join(home, 'sessions', id);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, 'session.json'), JSON.stringify({
+    version: 2, id, cwd, provider: 'chat-completions', model: 'offline-resume', baseUrl: 'http://localhost/v1',
+    messages: [{ role: 'user', content: `目标 ${id}` }], updatedAt: '2026-09-27T00:00:00.000Z', ...(task ? { task } : {}), runs: task ? [{
+      id: `run-${id}`, taskId: task.id, goal: task.goal, status, startedAt: '2026-09-27T00:00:00.000Z', ...(active ? {} : { endedAt: '2026-09-27T00:00:00.000Z' }),
+      updatedAt: '2026-09-27T00:00:00.000Z', checkpoint: 'started', turns: 0, toolCalls: 0, usage: { tokens: 0, estimated: false },
+      budget: { maxModelTurns: 1, maxToolCalls: 1, maxTokens: 10, maxContextChars: 10 }, budgetSource: 'new_task',
+      ...(status === 'verified' ? { taskSnapshot: structuredClone(task) } : {}),
+    }] : [],
+  }));
+}
+
+test('CLI sessions filters by repeated or comma-separated --status and rejects invalid values with exit 2', async () => {
+  const s = await fixture();
+  try {
+    await seedSession(s.home, 'failed-one', 'failed', s.cwd);
+    await seedSession(s.home, 'answered-one', 'answered', s.cwd);
+    await seedSession(s.home, 'legacy-one', 'legacy', s.cwd);
+    const only = await s.run(['sessions', '--status', 'failed'], false);
+    assert.equal(only.code, 0, only.stderr); assert.equal(only.stderr, '');
+    assert.match(only.stdout, /failed-one/); assert.doesNotMatch(only.stdout, /answered-one|legacy-one/);
+    const comma = await s.run(['sessions', '--status', 'failed,answered'], false);
+    assert.equal(comma.code, 0, comma.stderr); assert.equal(comma.stderr, '');
+    assert.match(comma.stdout, /failed-one/); assert.match(comma.stdout, /answered-one/); assert.doesNotMatch(comma.stdout, /legacy-one/);
+    const repeated = await s.run(['sessions', '--status', 'failed', '--status', 'legacy'], false);
+    assert.equal(repeated.code, 0, repeated.stderr); assert.equal(repeated.stderr, '');
+    assert.match(repeated.stdout, /failed-one/); assert.match(repeated.stdout, /legacy-one/); assert.doesNotMatch(repeated.stdout, /answered-one/);
+    const bad = await s.run(['sessions', '--status', 'bogus'], false);
+    assert.equal(bad.code, 2); assert.equal(bad.stdout, '');
+    assert.match(bad.stderr, /无效的状态：bogus；可用：running, awaiting_approval/);
+  } finally { await s.close(); }
+});
+
+test('CLI sessions --cwd filters by workspace, tolerates missing directories and keeps --json lines parseable', async () => {
+  const s = await fixture();
+  try {
+    // process.cwd() inside the child resolves macOS /var symlinks, so fixtures use the same physical path.
+    const real = await realpath(s.cwd);
+    await seedSession(s.home, 'in-workspace', 'failed', real);
+    await seedSession(s.home, 'nested-workspace', 'failed', path.join(real, 'nested', 'deep'));
+    await seedSession(s.home, 'elsewhere', 'failed', s.home);
+    const nested = await s.run(['sessions', '--cwd', path.join('nested', 'deep')], false);
+    assert.equal(nested.code, 0, nested.stderr); assert.equal(nested.stderr, '');
+    assert.match(nested.stdout, /nested-workspace/); assert.doesNotMatch(nested.stdout, /in-workspace|elsewhere/);
+    const missing = await s.run(['sessions', '--cwd', path.join('gone', 'workspace')], false);
+    assert.equal(missing.code, 0, missing.stderr); assert.equal(missing.stderr, '');
+    assert.match(missing.stdout, /暂无会话/);
+    const json = await s.run(['sessions', '--status', 'failed', '--cwd', '.', '--json'], false);
+    assert.equal(json.code, 0, json.stderr); assert.equal(json.stderr, '');
+    const lines = json.stdout.slice(0, -1).split('\n').map(line => JSON.parse(line) as Record<string, unknown>);
+    assert.ok(lines.length > 0);
+    for (const line of lines) assert.equal(line.type, 'session_summary');
+    assert.deepEqual(lines.map(line => line.id).sort(), ['in-workspace', 'nested-workspace']);
+  } finally { await s.close(); }
+});
+
+test('CLI rejects --status outside the sessions subcommand with exit 2', async () => {
+  const s = await fixture();
+  try {
+    for (const args of [['--status', 'failed'], ['run', 'Any goal.', '--status', 'failed'], ['config', 'init', '--status', 'failed']]) {
+      const rejected = await s.run(args, false);
+      assert.equal(rejected.code, 2, `${args.join(' ')}: ${rejected.stderr}`); assert.equal(rejected.stdout, '');
+      assert.match(rejected.stderr, /--status 仅用于 icy sessions 子命令/);
+    }
   } finally { await s.close(); }
 });

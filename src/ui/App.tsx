@@ -12,7 +12,7 @@ import wrapAnsi from 'wrap-ansi';
 import type { Agent } from '../core/agent.js';
 import type { AgentEvent, ApprovalDecision, ApprovalRequest, Approve, RunResult } from '../core/types.js';
 import type { RunState, TaskState } from '../core/run-state.js';
-import { listSessions } from '../sessions/list.js';
+import { invalidStatusText, listSessions, parseStatusFilter, type SessionFilter } from '../sessions/list.js';
 import { clean, errorText } from '../core/text.js';
 
 export interface ApprovalBridge { current?: Approve }
@@ -128,9 +128,19 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     if (prompt === '/model') { if (demo) notice('当前为离线演示；请运行 icy 后使用 /model 配置模型。'); else setModelOpen(true); return; }
     if (prompt === '/task') { notice(taskSummary(agent.store.data.task, latestRun())); return; }
     if (prompt === '/continue') { notice('继续原任务，将开启并记录新预算；已执行工具不会自动重放。'); await runTask(signal => agent.continue(signal)); return; }
-    if (prompt === '/sessions') {
+    if (prompt === '/sessions' || prompt.startsWith('/sessions ')) {
+      const argument = prompt.slice('/sessions'.length).trim();
+      let filter: SessionFilter | undefined;
+      try {
+        for (const token of argument ? argument.split(/\s+/) : []) {
+          const eq = token.indexOf('='), key = eq === -1 ? '' : token.slice(0, eq), value = eq === -1 ? '' : token.slice(eq + 1);
+          if (key === 'status' && value) (filter ??= {}).status = parseStatusFilter(value);
+          else if (key === 'cwd' && value) (filter ??= {}).cwd = value;
+          else throw new Error('用法：/sessions [status=<状态，逗号分隔>] [cwd=<目录>]');
+        }
+      } catch (error) { notice(invalidStatusText(error) ?? errorText(error)); return; }
       await localAction(async () => {
-        const sessions = await listSessions(agent.config.home);
+        const sessions = await listSessions(agent.config.home, filter);
         notice(sessions.length ? sessions.map(session => session.error ? `${session.id} · 无法读取：${session.error}`
           : `${session.id}\n${session.goal || '尚无目标'} · ${session.model} · ${session.updatedAt}\n工作区：${session.cwd}`).join('\n\n') + '\n\n/resume <会话 ID> 恢复；不会自动执行任务。' : '尚无已保存会话。');
       });
