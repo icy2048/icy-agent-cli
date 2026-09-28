@@ -39,8 +39,8 @@ function fixture() {
   ui.stdout.emit('resize');
   return { agent, data, task, run, ui, bridge, event: (event: AgentEvent) => listener(event), close: () => { ui.unmount(); ui.cleanup(); } };
 }
-async function waitForFrame(ui: ReturnType<typeof render>, matches: (frame: string) => boolean) {
-  const deadline = Date.now() + 10_000;
+async function waitForFrame(ui: ReturnType<typeof render>, matches: (frame: string) => boolean, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
   while (!matches(ui.lastFrame() ?? '')) {
     assert.ok(Date.now() < deadline, `Timed out waiting for UI state:\n${ui.lastFrame()}`);
     await tick();
@@ -49,19 +49,38 @@ async function waitForFrame(ui: ReturnType<typeof render>, matches: (frame: stri
 function composerIsIdle(frame: string) {
   return frame.includes('❯') && !frame.includes('Esc 取消');
 }
-function composerContains(frame: string, value: string) {
+function composerLine(frame: string) {
   const plain = frame.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
-  const line = plain.split('\n').reverse().find(item => item.trimStart().startsWith('❯'));
-  return line?.includes(value) ?? false;
+  return plain.split('\n').reverse().find(item => item.trimStart().startsWith('❯')) ?? '';
+}
+function composerContains(frame: string, value: string) {
+  return composerLine(frame).includes(value);
+}
+function composerValueCount(frame: string, value: string) {
+  const line = composerLine(frame);
+  let count = 0, offset = 0;
+  while (value && (offset = line.indexOf(value, offset)) !== -1) { count++; offset += value.length; }
+  return count;
 }
 async function command(ui: ReturnType<typeof render>, value: string, response: RegExp) {
   ui.stdin.write(value);
-  await waitForFrame(ui, frame => composerContains(frame, value));
+  try {
+    await waitForFrame(ui, frame => composerContains(frame, value), 2_000);
+  } catch {
+    // A newly mounted Composer can paint before its useInput effect subscribes.
+    // Retry once if that first write was lost.
+    ui.stdin.write(value);
+    await waitForFrame(ui, frame => composerContains(frame, value));
+  }
+  assert.equal(composerValueCount(ui.lastFrame()!, value), 1, `Composer does not contain exactly one ${JSON.stringify(value)}: ${ui.lastFrame()}`);
   ui.stdin.write('\r');
   await waitForFrame(ui, frame => response.test(frame));
   // Submission clears the composer before the async local action finishes. Do not
   // type the next command while the running view still has the composer unmounted.
   await waitForFrame(ui, composerIsIdle);
+  // Ink paints the remounted Composer before its useInput effect subscribes.
+  await tick();
+  await tick();
 }
 
 test('/task restores status, checkpoint, budget, todos and stale verification records', async () => {
