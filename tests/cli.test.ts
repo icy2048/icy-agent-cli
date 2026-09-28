@@ -45,7 +45,7 @@ async function fixture(reply: Reply = answer, provider = 'chat-completions') {
   const children: ReturnType<typeof spawn>[] = [];
   function start(args: string[]) {
     // Do not inherit model credentials, service endpoints, proxy settings or user configuration.
-    const child = spawn(process.execPath, ['--import', fileURLToPath(import.meta.resolve('tsx')), cli, ...args], {
+    const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], {
       cwd, env: { PATH: process.env.PATH, HOME: userHome, ICY_HOME: home, ICY_FIXTURE_KEY: fixtureKey, NO_COLOR: '1' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

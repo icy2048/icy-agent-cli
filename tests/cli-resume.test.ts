@@ -41,7 +41,7 @@ async function fixture(reply: (response: ServerResponse, request: Record<string,
   const address = http.address(); assert.ok(address && typeof address !== 'string');
   await writeFile(path.join(home, 'config.json'), JSON.stringify({ provider: 'chat-completions', baseUrl: `http://127.0.0.1:${address.port}/v1`, model: 'offline-resume', apiKeyEnv: 'ICY_FIXTURE_KEY', promptCompaction: 'off', requestTimeoutMs: 1000 }));
   async function run(args: string[], credentials = true) {
-    const child = spawn(process.execPath, ['--import', fileURLToPath(import.meta.resolve('tsx')), cli, ...args], {
+    const child = spawn(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], {
       cwd, env: { PATH: process.env.PATH, HOME: userHome, ICY_HOME: home, NO_COLOR: '1', ...(credentials ? { ICY_FIXTURE_KEY: 'offline-fixture-key' } : {}) },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

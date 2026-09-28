@@ -40,17 +40,23 @@ function fixture() {
   return { agent, data, task, run, ui, bridge, event: (event: AgentEvent) => listener(event), close: () => { ui.unmount(); ui.cleanup(); } };
 }
 async function waitForFrame(ui: ReturnType<typeof render>, matches: (frame: string) => boolean) {
-  const deadline = Date.now() + 3000;
+  const deadline = Date.now() + 10_000;
   while (!matches(ui.lastFrame() ?? '')) {
     assert.ok(Date.now() < deadline, `Timed out waiting for UI state:\n${ui.lastFrame()}`);
     await tick();
   }
+}
+function composerIsIdle(frame: string) {
+  return frame.includes('❯') && !frame.includes('Esc 取消');
 }
 async function command(ui: ReturnType<typeof render>, value: string, response: RegExp) {
   ui.stdin.write(value);
   await waitForFrame(ui, frame => frame.includes(value));
   ui.stdin.write('\r');
   await waitForFrame(ui, frame => response.test(frame));
+  // Submission clears the composer before the async local action finishes. Do not
+  // type the next command while the running view still has the composer unmounted.
+  await waitForFrame(ui, composerIsIdle);
 }
 
 test('/task restores status, checkpoint, budget, todos and stale verification records', async () => {

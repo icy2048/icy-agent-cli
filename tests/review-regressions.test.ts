@@ -20,7 +20,7 @@ async function workspace() {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-review-regression-'));
   const cwd = path.join(dir, 'workspace'), home = path.join(dir, 'icy');
   await Promise.all([mkdir(cwd), mkdir(home)]);
-  const runCli = (args: string[]) => exec(process.execPath, ['--import', fileURLToPath(import.meta.resolve('tsx')), cli, ...args], {
+  const runCli = (args: string[]) => exec(process.execPath, ['--import', import.meta.resolve('tsx'), cli, ...args], {
     cwd, env: { PATH: process.env.PATH, HOME: dir, ICY_HOME: home, NO_COLOR: '1' }, timeout: 15000, maxBuffer: 1024 * 1024,
   });
   return { dir, cwd, home, runCli, cleanup: () => rm(dir, { recursive: true, force: true }) };
