@@ -47,7 +47,7 @@ test('Workbench switches to one column and long approvals require paging through
 test('slash menu filters, selects, completes and dismisses without invoking the model', async () => {
   let modelRuns = 0;
   const agent = { config: { cwd: '/fixture', model: 'menu-model', provider: 'responses', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { modelRuns++; } } as unknown as Agent;
-  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => {} } }));
+  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => ({ ok: true as const, textReply: true as const, toolCalls: true as const }) } }));
   try {
     await tick(); ui.stdin.write('/'); await tick();
     assert.match(ui.lastFrame()!, /❯ \/help/); assert.match(ui.lastFrame()!, /Tab 补全/);
@@ -76,7 +76,7 @@ test('thinking streams separately, collapses without content leakage and persist
   };
   let listener: (event: import('../src/core/types.js').AgentEvent) => void = () => {};
   const agent = { config: { home, cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: (next: typeof listener) => { listener = next; } } as unknown as Agent;
-  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => {} } }));
+  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => ({ ok: true as const, textReply: true as const, toolCalls: true as const }) } }));
   try {
     await tick(); listener({ type: 'user', text: '用户问题' }); listener({ type: 'turn', turn: 1 }); listener({ type: 'reasoning_delta', text: '可见摘要片段' }); await tick();
     assert.match(ui.lastFrame()!, /▸ 思考/); assert.doesNotMatch(ui.lastFrame()!, /可见摘要片段/);
@@ -123,7 +123,7 @@ test('model wizard imports a service, searches models, tests then applies withou
   const config = { model: 'old', baseUrl: 'http://localhost', provider: 'responses', apiKey: '' } as import('../src/config/load.js').Config;
   const ui = render(React.createElement(ModelWizard, { config, width: 80, onClose: () => {}, onApply: async p => { assert.equal(verified, true); applied = p.model; }, services: {
     discover: async () => [{ name: 'Imported', model: 'initial', provider: 'responses' as const, baseUrl: 'https://example.test', apiKey: secret }],
-    list: async () => ['target-model', 'other-model'], verify: async () => { verified = true; },
+    list: async () => ['target-model', 'other-model'], verify: async () => { verified = true; return { ok: true as const, textReply: true as const, toolCalls: true as const }; },
   } }));
   try {
     await tick(); await tick(); assert.match(ui.lastFrame()!, /Imported/);
