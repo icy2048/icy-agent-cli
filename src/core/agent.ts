@@ -60,9 +60,11 @@ export class Agent {
   async killProcess(reference: string) {
     if (this.switchingStore) throw new Error('正在切换会话。');
     const id = reference.startsWith('icy-process:') ? reference.slice('icy-process:'.length) : reference;
-    if (!id) throw new Error('process_not_found');
-    const match = this.store.data.processes.find(record => record.id === id || record.id.startsWith(id));
-    return this.store.getProcessManager().kill(match?.id ?? id, 'user_kill');
+    if (!id || (id.length < 8 && !this.store.data.processes.some(record => record.id === id))) throw new Error('process_not_found');
+    const matches = this.store.data.processes.filter(record => record.id === id || record.id.startsWith(id));
+    if (!matches.length) throw new Error('process_not_found');
+    if (matches.length > 1) throw new Error('process_ambiguous');
+    return this.store.getProcessManager().kill(matches[0].id, 'user_kill');
   }
   private async eventFor(owner: SessionStore, event: AgentEvent) {
     const safe = JSON.parse(JSON.stringify(event, (_k, v) => typeof v === 'string' ? redact(v, [this.config.apiKey]) : v)) as AgentEvent;

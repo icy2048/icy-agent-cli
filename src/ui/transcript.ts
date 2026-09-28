@@ -13,7 +13,7 @@ function processElapsed(record: ProcessRecord): number {
 export function processTranscriptText(record: ProcessRecord): string {
   const reference = processReference(record.id);
   if (record.status === 'running') return `▶ 后台进程 ${reference} 已启动：${clean(record.command)}`;
-  if (record.status === 'unknown') return `? 后台进程 ${reference} 状态未知（icy 重启后不再跟踪，pid ${record.pidAlive ? '仍存活' : '已不存在'}）`;
+  if (record.status === 'unknown') return `? 后台进程 ${reference} ${record.reason === 'identity_unconfirmed' ? '未确认' : '状态未知'}（icy 重启后不再跟踪，pid ${record.pidAlive ? '仍存活' : '已不存在'}）`;
   if (record.status === 'timeout') return `■ 后台进程 ${reference} 已因超时终止`;
   if (record.status === 'output_limit') return `■ 后台进程 ${reference} 输出超过 16 MiB 终止`;
   if (record.status === 'killed') return `■ 后台进程 ${reference} 已被终止（${record.reason || 'unknown'}）`;
@@ -25,8 +25,9 @@ export function processListSummary(processes: ProcessRecord[] = []): string {
   return processes.map(record => {
     const ended = record.endedAt ? `结束 ${record.endedAt}` : `已运行 ${processElapsed(record)}s`;
     const exit = record.exitCode !== undefined && record.exitCode !== null ? `退出码 ${record.exitCode}` : record.reason ? `原因 ${record.reason}` : record.signal ? `原因 ${record.signal}` : '退出码 —';
+    const state = record.status === 'unknown' && record.reason === 'identity_unconfirmed' ? '未确认' : record.status;
     const command = Array.from(clean(record.command)).slice(0, 80).join('');
-    return `${processReference(record.id)} · 状态：${record.status} · pid ${record.pid ?? '—'} · ${ended} · ${exit} · 字节 ${record.bytes} · ${command}`;
+    return `${processReference(record.id)} · 状态：${state} · pid ${record.pid ?? '—'} · ${ended} · ${exit} · 字节 ${record.bytes} · ${command}`;
   }).join('\n');
 }
 
@@ -127,8 +128,9 @@ export function taskSummary(task?: TaskState, run?: RunState, processes: Process
     if (processes.length) {
       const running = processes.filter(process => process.status === 'running').length;
       const unknown = processes.filter(process => process.status === 'unknown').length;
-      lines.push(`后台进程：${running} 个运行中、${unknown} 个状态未知`);
-      if (running) lines.push('后台进程运行中时，已验证完成被阻止。');
+      const unconfirmed = processes.filter(process => process.status === 'unknown' && process.reason === 'identity_unconfirmed').length;
+      lines.push(`后台进程：${running} 个运行中、${unknown} 个状态未知${unconfirmed ? `、${unconfirmed} 个未确认` : ''}`);
+      if (running || processes.some(process => process.status === 'unknown' && process.pidAlive === true)) lines.push('后台进程运行中或状态未知且仍存活时，已验证完成被阻止。');
     }
     return lines.join('\n');
   }
@@ -144,8 +146,9 @@ export function taskSummary(task?: TaskState, run?: RunState, processes: Process
   if (processes.length) {
     const running = processes.filter(process => process.status === 'running').length;
     const unknown = processes.filter(process => process.status === 'unknown').length;
-    lines.push(`后台进程：${running} 个运行中、${unknown} 个状态未知`);
-    if (running) lines.push('后台进程运行中时，已验证完成被阻止。');
+    const unconfirmed = processes.filter(process => process.status === 'unknown' && process.reason === 'identity_unconfirmed').length;
+    lines.push(`后台进程：${running} 个运行中、${unknown} 个状态未知${unconfirmed ? `、${unconfirmed} 个未确认` : ''}`);
+    if (running || processes.some(process => process.status === 'unknown' && process.pidAlive === true)) lines.push('后台进程运行中或状态未知且仍存活时，已验证完成被阻止。');
   }
   lines.push('最近验收记录：');
   if (!task.verificationRecords.length) lines.push('尚无验收记录；/verify <命令> 指定并执行验收。');

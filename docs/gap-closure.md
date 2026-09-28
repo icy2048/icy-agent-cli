@@ -206,10 +206,12 @@ usage 合计包含预处理及本地估算。部分运行只有估算总数，�
 
 ## 2026-09-28：第五轮迭代：长命令支持
 
-本轮把原先 60 秒前台 Bash 的边界扩展为可查询、可取消的 detached 后台进程：`bash` 增加 `detach` 与 `kill`，后台进程拥有 `icy-process:<id>` 引用，输出经过脱敏后写入会话目录并限制为 16 MiB；`read icy-process:<id>` 最多等待 10 秒并按 Unicode 字符分页。Workbench 提供 `/ps`、`/kill`、后台命令审批说明、启动／结束／恢复未知状态的轨迹投影；JSON/纯文本 CLI 也输出 process 事件，正常退出用 `session_closed` 清理仍运行的进程。
+本轮把原先 60 秒前台 Bash 的边界扩展为可查询、可取消的 detached 后台进程：`bash` 增加 `detach` 与 `kill`，后台进程拥有 `icy-process:<id>` 引用，输出经过脱敏后写入会话目录并限制为 16 MiB；`read icy-process:<id>` 最多等待 10 秒并按 Unicode 字符分页。Workbench 提供 `/ps`、`/kill`、后台命令审批说明、启动／结束／恢复未知状态的轨迹投影；JSON/纯文本 CLI 也输出 process 事件，正常退出用 `session_closed` 清理仍运行的进程。Windows taskkill 的 128/1282（进程已退出）按成功处理，软终止的其他失败仍会升级到 `/T /F`。恢复记录只用 lstart/CreationDate 身份令牌匹配后才允许信号，不再以 `ps` 命令行过滤匹配进程。身份未确认时保留探测到的 liveness，并在任务和进程列表中显示“未确认”。
 
 契约是：前台命令最多 60 秒，detached 命令默认且最多 30 分钟；没有交互 stdin；kill 不需额外审批，审批 key 包含 detach；进程启动和退出都会推进 `mutationRevision`，运行中的进程阻止“已验证完成”。恢复不会重启旧进程，原先 running 的记录变为 `unknown` 并带 `pidAlive`，旧验收证据失效。输出不进入内存长结果，而保存在 `~/.icy/sessions/<id>/processes/<id>.log`。
 
 自动化测试新增了进程生命周期、Unicode 日志分页、16 MiB 限制、超时／树终止、无审批 kill、会话恢复、验收证据失效、Workbench 命令与审批／恢复显示，以及 CLI HTTP fixture 的 NDJSON 和子进程清理覆盖。动机不是声称已经观察到真实评测被长命令阻断：迭代计划的“真实任务经常被 60 秒阻断”门槛**未被评测数据满足**，已有记录中的 bash 没有一次命中 `timeout` 或 `output_limit`；本仓库自身在快速机器上的完整 `npm test` 约 24 秒，`build && test` 链接近该上限，因此仍有实际开发场景价值。本功能尚未运行 live-model evaluation batch。
 
-诚实边界：detached 进程不提供操作系统沙箱，没有 per-process 资源限制，不支持交互输入，也不自动重启；崩溃恢复只观测 PID，不接管旧进程。Windows CI 状态为“尚未运行”，Windows 真机状态为“尚未进行”，本轮 CI 结果统一为“尚未运行”，由后续编排器补填。未升版本、未提交发布或 PR。
+诚实边界：detached 进程不提供操作系统沙箱，没有 per-process 资源限制，不支持交互输入，也不自动重启；detached 子进程会继承写入 icy 的管道，如果 icy 自身崩溃（不是正常退出），继续写输出的子进程会收到 EPIPE/SIGPIPE 并通常退出，崩溃后的尾部输出会丢失；恢复只观察 PID 身份，不接管旧进程。Windows CI 状态为“尚未运行”，Windows 真机状态为“尚未进行”，本轮尚未推送，三平台 CI 结果为“尚未运行”。未升版本、未提交发布或 PR。
+
+审查与修复过程：首版由 gpt-5.6-luna 分两个单元实现（工具／进程／持久化层，UI／CLI／文档），编排方拒绝了其中一处越界改动——非交互模式对 detached 请求自动授权——并恢复为"未批准的 bash 一律退出 2"。grok-4.6 的第一轮独立审查给出 4 项阻塞（恢复后 PID 复用误杀、`closeAll` 漏掉 `unknown` 进程且超时不续、持久化失败毒化保存队列、`unknown` 存活进程不阻止验收）与 6 项其他问题；修复后的第二轮审查确认 R1–R4、R7、R9、R10 关闭，另指出 Windows `taskkill` 非零退出中断终止流程、identity 误判把存活进程标为 `pidAlive=false`、看门狗一次性失效、identity 捕获无超时、交互退出失败仍返回 0 等缺陷，均已修复并各自加回归。实现方一次声称"测试已补齐"而实际未写，编排方按测试数核对后另行补齐。本机最终门禁：类型检查、343 项测试（连续三次全部通过）、构建、安装包 smoke、POSIX PTY smoke 全部通过；管道导致 icy 崩溃后子进程 SIGPIPE 的问题有意不改架构，记录为边界。

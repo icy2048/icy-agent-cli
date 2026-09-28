@@ -101,7 +101,7 @@ export class ToolExecutor {
   }
   private async readProcess(reference: string, offset: number | null, limit: number | null, signal: AbortSignal): Promise<ToolResult> {
     const id = reference.slice('icy-process:'.length), manager = this.store.getProcessManager();
-    const record = await manager.status(id, { waitMs: 10_000, signal });
+    const record = await manager.status(id, { waitMs: offset === null && limit === null ? 10_000 : 0, signal });
     const output = await manager.readOutput(id, offset, limit);
     const next = output.truncated ? `\n[More output: read path="${reference}" offset=${output.end + 1} limit=6000]` : '\n[End of output]';
     const ok = record.status === 'running' || record.status === 'exited' && record.exitCode === 0;
@@ -158,7 +158,8 @@ export class ToolExecutor {
         const cwd = await workspacePath(this.config.cwd, a.cwd ?? '.');
         const timeoutMs = a.timeoutMs ?? (detach ? 1_800_000 : 60_000);
         if (kill !== null) {
-          const record = await this.store.getProcessManager().kill(kill.slice('icy-process:'.length), 'model_kill');
+          const reference = kill.startsWith('icy-process:') ? kill.slice('icy-process:'.length) : kill;
+          const record = await this.store.getProcessManager().kill(reference, 'model_kill');
           return { ok: record.status === 'killed', error: record.status === 'killed' ? undefined : record.status, content: `Process icy-process:${record.id} Status: ${record.status}${record.reason ? ` (reason ${record.reason})` : ''}` };
         }
         if (detach) {

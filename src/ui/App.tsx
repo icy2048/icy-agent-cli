@@ -67,7 +67,10 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
       await preferenceSave.current;
       const terminated = await agent.store.close();
       if (terminated > 0) process.stderr.write(`已终止 ${terminated} 个后台进程（session_closed）。\n`);
-    } catch (error) { process.stderr.write(`退出时关闭会话失败：${errorText(error)}\n`); }
+    } catch (error) {
+      process.stderr.write(`退出时关闭会话失败：${errorText(error)}\n`);
+      process.exitCode = 1;
+    }
     exit();
   };
   const exitSaved = () => { exitAfterCancel.current = true; if (!busy.current) void closeAndExit(); };
@@ -128,7 +131,12 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     finally { busy.current = false; setRunning(false); controller.current = null; if (exitAfterCancel.current) exitSaved(); }
   };
   const submit = async (value: string) => {
-    const prompt = value.trim(); if (!prompt || busy.current) return;
+    const prompt = value.trim(), processCommand = prompt === '/ps' || prompt === '/kill' || prompt.startsWith('/kill ');
+    if (!prompt) return;
+    if (busy.current && !processCommand) {
+      notice('运行中：只接受 /ps 和 /kill；Esc 取消当前运行。');
+      return;
+    }
     changeInput(''); setScroll(0);
     if (prompt === '/exit') { exitSaved(); return; }
     if (prompt === '/help') { notice(commands.map(c => `${c.command} ${c.description}`).join('\n') + '\n/ 菜单 · ↑↓ 选择 · Enter 执行 · Tab 补全 · Esc 关闭\nCtrl+T 思考 · Ctrl+O 工具 · PgUp/PgDn 翻页'); return; }
@@ -160,13 +168,14 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     }
     const command = prompt.split(/\s/, 1)[0], argument = prompt.slice(command.length).trim();
     if (command === '/kill') {
-      if (!argument) { notice('用法：/kill <icy-process:id 或 id>'); changeInput('/kill '); return; }
-      await localAction(async () => {
+      if (!argument) { notice('用法：/kill <icy-process:id 或至少 8 个字符的唯一前缀>'); changeInput('/kill '); return; }
+      const killAction = async () => {
         try {
           const record = await agent.killProcess(argument);
           notice(`后台进程 ${processReference(record.id)} 当前状态：${record.status}${record.reason ? `（${record.reason}）` : ''}`);
         } catch (error) { notice(`无法终止后台进程 ${argument}：${errorText(error)}`); }
-      });
+      };
+      if (busy.current) await killAction(); else await localAction(killAction);
       return;
     }
     if (['/verify', '/todo', '/done', '/resume'].includes(command)) {
@@ -220,7 +229,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   }, []);
   useInput((value, key) => {
     if (modelOpen) return;
-    if (key.ctrl && (value === 'c' || value === 'd')) { if (busy.current) controller.current?.abort(); else exitSaved(); return; }
+    if (key.ctrl && value === 'c') { if (busy.current) controller.current?.abort(); else exitSaved(); return; }
     if (key.escape) { if (menuOpen || (!running && input.startsWith('/'))) { setMenuDismissed(true); changeInput(''); return; } controller.current?.abort(); return; }
     if (pendingRef.current) {
       if (key.pageDown) setApprovalPage(p => Math.min(p + 1, approvalPages - 1));
@@ -280,7 +289,10 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
           <Text dimColor>{pending.request.detach ? '输出写入磁盘；命令会在当前轮结束后继续运行。' : 'bash 在主机执行，可访问工作区之外的资源。'}</Text>
         </Box> : <Box flexDirection="column" marginTop={1}><Text dimColor>{'─'.repeat(leftWidth - 2)}</Text><Box paddingX={1}>
           <Text color={accent}>❯ </Text>
-          {running ? <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text> : <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.takesArgument || selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />}
+          <Box flexDirection="column">
+            {running && <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text>}
+            <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.takesArgument || selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />
+          </Box>
         </Box></Box>}
       </Box>
       {dual && <Box flexDirection="column" width={28} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor="gray" paddingX={1}>

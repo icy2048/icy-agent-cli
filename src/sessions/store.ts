@@ -18,11 +18,15 @@ export interface LegacySessionData extends SessionMetadata { version: 1 }
 export interface SessionData extends SessionMetadata, SessionExecutionState { version: 2; processes: NonNullable<SessionExecutionState['processes']> }
 export interface SessionStoreOptions {
   platform?: NodeJS.Platform;
+  processPlatform?: NodeJS.Platform;
   kill?: typeof process.kill;
   processSpawn?: typeof spawn;
   processKill?: ProcessManagerOptions['kill'];
   processEnv?: NodeJS.ProcessEnv;
   shellPath?: string;
+  processIdentity?: ProcessManagerOptions['captureIdentity'];
+  processAlive?: ProcessManagerOptions['isAlive'];
+  processOutputLimit?: number;
 }
 export class SessionStore {
   readonly dir: string;
@@ -37,7 +41,8 @@ export class SessionStore {
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(data.id)) throw new Error('无效会话 ID。');
     this.platform = options.platform ?? process.platform;
     this.kill = options.kill ?? process.kill.bind(process);
-    this.processOptions = { platform: this.platform, spawn: options.processSpawn, kill: options.processKill, env: options.processEnv, shellPath: options.shellPath };
+    this.processOptions = { platform: options.processPlatform ?? this.platform, spawn: options.processSpawn, kill: options.processKill, env: options.processEnv, shellPath: options.shellPath,
+      captureIdentity: options.processIdentity, isAlive: options.processAlive, outputLimit: options.processOutputLimit };
     this.snapshot = this.normalize(data);
     this.dir = path.join(home, 'sessions', data.id);
   }

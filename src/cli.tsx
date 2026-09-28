@@ -137,8 +137,14 @@ export async function main(argv = process.argv.slice(2)) {
       finally { process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel); }
     }
   } finally {
-    const terminated = await agent.store.close();
-    if (terminated > 0) process.stderr.write(`已终止 ${terminated} 个后台进程（session_closed）。\n`);
+    try {
+      const terminated = await agent.store.close();
+      if (terminated > 0) process.stderr.write(`已终止 ${terminated} 个后台进程（session_closed）。\n`);
+    } catch (error) {
+      process.stderr.write(`icy: ${redact(errorText(error))}\n`);
+      process.exitCode = 1;
+      process.exit();
+    }
   }
 }
 

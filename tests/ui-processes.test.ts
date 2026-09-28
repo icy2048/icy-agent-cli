@@ -12,12 +12,14 @@ const record = (status: ProcessRecord['status'] = 'running'): ProcessRecord => (
   id: '11111111-1111-4111-8111-111111111111', toolCallId: 'call-1', command: 'sleep 30', cwd: '/fixture', pid: 12345,
   startedAt: now, ...(status === 'running' ? {} : { endedAt: now }), timeoutMs: 1_800_000, status, ...(status === 'exited' ? { exitCode: 0 } : {}), bytes: 42,
 });
-function fixture(processes: ProcessRecord[] = []) {
+function fixture(processes: ProcessRecord[] = [], options: { closeError?: boolean } = {}) {
   let listener: (event: AgentEvent) => void = () => {};
+  let releaseRun: (() => void) | undefined;
   const data = { id: 'ui-process-session', messages: [], runs: [], processes };
   const agent = {
     config: { home: '/unused', cwd: '/fixture', model: 'fixture', baseUrl: 'http://localhost', permissions: 'workspace-edit' },
-    store: { data }, setListener: (next: typeof listener) => { listener = next; },
+    store: { data, close: async () => { if (options.closeError) throw new Error('close_failed'); return 0; } }, setListener: (next: typeof listener) => { listener = next; },
+    run: async () => { await new Promise<void>(resolve => { releaseRun = resolve; }); return { ok: true, reason: 'completed' }; },
     killProcess: async (id: string) => {
       const normalized = id.startsWith('icy-process:') ? id.slice('icy-process:'.length) : id;
       if (normalized !== processes[0]?.id) throw new Error('process_not_found');
@@ -29,7 +31,7 @@ function fixture(processes: ProcessRecord[] = []) {
   Object.defineProperty(ui.stdout, 'columns', { configurable: true, value: 90 });
   Object.defineProperty(ui.stdout, 'rows', { configurable: true, value: 60 });
   ui.stdout.emit('resize');
-  return { ui, agent, bridge, event: (event: AgentEvent) => listener(event), close: () => { ui.unmount(); ui.cleanup(); } };
+  return { ui, agent, bridge, event: (event: AgentEvent) => listener(event), finishRun: () => releaseRun?.(), close: () => { ui.unmount(); ui.cleanup(); } };
 }
 async function command(ui: ReturnType<typeof render>, value: string, expected: RegExp) {
   await tick(); ui.stdin.write(value); await tick(); ui.stdin.write('\r');
@@ -49,6 +51,38 @@ test('/ps shows an empty and a populated process list, and /kill handles unknown
   } finally { f.close(); }
 });
 
+test('/ps and /kill remain available while a model run is busy', async () => {
+  const f = fixture([record()]);
+  try {
+    f.ui.stdin.write('long-running request'); f.ui.stdin.write('\r'); await tick();
+    await command(f.ui, '/ps', /icy-process:11111111/);
+    await command(f.ui, '/kill 11111111-1111-4111-8111-111111111111', /当前状态：killed.*user_kill/);
+    f.finishRun(); await tick();
+  } finally { f.close(); }
+});
+
+test('busy composer keeps a non-process draft and explains the accepted commands', async () => {
+  const f = fixture();
+  try {
+    f.ui.stdin.write('long-running request'); f.ui.stdin.write('\r'); await tick();
+    f.ui.stdin.write('draft kept while busy'); await tick(); f.ui.stdin.write('\r');
+    for (let i = 0; i < 100 && !/运行中：只接受 \/ps 和 \/kill；Esc 取消当前运行。/.test(f.ui.lastFrame() ?? ''); i++) await tick();
+    assert.match(f.ui.lastFrame() ?? '', /运行中：只接受 \/ps 和 \/kill；Esc 取消当前运行。/);
+    assert.match(f.ui.lastFrame() ?? '', /draft kept while busy/);
+    f.finishRun(); await tick();
+  } finally { f.close(); }
+});
+
+test('interactive close failure sets a non-zero exit code', async () => {
+  const previous = process.exitCode; process.exitCode = undefined;
+  const f = fixture([], { closeError: true });
+  try {
+    f.ui.stdin.write('/exit'); f.ui.stdin.write('\r');
+    for (let i = 0; i < 100 && process.exitCode !== 1; i++) await tick();
+    assert.equal(process.exitCode, 1);
+  } finally { f.close(); process.exitCode = previous; }
+});
+
 test('detached approval clearly describes persistence and keeps long-command paging', async () => {
   const f = fixture();
   try {
@@ -58,6 +92,14 @@ test('detached approval clearly describes persistence and keeps long-command pag
     assert.match(f.ui.lastFrame()!, /后台命令（最长 30 分钟，输出写入会话目录）/);
     assert.match(f.ui.lastFrame()!, /输出写入磁盘；命令会在当前轮结束后继续运行/);
     f.ui.stdin.write('n'); assert.equal(await decision, 'deny');
+  } finally { f.close(); }
+});
+
+test('/ps and /task label identity-unconfirmed processes as 未确认', async () => {
+  const f = fixture([{ ...record('unknown'), pidAlive: true, reason: 'identity_unconfirmed' }]);
+  try {
+    await command(f.ui, '/ps', /状态：未确认/);
+    await command(f.ui, '/task', /未确认/);
   } finally { f.close(); }
 });
 

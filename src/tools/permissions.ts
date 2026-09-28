@@ -2,6 +2,7 @@ import type { Config } from '../config/load.js';
 import type { Approve } from '../core/types.js';
 import type { ToolInput } from './definitions.js';
 import { workspacePath } from './paths.js';
+import { FOREGROUND_TIMEOUT_ERROR } from './definitions.js';
 
 /** Session-scoped exact grants. No file writes or process execution occur here. */
 export class PermissionPolicy {
@@ -19,7 +20,7 @@ export class PermissionPolicy {
     const a = input.args, cwd = await workspacePath(this.config.cwd, a.cwd ?? '.');
     const detach = a.detach ?? false, kill = a.kill ?? null;
     const timeoutMs = a.timeoutMs ?? (detach ? 1_800_000 : 60_000);
-    if (detach !== true && timeoutMs > 60_000) throw new Error('timeout_exceeds_foreground_limit');
+    if (detach !== true && timeoutMs > 60_000) throw new Error(FOREGROUND_TIMEOUT_ERROR);
     if (kill !== null) {
       if (a.command !== 'kill' || detach) throw new Error('invalid_arguments');
       return { name: 'bash', args: { command: 'kill', cwd, timeoutMs, detach: false, kill } };

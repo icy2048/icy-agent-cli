@@ -94,7 +94,7 @@ export function updateRun(state: SessionExecutionState, patch: RunProgress): Run
 
 export function canVerifyTask(state: SessionExecutionState, processes: ProcessRecord[] = state.processes ?? []): boolean {
   const task = state.task;
-  return Boolean(task && !processes.some(process => process.status === 'running') && task.remaining.length === 0 && task.verificationChecks.length > 0 && task.verificationChecks.every(check => {
+  return Boolean(task && !processes.some(process => process.status === 'running' || process.status === 'unknown' && process.pidAlive === true) && task.remaining.length === 0 && task.verificationChecks.length > 0 && task.verificationChecks.every(check => {
     const record = task.verificationRecords.findLast(item => item.checkId === check.id);
     return record?.ok === true && record.mutationRevision === task.mutationRevision;
   }));

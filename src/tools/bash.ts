@@ -9,7 +9,7 @@ export interface BashOptions {
   shellPath?: string;
   env?: NodeJS.ProcessEnv;
   spawn?: typeof spawn;
-  kill?: (pid: number, tree: boolean) => void;
+  kill?: (pid: number, tree: boolean, signal?: NodeJS.Signals) => void | Promise<void>;
 }
 
 const isSystem32Bash = (candidate: string) => /(?:^|\\)windows\\system32\\bash\.exe$/i.test(path.win32.normalize(candidate));
@@ -43,6 +43,7 @@ export function resolveBashShell(
 
 export const BASH_UNAVAILABLE = 'bash 不可用：请安装 Git for Windows，或用 ICY_BASH 指定 bash.exe 路径。';
 export const bashArgs = (command: string) => ['--noprofile', '--norc', '-c', command];
+const detachedBashCommand = (command: string) => `${command}\n__ICY_EXIT_STATUS=$?\n: \nexit "$__ICY_EXIT_STATUS"`;
 
 /** Spawn and tree-kill details are shared by foreground and detached commands. */
 export function spawnBash(
@@ -52,9 +53,10 @@ export function spawnBash(
   env: NodeJS.ProcessEnv,
   shellPath: string | undefined,
   spawnProcess: typeof spawn,
+  preserveShell = false,
 ) {
   if (platform === 'win32' && !shellPath) return undefined;
-  return spawnProcess(shellPath ?? '/bin/bash', bashArgs(command), {
+  return spawnProcess(shellPath ?? '/bin/bash', bashArgs(preserveShell ? detachedBashCommand(command) : command), {
     cwd,
     detached: platform !== 'win32',
     ...(platform === 'win32' ? { windowsHide: true } : {}),
@@ -63,24 +65,35 @@ export function spawnBash(
   });
 }
 
-/** The injected kill signature is intentionally the old two-argument contract. */
-export function killBashTree(
+/** The injected kill keeps the legacy two arguments and may accept a signal as the third. */
+export async function killBashTree(
   pid: number,
   platform: NodeJS.Platform,
   spawnProcess: typeof spawn,
   kill: BashOptions['kill'] | undefined,
   signal: NodeJS.Signals,
-) {
+): Promise<boolean> {
   if (platform === 'win32') {
-    if (kill) return kill(pid, true);
-    const taskkill = spawnProcess('taskkill.exe', ['/pid', String(pid), '/T', '/F'], {
+    if (kill) { await kill(pid, true, signal); return false; }
+    const args = ['/pid', String(pid), '/T', ...(signal === 'SIGKILL' ? ['/F'] : [])];
+    const taskkill = spawnProcess('taskkill.exe', args, {
       windowsHide: true, detached: false, stdio: 'ignore',
     });
-    taskkill.once('error', () => {});
-    return;
+    return new Promise<boolean>((resolve, reject) => {
+      let settled = false;
+      const done = (error?: Error, gone = false) => { if (settled) return; settled = true; error ? reject(error) : resolve(gone); };
+      taskkill.once('error', error => done(error instanceof Error ? error : new Error(String(error))));
+      taskkill.once('close', code => {
+        // taskkill reports an already-dead process as 128 or 1282. Both are
+        // successful outcomes for tree termination.
+        if (code === 0) done(undefined, false);
+        else if (code === 128 || code === 1282) done(undefined, true);
+        else done(new Error(`taskkill_failed:${code ?? 'signal'}`));
+      });
+    });
   }
-  if (kill) return kill(-pid, false);
-  process.kill(-pid, signal);
+  if (kill) { await kill(-pid, false, signal); return false; }
+  process.kill(-pid, signal); return false;
 }
 
 export function runBash(
@@ -110,8 +123,7 @@ export function runBash(
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const killGroup = (sig: NodeJS.Signals) => {
       if (!child.pid) return;
-      try { killBashTree(child.pid, platform, spawnProcess, options.kill, sig); }
-      catch { /* already exited */ }
+      void killBashTree(child.pid, platform, spawnProcess, options.kill, sig).catch(() => { /* already exited */ });
     };
     const terminate = (why: string) => {
       if (reason || settled) return;
