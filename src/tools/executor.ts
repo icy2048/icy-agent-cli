@@ -6,6 +6,7 @@ import type { Config } from '../config/load.js';
 import type { ToolResult } from '../core/types.js';
 import type { SessionStore } from '../sessions/store.js';
 import { workspacePath } from './paths.js';
+import { listDirectory, searchWorkspace } from './explore.js';
 import { runBash } from './bash.js';
 
 import type { ToolInput } from './definitions.js';
@@ -17,7 +18,7 @@ const page = (content: string, offset: number | null, limit: number | null) => {
 };
 export class ToolExecutor {
   constructor(private config: Pick<Config, 'cwd'>, private store: SessionStore) {}
-  private async read(file: string) {
+  private async readFileContent(file: string) {
     const resolved = await workspacePath(this.config.cwd, file);
     const info = await stat(resolved);
     if (!info.isFile() || info.size > 1_000_000) throw new Error('not_text_file_or_too_large');
@@ -29,7 +30,7 @@ export class ToolExecutor {
     if (file.startsWith('icy-output:')) throw new Error('output_reference_is_read_only');
     let before = '', exists = true;
     const target = await workspacePath(this.config.cwd, file);
-    try { before = await this.read(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') exists = false; else throw e; }
+    try { before = await this.readFileContent(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') exists = false; else throw e; }
     if (exists ? expectedHash !== sha256(before) : expectedHash !== null) throw new Error('file_changed_or_hash_required');
     signal.throwIfAborted();
     await mkdir(path.dirname(target), { recursive: true });
@@ -40,7 +41,7 @@ export class ToolExecutor {
       signal.throwIfAborted();
       await workspacePath(this.config.cwd, file);
       if (exists) {
-        if (sha256(await this.read(file)) !== expectedHash) throw new Error('file_changed');
+        if (sha256(await this.readFileContent(file)) !== expectedHash) throw new Error('file_changed');
         await rename(temp, target);
       } else { await link(temp, target); await unlink(temp); } // no overwrite if another process creates the target
     } finally { await unlink(temp).catch(() => {}); }
@@ -61,8 +62,17 @@ export class ToolExecutor {
     switch (input.name) {
       case 'read': {
         const a = input.args;
-        if (a.path.startsWith('icy-output:')) return this.readOutput(a.path, a.offset, a.limit);
-        const content = await this.read(a.path);
+        if (a.path.startsWith('icy-output:')) {
+          if (a.pattern !== null) throw new Error('pattern_not_supported_for_output');
+          return this.readOutput(a.path, a.offset, a.limit);
+        }
+        if (a.pattern !== null) {
+          return { ok: true, content: await searchWorkspace(this.config.cwd, a.path, a.pattern, a.regex ?? false, a.offset, a.limit, signal) };
+        }
+        const resolved = await workspacePath(this.config.cwd, a.path);
+        const info = await stat(resolved);
+        if (info.isDirectory()) return { ok: true, content: await listDirectory(this.config.cwd, a.path, a.offset, a.limit, a.depth) };
+        const content = await this.readFileContent(a.path);
         return { ok: true, content: `SHA256: ${sha256(content)}\n${page(content, a.offset, a.limit)}` };
       }
       case 'write': {
@@ -72,7 +82,7 @@ export class ToolExecutor {
       case 'edit': {
         const a = input.args;
         if (a.path.startsWith('icy-output:')) throw new Error('output_reference_is_read_only');
-        const before = await this.read(a.path), index = before.indexOf(a.oldText);
+        const before = await this.readFileContent(a.path), index = before.indexOf(a.oldText);
         if (index < 0) throw new Error('edit_text_not_found');
         if (before.indexOf(a.oldText, index + 1) >= 0) throw new Error('edit_text_not_unique');
         const after = before.slice(0, index) + a.newText + before.slice(index + a.oldText.length);
