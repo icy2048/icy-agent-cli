@@ -184,7 +184,7 @@ v1 会话恢复时迁移到 v2，保留原消息、工具结果和 Responses 专
 
 ## 当前边界
 
-shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、自动上下文摘要、MCP、多 Agent。Windows 不执行 POSIX `0600`/`0700` 权限位，凭据安全依赖用户 profile ACL；Windows 实机交互验收尚未进行。
+shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、自动上下文摘要、MCP、多 Agent。Windows 不执行 POSIX `0600`/`0700` 权限位，凭据安全依赖用户 profile ACL；Windows CI 尚未运行，Windows 实机交互验收尚未进行。
 
 ## 开发与验证
 
@@ -204,7 +204,7 @@ shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命�
 
 `eval:prompts` 的离线夹具包含顺序、条件、例外、否定、验收和引用材料；默认使用确定性假模型，不发送工作区文件或执行主机工具；`--live` 只发送合成夹具到配置的小模型服务。它只报告原文是否保留、字面要求遗漏、字符数、预处理 token 和耗时，不测自主任务完成率，也不证明语义等价。`eval:tasks -- --live` 默认每个样例只执行一次；即使输出正确，也不能据此给出稳定成功率、费用排名或压缩收益。真实模型结果、历史失败、重复批次和上下文诊断保存在 [docs/evaluations/](docs/evaluations/)；限制与审计见 [docs/gap-closure.md](docs/gap-closure.md)。
 
-仓库的 Node 22 [GitHub Actions 门禁](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)当前矩阵只有 `ubuntu-latest`、`macos-latest`，包含锁文件安装、类型检查、测试、构建、POSIX PTY 和包测试；`.github/workflows/ci.yml` 尚未配置 `windows-latest`，所以 Windows CI 证据为“尚未”，不链接运行记录。`scripts/pty-smoke.py` 是 POSIX PTY 门禁；Windows 侧的 `scripts/package-smoke.mjs` 使用 Node 直接启动安装产物，执行离线 `--demo`，并跳过 Unix executable bit 检查。`npm test` 在 Windows 跳过 `tests/windows-paths.test.ts` 的 POSIX symlink fixture（junction 由 `lstat` 覆盖）；workspace fingerprint 不比较 POSIX mode bits。Linux PTY 有自动门禁，但不替代真人人工交互验收；Windows 实机交互验收尚未进行。
+仓库的 Node 22 [GitHub Actions 门禁](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)当前矩阵为 `ubuntu-latest`、`macos-latest`、`windows-latest`，每个平台都执行锁文件安装、类型检查、测试和构建；`npm run test:pty` 仅在 `runner.os != 'Windows'` 时运行，Windows 改为执行 `node dist/cli.js --demo --plain` 和 `node dist/cli.js --version` 的 Windows offline smoke；`npm run test:package` 在所有平台运行。`scripts/pty-smoke.py` 是 POSIX PTY 门禁；Windows 侧的 `scripts/package-smoke.mjs` 使用 Node 直接启动安装产物，并跳过 Unix executable bit 检查。`npm test` 现在执行 `node --import tsx --test "tests/**/*.test.ts"`；Windows 仅跳过 CLI SIGINT/SIGTERM cancellation（`Windows has no SIGINT delivery to child processes`）、model credential permissions（`Windows does not preserve POSIX 0o600 permissions`）和 workspace mode fingerprint（`Windows does not preserve POSIX file mode changes`）。symlink fixtures 使用 `tests/helpers` 的 `makeSymlink`，Windows 目录链接失败时回退为 junction，不再跳过。Linux PTY 有自动门禁，但不替代真人人工交互验收；这些提交尚未推送，Windows CI 尚未运行，Windows 实机交互验收尚未进行。
 
 代码入口是 `src/cli.tsx`；运行循环在 `src/core/`，模型协议在 `src/providers/`，工具与权限在 `src/tools/`，会话在 `src/sessions/`，Workbench 在 `src/ui/`。
 
