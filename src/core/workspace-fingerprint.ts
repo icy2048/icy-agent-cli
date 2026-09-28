@@ -10,10 +10,12 @@ export interface WorkspaceFingerprintOptions {
   maxFiles?: number;
   /** Maximum regular-file and symlink-target bytes read. */
   maxBytes?: number;
+  /** Filesystem platform, injectable for cross-platform tests. */
+  platform?: NodeJS.Platform;
 }
 
-function unchanged(before: BigIntStats, after: BigIntStats): boolean {
-  return before.dev === after.dev && before.ino === after.ino && before.mode === after.mode
+export function unchanged(before: BigIntStats, after: BigIntStats, platform = process.platform): boolean {
+  return before.dev === after.dev && before.ino === after.ino && (platform === 'win32' || before.mode === after.mode)
     && before.nlink === after.nlink && before.size === after.size
     && before.mtimeNs === after.mtimeNs && before.ctimeNs === after.ctimeNs;
 }
@@ -24,7 +26,7 @@ function unchanged(before: BigIntStats, after: BigIntStats): boolean {
  * Only explicitly named subtrees are ignored; secrets and dependencies are hashed.
  */
 export async function fingerprintWorkspace(cwd: string, options: WorkspaceFingerprintOptions = {}): Promise<string | undefined> {
-  const { signal, maxFiles = 10_000, maxBytes = 64 * 1024 * 1024 } = options;
+  const { signal, maxFiles = 10_000, maxBytes = 64 * 1024 * 1024, platform = process.platform } = options;
   signal?.throwIfAborted();
   if (![maxFiles, maxBytes].every(value => Number.isSafeInteger(value) && value >= 0)) return;
   const root = path.resolve(cwd), ignored = (options.ignorePaths ?? []).map(value => path.resolve(root, value));
@@ -35,7 +37,8 @@ export async function fingerprintWorkspace(cwd: string, options: WorkspaceFinger
   const uncertain = () => { throw new Error('Workspace fingerprint is unknown.'); };
   const check = () => signal?.throwIfAborted();
   const add = (relative: string, type: string, mode: bigint, content = '') => {
-    hash.update(JSON.stringify([relative, type, mode.toString(), content]) + '\n');
+    // Windows mode values do not carry POSIX permission bits and must not affect the fingerprint.
+    hash.update(JSON.stringify([relative, type, platform === 'win32' ? '' : mode.toString(), content]) + '\n');
   };
   const visit = async (file: string, relative: string): Promise<void> => {
     check();
@@ -61,14 +64,14 @@ export async function fingerprintWorkspace(cwd: string, options: WorkspaceFinger
         names.push(entry.name);
       }
       check();
-      if (!unchanged(before, await fs.lstat(file, { bigint: true }))) uncertain();
+      if (!unchanged(before, await fs.lstat(file, { bigint: true }), platform)) uncertain();
       for (const name of names.sort()) await visit(path.join(file, name), relative ? `${relative}/${name}` : name);
     } else if (before.isFile()) {
       if (before.size > BigInt(maxBytes - bytes)) uncertain();
       // Do not follow a file swapped for a link, or block if it becomes a FIFO after lstat.
       const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
       try {
-        if (!unchanged(before, await handle.stat({ bigint: true }))) uncertain();
+        if (!unchanged(before, await handle.stat({ bigint: true }), platform)) uncertain();
         const content = createHash('sha256'), buffer = Buffer.alloc(Math.min(64 * 1024, Number(before.size)));
         let read = 0;
         while (read < Number(before.size)) {
@@ -80,12 +83,12 @@ export async function fingerprintWorkspace(cwd: string, options: WorkspaceFinger
           content.update(buffer.subarray(0, chunk.bytesRead));
         }
         check();
-        if (!unchanged(before, await handle.stat({ bigint: true }))) uncertain();
+        if (!unchanged(before, await handle.stat({ bigint: true }), platform)) uncertain();
         add(relative, 'file', before.mode, content.digest('hex'));
       } finally { await handle.close(); }
     } else uncertain();
     check();
-    if (!unchanged(before, await fs.lstat(file, { bigint: true }))) uncertain();
+    if (!unchanged(before, await fs.lstat(file, { bigint: true }), platform)) uncertain();
   };
   try {
     const rootStat = await fs.lstat(root, { bigint: true });
@@ -94,7 +97,7 @@ export async function fingerprintWorkspace(cwd: string, options: WorkspaceFinger
     // Catch changes to an earlier file while a later part of the tree was being read.
     for (const [file, before] of snapshots) {
       check();
-      if (!unchanged(before, await fs.lstat(file, { bigint: true }))) uncertain();
+      if (!unchanged(before, await fs.lstat(file, { bigint: true }), platform)) uncertain();
     }
     check();
     return hash.digest('hex');

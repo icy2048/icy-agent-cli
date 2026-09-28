@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import { canonicalPath } from '../tools/paths.js';
 
 const schema = z.object({
   provider: z.enum(['chat-completions', 'responses']).default('chat-completions'),
@@ -29,7 +30,7 @@ async function readJson(file: string): Promise<Record<string, unknown>> {
   try { return JSON.parse(await readFile(file, 'utf8')); }
   catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {}; throw new Error(`无法读取配置 ${file}: ${e instanceof Error ? e.message : e}`); }
 }
-export async function loadConfig(cwd: string, overrides: Record<string, unknown> = {}): Promise<Config> {
+export async function loadConfig(cwd: string, overrides: Record<string, unknown> = {}, platform = process.platform): Promise<Config> {
   const home = path.resolve(process.env.ICY_HOME || path.join(homedir(), '.icy'));
   const user = await readJson(path.join(home, 'config.json'));
   const ui = await readJson(path.join(home, 'ui.json'));
@@ -50,7 +51,7 @@ export async function loadConfig(cwd: string, overrides: Record<string, unknown>
     if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('私有密钥文件必须位于 ICY_HOME 内。');
     apiKey = (await readFile(keyFile, 'utf8')).trim();
   }
-  return { ...config, baseUrl: config.baseUrl.replace(/\/$/, ''), home, cwd: path.resolve(cwd), apiKey };
+  return { ...config, baseUrl: config.baseUrl.replace(/\/$/, ''), home, cwd: canonicalPath(path.resolve(cwd), platform), apiKey };
 }
 export function validateBaseUrl(value: string, allowPrivateHttp = false): string {
   const url = new URL(value);

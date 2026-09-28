@@ -1,7 +1,7 @@
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises';
 import * as vm from 'node:vm';
 import path from 'node:path';
-import { workspacePath, sensitive } from './paths.js';
+import { canonicalPath, workspacePath, sensitive } from './paths.js';
 
 const MAX_FILE_BYTES = 1_000_000;
 const MAX_LISTING_ENTRIES = 500;
@@ -73,7 +73,7 @@ async function workspaceTarget(cwd: string, input: string): Promise<{ root: stri
   const target = await workspacePath(cwd, input);
   // workspacePath resolves cwd before applying its checks. realpath is repeated here
   // only to make paths in results relative to the same canonical workspace root.
-  const root = await realpath(cwd);
+  const root = canonicalPath(await realpath(cwd));
   return { root, target };
 }
 

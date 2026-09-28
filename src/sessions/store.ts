@@ -5,6 +5,7 @@ import type { AgentEvent, Message, ToolCall } from '../core/types.js';
 import { redact } from '../core/text.js';
 import { parseSessionData } from './schema.js';
 import { interruptActiveRun, markMutation, type SessionExecutionState } from '../core/run-state.js';
+import { canonicalPath } from '../tools/paths.js';
 
 interface SessionMetadata {
   id: string; cwd: string; provider: string; model: string; baseUrl: string;
@@ -12,23 +13,35 @@ interface SessionMetadata {
 }
 export interface LegacySessionData extends SessionMetadata { version: 1 }
 export interface SessionData extends SessionMetadata, SessionExecutionState { version: 2 }
+export interface SessionStoreOptions {
+  platform?: NodeJS.Platform;
+  kill?: typeof process.kill;
+}
 export class SessionStore {
   readonly dir: string;
   private locked = false;
   private snapshot: SessionData;
+  private readonly platform: NodeJS.Platform;
+  private readonly kill: typeof process.kill;
   get data(): SessionData { return this.snapshot; }
-  constructor(readonly home: string, data: SessionData | LegacySessionData, private secrets: string[] = []) {
+  constructor(readonly home: string, data: SessionData | LegacySessionData, private secrets: string[] = [], options: SessionStoreOptions = {}) {
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(data.id)) throw new Error('无效会话 ID。');
-    this.snapshot = data.version === 1 ? { ...data, version: 2, task: undefined, runs: [] } : data;
+    this.platform = options.platform ?? process.platform;
+    this.kill = options.kill ?? process.kill.bind(process);
+    this.snapshot = this.normalize(data);
     this.dir = path.join(home, 'sessions', data.id);
   }
-  static async create(home: string, metadata: Pick<SessionData, 'cwd' | 'provider' | 'model' | 'baseUrl'>, secrets: string[] = []) {
+  private normalize(data: SessionData | LegacySessionData): SessionData {
+    const snapshot = data.version === 1 ? { ...data, version: 2 as const, task: undefined, runs: [] } : data;
+    return { ...snapshot, cwd: canonicalPath(snapshot.cwd, this.platform) };
+  }
+  static async create(home: string, metadata: Pick<SessionData, 'cwd' | 'provider' | 'model' | 'baseUrl'>, secrets: string[] = [], options: SessionStoreOptions = {}) {
     const { cwd, provider, model, baseUrl } = metadata;
-    const store = new SessionStore(home, { version: 2, id: randomUUID(), cwd, provider, model, baseUrl, messages: [], runs: [], updatedAt: new Date().toISOString() }, secrets);
+    const store = new SessionStore(home, { version: 2, id: randomUUID(), cwd, provider, model, baseUrl, messages: [], runs: [], updatedAt: new Date().toISOString() }, secrets, options);
     try { await store.lock(); await store.save(); return store; }
     catch (error) { await store.close(); throw error; }
   }
-  static async resume(home: string, id: string, secrets: string[] = []) {
+  static async resume(home: string, id: string, secrets: string[] = [], options: SessionStoreOptions = {}) {
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id)) throw new Error('无效会话 ID。');
     const location = path.join(home, 'sessions', id, 'session.json');
     const readSnapshot = async () => {
@@ -40,11 +53,11 @@ export class SessionStore {
       }
       return parseSessionData(snapshot, id);
     };
-    const store = new SessionStore(home, await readSnapshot(), secrets);
+    const store = new SessionStore(home, await readSnapshot(), secrets, options);
     try {
       await store.lock();
       // Another writer may have saved and released the lock after our initial read.
-      store.snapshot = await readSnapshot();
+      store.snapshot = store.normalize(await readSnapshot());
       const data = store.data;
       // A recorded tool call may have changed the filesystem before its result was saved.
       // Close every unmatched call; never replay side effects on resume.
@@ -68,8 +81,11 @@ export class SessionStore {
       if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
       const pid = Number(await readFile(file, 'utf8'));
       if (!Number.isInteger(pid) || pid < 1) throw new Error(`会话锁损坏，请检查 ${file}`);
-      try { process.kill(pid, 0); } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ESRCH') { await unlink(file); return this.lock(); }
+      try { this.kill(pid, 0); } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === 'ESRCH') { await unlink(file); return this.lock(); }
+        // EPERM means the process exists but is owned by another user; it is live.
+        if (code !== 'EPERM') { /* Unknown errors are conservative: keep the lock. */ }
       }
       throw new Error('这个会话正在其他 icy 进程中使用。');
     }
