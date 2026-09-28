@@ -49,9 +49,14 @@ async function waitForFrame(ui: ReturnType<typeof render>, matches: (frame: stri
 function composerIsIdle(frame: string) {
   return frame.includes('❯') && !frame.includes('Esc 取消');
 }
+function composerContains(frame: string, value: string) {
+  const plain = frame.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
+  const line = plain.split('\n').reverse().find(item => item.trimStart().startsWith('❯'));
+  return line?.includes(value) ?? false;
+}
 async function command(ui: ReturnType<typeof render>, value: string, response: RegExp) {
   ui.stdin.write(value);
-  await waitForFrame(ui, frame => frame.includes(value));
+  await waitForFrame(ui, frame => composerContains(frame, value));
   ui.stdin.write('\r');
   await waitForFrame(ui, frame => response.test(frame));
   // Submission clears the composer before the async local action finishes. Do not

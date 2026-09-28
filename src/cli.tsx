@@ -53,11 +53,12 @@ export async function main(argv = process.argv.slice(2)) {
   if (values.version) { const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); process.stdout.write(pkg.version + '\n'); return; }
   if (values.status !== undefined && positionals[0] !== 'sessions') { process.stderr.write('--status 仅用于 icy sessions 子命令。\n'); process.exitCode = 2; return; }
   const overrides = Object.fromEntries(Object.entries({ model: values.model, provider: values.provider, baseUrl: values['base-url'], permissions: values['read-only'] || values.demo ? 'read-only' : undefined }).filter(([, value]) => value !== undefined));
-  let config: Config;
-  if (positionals[0] === 'sessions' && values.cwd) {
+  let config: Config, sessionWorkspace: string | undefined;
+  if (positionals[0] === 'sessions' && values.cwd !== undefined) {
     // For sessions --cwd doubles as the filter and may name a removed workspace; project config then just reads nothing.
     let workspace = canonicalPath(path.resolve(values.cwd));
     try { workspace = canonicalPath(await realpath(values.cwd)); } catch { /* removed workspace: still a valid filter */ }
+    sessionWorkspace = workspace;
     config = await loadConfig(workspace, overrides);
   } else config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
@@ -65,7 +66,7 @@ export async function main(argv = process.argv.slice(2)) {
     const filter: SessionFilter = {};
     try {
       if (values.status?.length) filter.status = values.status.flatMap(value => parseStatusFilter(value));
-      if (values.cwd !== undefined) filter.cwd = values.cwd;
+      if (values.cwd !== undefined) filter.cwd = sessionWorkspace ?? values.cwd;
     } catch (error) {
       const message = invalidStatusText(error);
       if (message === undefined) throw error;

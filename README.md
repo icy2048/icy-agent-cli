@@ -47,7 +47,7 @@ icy --version
 
 `run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。成功退出码为 `0`；未批准的 shell 为 `2`，取消为 `130`，其他运行失败为 `1`。状态过滤、`--status` 用错位置和缺少非交互目标等部分用法错误使用 `2`。非交互模式没有授权弹窗；通常应进入 Workbench 用 `/verify npm test` 审批并验收，`--verify` 不绕过 shell 权限。
 
-`icy sessions --json` 逐行输出会话摘要。`--status` 支持 `running`、`awaiting_approval`、`cancelled`、`limited`、`failed`、`answered`、`verified`、`interrupted`、`legacy`；`--cwd` 相对启动目录解析，目录可以不存在。指定过滤条件时，不返回无法读取的会话；无过滤条件时仍显示其错误摘要。只传 `--resume` 的非交互命令只展示任务状态，不请求模型或执行工具，但仍会校验会话、迁移旧格式并记录中断。`--continue`、`--verify` 都要求 `--resume`，且不能和新目标或彼此混用。
+`icy sessions --json` 逐行输出会话摘要。`--status` 支持 `running`、`awaiting_approval`、`cancelled`、`limited`、`failed`、`answered`、`verified`、`interrupted`、`legacy`；`--cwd` 相对启动目录解析并 realpath，目录可以不存在。指定过滤条件时，不返回无法读取的会话；无过滤条件时仍显示其错误摘要。只传 `--resume` 的非交互命令只展示任务状态，不请求模型或执行工具，但仍会校验会话、迁移旧格式并记录中断。`--continue`、`--verify` 都要求 `--resume`，且不能和新目标或彼此混用。
 
 ## 模型配置
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, rm, mkdir, writeFile, stat, access } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, mkdir, writeFile, stat, access, realpath, symlink } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { SessionStore } from '../src/sessions/store.js';
@@ -81,6 +81,22 @@ test('cwd filters resolve against process.cwd(), match nested workspaces and com
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
+test('cwd filters realpath through a symlink and tolerate a removed workspace', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'icy-cwd-link-home-'));
+  const root = await mkdtemp(path.join(tmpdir(), 'icy-cwd-link-root-'));
+  try {
+    const real = path.join(root, 'real'), link = path.join(root, 'link'), nested = path.join(real, 'sub');
+    await mkdir(nested, { recursive: true });
+    await symlink(real, link, process.platform === 'win32' ? 'junction' : undefined);
+    await fixtureSession(home, 'linked-workspace', { status: 'failed', cwd: await realpath(nested) });
+    assert.deepEqual((await listSessions(home, { cwd: path.join(root, 'link', 'sub') })).map(summary => summary.id), ['linked-workspace']);
+
+    const removed = path.join(root, 'removed', 'sub');
+    assert.deepEqual(await listSessions(home, { cwd: removed }), []);
+    await assert.rejects(access(removed), { code: 'ENOENT' });
+  } finally { await rm(home, { recursive: true, force: true }); await rm(root, { recursive: true, force: true }); }
+});
+
 test('a removed workspace is a valid filter that matches nothing without creating or reading it', async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-cwd-missing-'));
   try {
@@ -109,7 +125,7 @@ test('invalid status values throw before any directory is read', async () => {
 test('unreadable sessions stay listed without filters and are excluded whenever any filter is active', async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-broken-'));
   try {
-    await fixtureSession(home, 'good', { status: 'failed', cwd: home });
+    await fixtureSession(home, 'good', { status: 'failed', cwd: await realpath(home) });
     await mkdir(path.join(home, 'sessions', 'broken')); await writeFile(path.join(home, 'sessions', 'broken', 'session.json'), '{');
     const unfiltered = await listSessions(home);
     assert.equal(unfiltered.length, 2); assert.ok(unfiltered.find(summary => summary.id === 'broken')?.error);

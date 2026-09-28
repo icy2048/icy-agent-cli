@@ -1,4 +1,4 @@
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { parseSessionData, sessionIdSchema } from './schema.js';
 import { errorText, redact } from '../core/text.js';
@@ -35,10 +35,15 @@ export async function listSessions(home: string, filter?: SessionFilter, platfor
   // Validate before touching the filesystem: a bad status must not read (or depend on) any directory.
   const statuses = filter?.status ?? [];
   for (const status of statuses) if (!knownStatus(status)) invalidStatus(status);
-  // A filter cwd may name a removed workspace; it is only resolved, never realpathed, stated or created.
-  const resolvePath = platform === 'win32' ? path.win32 : path;
+  // A filter cwd may name a removed workspace; realpath is read-only and falls back without creating or locking it.
   const separator = platform === 'win32' ? '\\' : path.sep;
-  const workspace = filter?.cwd === undefined ? undefined : canonicalPath(resolvePath.resolve(process.cwd(), filter.cwd), platform);
+  let workspace: string | undefined;
+  if (filter?.cwd !== undefined) {
+    const resolved = path.resolve(process.cwd(), filter.cwd);
+    let target = resolved;
+    try { target = await realpath(resolved); } catch { /* removed workspace: keep the resolved filter */ }
+    workspace = canonicalPath(target, platform);
+  }
   const filtering = statuses.length > 0 || workspace !== undefined;
   let entries;
   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
