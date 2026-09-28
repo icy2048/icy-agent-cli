@@ -30,7 +30,7 @@ export class ToolRegistry {
       this.policy.assertToolAllowed(call.name);
       const input = parseToolInput(call.name, call.arguments);
       const authorized = await this.policy.authorize(input, signal);
-      const result = await this.executor.execute(authorized, signal);
+      const result = await this.executor.execute(authorized, signal, { callId: call.id });
       result.content = redact(result.content, [this.config.apiKey]);
       if (result.diff) result.diff = redact(result.diff, [this.config.apiKey]);
       if (Buffer.byteLength(result.content) > 32768) {
@@ -40,6 +40,10 @@ export class ToolRegistry {
       }
       if (result.diff && result.diff.length > 8000) { const id = await this.store.output(result.diff); result.diff = result.diff.slice(0, 8000) + `\n[Diff truncated: read path="icy-output:${id}" offset=1 limit=6000]`; }
       result.durationMs ??= Date.now() - start; return result;
-    } catch (e) { return { ok: false, error: signal.aborted ? 'cancelled' : 'tool_error', content: redact(errorText(e), [this.config.apiKey]), durationMs: Date.now() - start }; }
+    } catch (e) {
+      const content = redact(errorText(e), [this.config.apiKey]);
+      const stable = /^(invalid_arguments|timeout_exceeds_foreground_limit|process_not_found|arguments_not_supported_for_process|arguments_not_supported_for_output|output_reference_is_read_only|offset_out_of_range|bash_unavailable|read_only|approval_required|permission_denied)(?::|$)/.exec(content)?.[1];
+      return { ok: false, error: signal.aborted ? 'cancelled' : stable ?? 'tool_error', content, durationMs: Date.now() - start };
+    }
   }
 }

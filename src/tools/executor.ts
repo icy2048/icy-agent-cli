@@ -8,6 +8,7 @@ import type { SessionStore } from '../sessions/store.js';
 import { workspacePath } from './paths.js';
 import { listDirectory, searchWorkspace } from './explore.js';
 import { runBash } from './bash.js';
+import type { ProcessRecord } from '../core/types.js';
 
 import type { ToolInput } from './definitions.js';
 
@@ -46,7 +47,7 @@ export class ToolExecutor {
     return content;
   }
   private async write(file: string, content: string, expectedHash: string | null, signal: AbortSignal): Promise<ToolResult> {
-    if (file.startsWith('icy-output:')) throw new Error('output_reference_is_read_only');
+    if (file.startsWith('icy-output:') || file.startsWith('icy-process:')) throw new Error('output_reference_is_read_only');
     let before = '', exists = true;
     const target = await workspacePath(this.config.cwd, file);
     try { before = await this.readFileContent(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') exists = false; else throw e; }
@@ -89,6 +90,23 @@ export class ToolExecutor {
     } finally { await unlink(temp).catch(() => {}); }
     return { ok: true, content: `Updated ${file}\nSHA256: ${sha256(content)}`, changedFile: file, diff: createTwoFilesPatch(file, file, before, content) };
   }
+  private processHeader(reference: string, record: ProcessRecord) {
+    const details = [
+      record.exitCode !== undefined && record.exitCode !== null ? `exit code ${record.exitCode}` : undefined,
+      record.signal ? `signal ${record.signal}` : undefined, record.reason ? `reason ${record.reason}` : undefined,
+    ].filter(Boolean).join(' | ');
+    const end = record.endedAt ? Date.parse(record.endedAt) : Date.now();
+    const duration = Math.max(0, Math.floor((end - Date.parse(record.startedAt)) / 1000));
+    return `Process ${reference}\nStatus: ${record.status}${details ? ` (${details})` : ''}\nCommand: ${record.command}\nCwd: ${record.cwd}\nStarted: ${record.startedAt}  Duration: ${duration}s  Output bytes: ${record.bytes}${record.truncated ? ' (truncated at 16 MiB)' : ''}\n---`;
+  }
+  private async readProcess(reference: string, offset: number | null, limit: number | null, signal: AbortSignal): Promise<ToolResult> {
+    const id = reference.slice('icy-process:'.length), manager = this.store.getProcessManager();
+    const record = await manager.status(id, { waitMs: 10_000, signal });
+    const output = await manager.readOutput(id, offset, limit);
+    const next = output.truncated ? `\n[More output: read path="${reference}" offset=${output.end + 1} limit=6000]` : '\n[End of output]';
+    const ok = record.status === 'running' || record.status === 'exited' && record.exitCode === 0;
+    return { ok, error: ok ? undefined : record.status === 'exited' ? 'command_failed' : record.status, content: `${this.processHeader(reference, record)}\n${output.text}${next}`, truncated: output.truncated };
+  }
   private async readOutput(reference: string, offset: number | null, limit: number | null): Promise<ToolResult> {
     const chars = Array.from(await this.store.readOutput(reference.slice('icy-output:'.length)));
     const start = (offset ?? 1) - 1;
@@ -99,11 +117,15 @@ export class ToolExecutor {
       : '\n[End of output]'), truncated: end < chars.length };
   }
   /** Execute a validated and authorized request; registry owns errors and output projection. */
-  async execute(input: ToolInput, signal: AbortSignal): Promise<ToolResult> {
+  async execute(input: ToolInput, signal: AbortSignal, context: { callId: string } = { callId: 'unknown' }): Promise<ToolResult> {
     signal.throwIfAborted();
     switch (input.name) {
       case 'read': {
         const a = input.args;
+        if (a.path.startsWith('icy-process:')) {
+          if (a.depth !== null || a.pattern !== null || a.regex !== null) throw new Error('arguments_not_supported_for_process');
+          return this.readProcess(a.path, a.offset, a.limit, signal);
+        }
         if (a.path.startsWith('icy-output:')) {
           if (a.depth !== null || a.pattern !== null || a.regex !== null) throw new Error('arguments_not_supported_for_output');
           return this.readOutput(a.path, a.offset, a.limit);
@@ -123,7 +145,7 @@ export class ToolExecutor {
       }
       case 'edit': {
         const a = input.args;
-        if (a.path.startsWith('icy-output:')) throw new Error('output_reference_is_read_only');
+        if (a.path.startsWith('icy-output:') || a.path.startsWith('icy-process:')) throw new Error('output_reference_is_read_only');
         const before = await this.readFileContent(a.path), index = before.indexOf(a.oldText);
         if (index < 0) throw new Error('edit_text_not_found');
         if (before.indexOf(a.oldText, index + 1) >= 0) throw new Error('edit_text_not_unique');
@@ -131,10 +153,20 @@ export class ToolExecutor {
         return this.write(a.path, after, sha256(before), signal);
       }
       case 'bash': {
-        const a = input.args;
+        const a = input.args, detach = a.detach ?? false, kill = a.kill ?? null;
         // Revalidate after an approval wait: a directory may have become a symlink.
         const cwd = await workspacePath(this.config.cwd, a.cwd ?? '.');
-        return runBash(a.command, cwd, a.timeoutMs ?? 60_000, signal);
+        const timeoutMs = a.timeoutMs ?? (detach ? 1_800_000 : 60_000);
+        if (kill !== null) {
+          const record = await this.store.getProcessManager().kill(kill.slice('icy-process:'.length), 'model_kill');
+          return { ok: record.status === 'killed', error: record.status === 'killed' ? undefined : record.status, content: `Process icy-process:${record.id} Status: ${record.status}${record.reason ? ` (reason ${record.reason})` : ''}` };
+        }
+        if (detach) {
+          const record = await this.store.getProcessManager().start({ toolCallId: context.callId, command: a.command, cwd, timeoutMs }, signal);
+          if (record.status === 'spawn_error') return { ok: false, error: record.status, content: `Process icy-process:${record.id} Status: ${record.status}${record.reason ? `: ${record.reason}` : ''}` };
+          return { ok: true, content: `Started icy-process:${record.id} (pid ${record.pid}). Poll with read path="icy-process:${record.id}"; stop with bash command="kill" kill="icy-process:${record.id}".` };
+        }
+        return runBash(a.command, cwd, timeoutMs, signal);
       }
     }
   }

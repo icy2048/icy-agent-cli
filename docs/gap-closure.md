@@ -203,3 +203,13 @@ usage 合计包含预处理及本地估算。部分运行只有估算总数，�
 - **测试入口与跳过项**：`scripts/pty-smoke.py` 是 POSIX PTY 门禁。Windows 侧 package smoke 使用 Node 直接启动安装产物并执行离线 `--demo`，不检查 Unix executable bit；`npm test` 现在执行 `node --import tsx --test "tests/**/*.test.ts"`，在 Windows 仅跳过 CLI SIGINT/SIGTERM cancellation（`Windows has no SIGINT delivery to child processes`）、model credential permissions（`Windows does not preserve POSIX 0o600 permissions`）和 workspace mode fingerprint（`Windows does not preserve POSIX file mode changes`）。symlink fixtures 使用 `tests/helpers` 的 `makeSymlink`，Windows 目录链接失败时回退为 junction，不再跳过。
 - **CI 与状态**：`.github/workflows/ci.yml` 的矩阵为 `ubuntu-latest`、`macos-latest`、`windows-latest`。每个平台执行锁文件安装、类型检查、测试和构建；`npm run test:pty` 仅在 `runner.os != 'Windows'` 时运行，Windows 改为执行 `node dist/cli.js --demo --plain` 和 `node dist/cli.js --version` 的 Windows offline smoke；`npm run test:package` 在所有平台运行。`ae48d9d` 的 [三平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36394601447) 全部通过：macOS/Linux 各 304 项、0 跳过；Windows 跳过 4 项 POSIX 专属用例，其余全部通过，离线 `--demo` 与安装包检查也通过。本迭代没有在 Windows 机器做真实交互验收，该项仍为“尚未”。
 - **六轮 CI 才通过，Windows 特有缺陷及修复**：(1) 子进程测试把 tsx 加载器路径传给 `--import`，Windows 要求 `file://` URL（测试修正）；(2) task-audit 夹具写死 `/fixture`，Windows 解析为 `D:\fixture`（测试修正）；(3) UI 测试在输入框重新挂载、`useInput` 尚未订阅时输入被丢弃，Ubuntu 也出现过一次（测试改为等待事件循环并重试一次）；(4) 会话工作区过滤：GitHub 的临时目录是 8.3 短名 `RUNNER~1`，且过滤目录不存在时 realpath 失败，回退的短名路径与存储的长名不匹配。产品修复 `resolveWorkspacePath`（`cfec202`、`ae48d9d`）：Windows 使用原生 realpath、比较忽略大小写，不存在的路径经最近存在的祖先目录规范化后再拼回剩余部分。
+
+## 2026-09-28：第五轮迭代：长命令支持
+
+本轮把原先 60 秒前台 Bash 的边界扩展为可查询、可取消的 detached 后台进程：`bash` 增加 `detach` 与 `kill`，后台进程拥有 `icy-process:<id>` 引用，输出经过脱敏后写入会话目录并限制为 16 MiB；`read icy-process:<id>` 最多等待 10 秒并按 Unicode 字符分页。Workbench 提供 `/ps`、`/kill`、后台命令审批说明、启动／结束／恢复未知状态的轨迹投影；JSON/纯文本 CLI 也输出 process 事件，正常退出用 `session_closed` 清理仍运行的进程。
+
+契约是：前台命令最多 60 秒，detached 命令默认且最多 30 分钟；没有交互 stdin；kill 不需额外审批，审批 key 包含 detach；进程启动和退出都会推进 `mutationRevision`，运行中的进程阻止“已验证完成”。恢复不会重启旧进程，原先 running 的记录变为 `unknown` 并带 `pidAlive`，旧验收证据失效。输出不进入内存长结果，而保存在 `~/.icy/sessions/<id>/processes/<id>.log`。
+
+自动化测试新增了进程生命周期、Unicode 日志分页、16 MiB 限制、超时／树终止、无审批 kill、会话恢复、验收证据失效、Workbench 命令与审批／恢复显示，以及 CLI HTTP fixture 的 NDJSON 和子进程清理覆盖。动机不是声称已经观察到真实评测被长命令阻断：迭代计划的“真实任务经常被 60 秒阻断”门槛**未被评测数据满足**，已有记录中的 bash 没有一次命中 `timeout` 或 `output_limit`；本仓库自身在快速机器上的完整 `npm test` 约 24 秒，`build && test` 链接近该上限，因此仍有实际开发场景价值。本功能尚未运行 live-model evaluation batch。
+
+诚实边界：detached 进程不提供操作系统沙箱，没有 per-process 资源限制，不支持交互输入，也不自动重启；崩溃恢复只观测 PID，不接管旧进程。Windows CI 状态为“尚未运行”，Windows 真机状态为“尚未进行”，本轮 CI 结果统一为“尚未运行”，由后续编排器补填。未升版本、未提交发布或 PR。

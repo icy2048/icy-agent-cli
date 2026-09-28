@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import type { ProcessRecord } from './types.js';
 
 export type ExecutionStatus = 'running' | 'awaiting_approval' | 'cancelled' | 'limited' | 'failed' | 'answered' | 'verified' | 'interrupted';
 export type RunStatus = ExecutionStatus;
@@ -21,7 +22,7 @@ export interface RunState {
   checkpoint: string; turns: number; toolCalls: number; usage: RunUsage; budget: RunBudget;
   budgetSource: 'new_task' | 'explicit_resume'; continuationOf?: string; reason?: string; taskSnapshot?: TaskState;
 }
-export interface SessionExecutionState { task?: TaskState; runs: RunState[] }
+export interface SessionExecutionState { task?: TaskState; runs: RunState[]; processes?: ProcessRecord[] }
 export interface RunProgress {
   turns?: number; toolCalls?: number; usage?: Partial<RunUsage>; checkpoint?: string;
   status?: 'running' | 'awaiting_approval';
@@ -91,9 +92,9 @@ export function updateRun(state: SessionExecutionState, patch: RunProgress): Run
   run.updatedAt = now(); return run;
 }
 
-export function canVerifyTask(state: SessionExecutionState): boolean {
+export function canVerifyTask(state: SessionExecutionState, processes: ProcessRecord[] = state.processes ?? []): boolean {
   const task = state.task;
-  return Boolean(task && task.remaining.length === 0 && task.verificationChecks.length > 0 && task.verificationChecks.every(check => {
+  return Boolean(task && !processes.some(process => process.status === 'running') && task.remaining.length === 0 && task.verificationChecks.length > 0 && task.verificationChecks.every(check => {
     const record = task.verificationRecords.findLast(item => item.checkId === check.id);
     return record?.ok === true && record.mutationRevision === task.mutationRevision;
   }));

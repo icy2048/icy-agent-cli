@@ -142,9 +142,9 @@ export class ContextManager {
             const request: Record<string, unknown> = {};
             try {
               const args = JSON.parse(call.arguments);
-              for (const key of ['path', 'offset', 'limit', 'command', 'cwd', 'timeoutMs']) {
+              for (const key of ['path', 'offset', 'limit', 'command', 'cwd', 'timeoutMs', 'detach', 'kill']) {
                 const value = args?.[key];
-                if (value === null || typeof value === 'number' || typeof value === 'string' && value.length <= 500) request[key] = value;
+                if (value === null || typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string' && value.length <= 500) request[key] = value;
               }
             } catch { /* Exact arguments remain in the archive. */ }
             try {

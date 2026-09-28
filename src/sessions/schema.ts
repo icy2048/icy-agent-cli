@@ -2,6 +2,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import type { SessionData } from './store.js';
 import { canVerifyTask, isActiveRun, type TaskState } from '../core/run-state.js';
+import type { ProcessRecord } from '../core/types.js';
 
 export const sessionIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,80}$/);
 const callId = z.string().min(1);
@@ -19,6 +20,13 @@ const timestamp = z.iso.datetime({ offset: true });
 const count = z.number().int().nonnegative();
 const status = z.enum(['running', 'awaiting_approval', 'cancelled', 'limited', 'failed', 'answered', 'verified', 'interrupted']);
 const absolutePath = z.string().refine(value => path.isAbsolute(value) && !value.includes('\0'), 'Expected an absolute path');
+const processRecordSchema = z.object({
+  id: z.string().uuid(), toolCallId: callId, command: z.string().min(1), cwd: absolutePath, pid: z.number().int().positive().optional(),
+  startedAt: timestamp, endedAt: timestamp.optional(), timeoutMs: z.number().int().min(1).max(1_800_000),
+  status: z.enum(['running', 'exited', 'killed', 'timeout', 'output_limit', 'spawn_error', 'unknown']),
+  exitCode: z.number().int().nullable().optional(), signal: z.string().optional(), bytes: count,
+  truncated: z.boolean().optional(), reason: z.string().optional(), pidAlive: z.boolean().optional(),
+}).passthrough();
 const verificationCheckSchema = z.object({
   id: callId, source: z.literal('user'), command: z.string().min(1), cwd: absolutePath, createdAt: timestamp,
 }).passthrough();
@@ -46,14 +54,14 @@ const sessionMetadata = {
 };
 const sessionSchema = z.discriminatedUnion('version', [
   z.object({ ...sessionMetadata, version: z.literal(1) }).passthrough(),
-  z.object({ ...sessionMetadata, version: z.literal(2), task: taskSchema.optional(), runs: z.array(runSchema) }).passthrough(),
+  z.object({ ...sessionMetadata, version: z.literal(2), task: taskSchema.optional(), runs: z.array(runSchema), processes: z.array(processRecordSchema).default([]) }).passthrough(),
 ]);
 
 function invalid(location: string, reason: string): never {
   throw new Error(`不支持或损坏的会话（${location}: ${reason}）。`);
 }
 
-function validateTask(task: TaskState, location: string, runs: Map<string, SessionData['runs'][number]>) {
+function validateTask(task: TaskState, location: string, runs: Map<string, SessionData['runs'][number]>, processes: ProcessRecord[] = []) {
   const checks = new Map<string, TaskState['verificationChecks'][number]>(), records = new Set<string>();
   for (const [index, check] of task.verificationChecks.entries()) {
     if (checks.has(check.id)) invalid(`${location}.verificationChecks.${index}.id`, 'duplicate check ID');
@@ -67,7 +75,7 @@ function validateTask(task: TaskState, location: string, runs: Map<string, Sessi
     if (record.mutationRevision > task.mutationRevision) invalid(`${at}.mutationRevision`, 'record refers to a future mutation');
     if (record.runId && runs.get(record.runId)?.taskId !== task.id) invalid(`${at}.runId`, 'record must belong to a run of this task');
   }
-  if (task.status === 'verified' && !canVerifyTask({ task, runs: [] })) invalid(`${location}.status`, 'verified status requires current user-specified evidence and no remaining items');
+  if (task.status === 'verified' && !canVerifyTask({ task, runs: [], processes }, processes)) invalid(`${location}.status`, 'verified status requires current user-specified evidence and no remaining items');
 }
 
 /** Validate persisted data and migrate v1 history without inventing tasks or verification evidence. */
@@ -78,7 +86,7 @@ export function parseSessionData(value: unknown, expectedId: string): SessionDat
     invalid(issue.path.map(String).join('.') || 'session', issue.message);
   }
   const data: SessionData = parsed.data.version === 1
-    ? { ...parsed.data, version: 2, task: undefined, runs: [] }
+    ? { ...parsed.data, version: 2, task: undefined, runs: [], processes: [] }
     : parsed.data;
   if (data.id !== expectedId) invalid('id', 'does not match the requested session');
   const calls = new Set<string>(), results = new Set<string>(), pending = new Set<string>();
@@ -114,7 +122,7 @@ export function parseSessionData(value: unknown, expectedId: string): SessionDat
     if (run.status === 'verified' && (!run.taskSnapshot || !canVerifyTask({ task: run.taskSnapshot, runs: [] }))) invalid(`${location}.status`, 'verified run requires a task snapshot with verification evidence');
     runs.set(run.id, run);
   }
-  if (data.task) validateTask(data.task, 'task', runs);
+  if (data.task) validateTask(data.task, 'task', runs, data.processes);
   for (const [index, run] of data.runs.entries()) if (run.taskSnapshot) validateTask(run.taskSnapshot, `runs.${index}.taskSnapshot`, runs);
   const activeRuns = data.runs.filter(isActiveRun);
   if (activeRuns.length > 1) invalid('runs', 'only one run can be active');

@@ -1,10 +1,37 @@
 import wrapAnsi from 'wrap-ansi';
 import { clean } from '../core/text.js';
-import type { AgentEvent, Message, ToolCall, ToolResult } from '../core/types.js';
+import type { AgentEvent, Message, ProcessRecord, ToolCall, ToolResult } from '../core/types.js';
 import type { ExecutionStatus, RunState, TaskState } from '../core/run-state.js';
 
+export const shortProcessId = (id: string) => id.slice(0, 8);
+export const processReference = (id: string) => `icy-process:${shortProcessId(id)}`;
+function processElapsed(record: ProcessRecord): number {
+  const end = record.endedAt ? Date.parse(record.endedAt) : Date.now();
+  const start = Date.parse(record.startedAt);
+  return Number.isFinite(start) ? Math.max(0, Math.floor((end - start) / 1000)) : 0;
+}
+export function processTranscriptText(record: ProcessRecord): string {
+  const reference = processReference(record.id);
+  if (record.status === 'running') return `▶ 后台进程 ${reference} 已启动：${clean(record.command)}`;
+  if (record.status === 'unknown') return `? 后台进程 ${reference} 状态未知（icy 重启后不再跟踪，pid ${record.pidAlive ? '仍存活' : '已不存在'}）`;
+  if (record.status === 'timeout') return `■ 后台进程 ${reference} 已因超时终止`;
+  if (record.status === 'output_limit') return `■ 后台进程 ${reference} 输出超过 16 MiB 终止`;
+  if (record.status === 'killed') return `■ 后台进程 ${reference} 已被终止（${record.reason || 'unknown'}）`;
+  if (record.status === 'spawn_error') return `■ 后台进程 ${reference} 启动失败（${record.reason || 'spawn_error'}）`;
+  return `■ 后台进程 ${reference} 已结束，退出码 ${record.exitCode ?? '未知'}${record.signal ? `（${record.signal}）` : ''}`;
+}
+export function processListSummary(processes: ProcessRecord[] = []): string {
+  if (!processes.length) return '没有后台进程。';
+  return processes.map(record => {
+    const ended = record.endedAt ? `结束 ${record.endedAt}` : `已运行 ${processElapsed(record)}s`;
+    const exit = record.exitCode !== undefined && record.exitCode !== null ? `退出码 ${record.exitCode}` : record.reason ? `原因 ${record.reason}` : record.signal ? `原因 ${record.signal}` : '退出码 —';
+    const command = Array.from(clean(record.command)).slice(0, 80).join('');
+    return `${processReference(record.id)} · 状态：${record.status} · pid ${record.pid ?? '—'} · ${ended} · ${exit} · 字节 ${record.bytes} · ${command}`;
+  }).join('\n');
+}
+
 export interface Entry {
-  kind: 'user' | 'assistant' | 'tool' | 'notice' | 'thinking';
+  kind: 'user' | 'assistant' | 'tool' | 'notice' | 'thinking' | 'process';
   text: string; call?: ToolCall; result?: ToolResult; active?: boolean; interrupted?: boolean;
 }
 export interface TranscriptLine { text: string; color?: string; backgroundColor?: string; marker?: string; markerColor?: string; dim?: boolean }
@@ -29,6 +56,7 @@ export function projectTranscriptEvent(entries: Entry[], event: AgentEvent): Ent
       const started = projectTranscriptEvent(entries, { type: 'tool_start', call: event.call });
       return started.map(entry => entry.call?.id === event.call.id ? { ...entry, result: event.result } : entry);
     }
+    case 'process': return [...entries, { kind: 'process', text: processTranscriptText(event.record) }];
     case 'context': {
       const { beforeChars, afterChars, compactedToolResults, fallback } = event.stats;
       const text = fallback ? `上下文压缩失败，已保留完整上下文（${beforeChars.toLocaleString()} 字符）。`
@@ -62,7 +90,7 @@ function restoredResult(raw: string): ToolResult {
   return { ok: false, error: 'unknown_tool_result', content: `历史工具结果无法识别，原始内容：\n${raw}` };
 }
 
-export function transcriptFromMessages(messages: Message[]): Entry[] {
+export function transcriptFromMessages(messages: Message[], processes: ProcessRecord[] = []): Entry[] {
   let entries: Entry[] = [];
   const calls = new Map<string, ToolCall>();
   for (const message of messages) {
@@ -81,6 +109,7 @@ export function transcriptFromMessages(messages: Message[]): Entry[] {
       else entries = [...entries, { kind: 'notice', text: `历史工具结果缺少对应调用（${message.id}）：\n${message.content}` }];
     }
   }
+  for (const record of processes) entries = projectTranscriptEvent(entries, { type: 'process', record });
   return entries;
 }
 
@@ -92,8 +121,17 @@ export function taskStatusLabel(status: ExecutionStatus): string {
   return { running: '执行中', awaiting_approval: '等待批准', cancelled: '已取消', limited: '达到限制', failed: '失败', answered: '已回答 · 未验证', verified: '已验证完成', interrupted: '已中断' }[status];
 }
 
-export function taskSummary(task?: TaskState, run?: RunState): string {
-  if (!task) return '当前会话没有任务状态记录；旧会话的完成状态与验收结果保持未知。';
+export function taskSummary(task?: TaskState, run?: RunState, processes: ProcessRecord[] = []): string {
+  if (!task) {
+    const lines = ['当前会话没有任务状态记录；旧会话的完成状态与验收结果保持未知。'];
+    if (processes.length) {
+      const running = processes.filter(process => process.status === 'running').length;
+      const unknown = processes.filter(process => process.status === 'unknown').length;
+      lines.push(`后台进程：${running} 个运行中、${unknown} 个状态未知`);
+      if (running) lines.push('后台进程运行中时，已验证完成被阻止。');
+    }
+    return lines.join('\n');
+  }
   const lines = [`目标：${task.goal}`, `状态：${taskStatusLabel(task.status)}`];
   if (run) {
     lines.push(`最近检查点：${run.checkpoint}`, `模型请求：${run.turns}/${run.budget.maxModelTurns} · 工具调用：${run.toolCalls}/${run.budget.maxToolCalls}`,
@@ -103,6 +141,12 @@ export function taskSummary(task?: TaskState, run?: RunState): string {
   }
   lines.push('待办：', ...(task.remaining.length ? task.remaining.map((item, i) => `${i + 1}. ${item}`) : ['暂无待办记录']));
   if (task.completed.length) lines.push('已完成：', ...task.completed.map(item => `✓ ${item}`));
+  if (processes.length) {
+    const running = processes.filter(process => process.status === 'running').length;
+    const unknown = processes.filter(process => process.status === 'unknown').length;
+    lines.push(`后台进程：${running} 个运行中、${unknown} 个状态未知`);
+    if (running) lines.push('后台进程运行中时，已验证完成被阻止。');
+  }
   lines.push('最近验收记录：');
   if (!task.verificationRecords.length) lines.push('尚无验收记录；/verify <命令> 指定并执行验收。');
   for (const record of task.verificationRecords.slice(-3)) {
@@ -152,6 +196,7 @@ export function entryLines(entry: Entry, width: number, details: boolean, expand
     value = `${expanded ? '▾' : '▸'} ${state}`;
     if (expanded) value += '\n' + (entry.text || (entry.active ? '等待接口返回可见思考内容…' : entry.interrupted ? '尚未收到可见思考内容。' : '本次接口未返回可见思考内容。'));
   } else if (kind === 'notice') value = `! ${value}`;
+  else if (kind === 'process') value = entry.text;
   else if (kind === 'tool') {
     const summary = entry.call ? describeCall(entry.call, entry.result) : entry.text;
     const status = entry.result?.error === 'interrupted_unknown' ? '? 执行结果未知'
@@ -172,7 +217,7 @@ export function entryLines(entry: Entry, width: number, details: boolean, expand
   const wrapped = wrapAnsi(clean(value), Math.max(4, width - 3), { hard: true, trim: false }).split('\n');
   const lines: TranscriptLine[] = wrapped.map(text => ({ text, marker, markerColor,
     color: kind === 'tool' && entry.result && !entry.result.ok ? 'yellow' : undefined,
-    dim: kind === 'thinking' || kind === 'notice' || kind === 'tool',
+    dim: kind === 'thinking' || kind === 'notice' || kind === 'tool' || kind === 'process',
   }));
   return [...lines, { text: '' }];
 }

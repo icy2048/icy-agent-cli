@@ -7,6 +7,8 @@ export const commands: Command[] = [
   { command: '/clear', description: '清空当前会话上下文' },
   { command: '/exit', description: '退出 icy' },
   { command: '/task', description: '查看任务、待办、预算与验收记录' },
+  { command: '/ps', description: '列出本会话启动的后台进程及状态' },
+  { command: '/kill', description: '终止后台进程', takesArgument: true },
   { command: '/continue', description: '以新预算继续原任务' },
   { command: '/verify', description: '指定并执行验收命令，沿用 shell 审批', takesArgument: true },
   { command: '/todo', description: '添加待办事项', takesArgument: true },

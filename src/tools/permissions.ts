@@ -17,7 +17,14 @@ export class PermissionPolicy {
     this.assertToolAllowed(input.name);
     if (input.name !== 'bash') return input;
     const a = input.args, cwd = await workspacePath(this.config.cwd, a.cwd ?? '.');
-    const request = { command: a.command, cwd, timeoutMs: a.timeoutMs ?? 60_000 };
+    const detach = a.detach ?? false, kill = a.kill ?? null;
+    const timeoutMs = a.timeoutMs ?? (detach ? 1_800_000 : 60_000);
+    if (detach !== true && timeoutMs > 60_000) throw new Error('timeout_exceeds_foreground_limit');
+    if (kill !== null) {
+      if (a.command !== 'kill' || detach) throw new Error('invalid_arguments');
+      return { name: 'bash', args: { command: 'kill', cwd, timeoutMs, detach: false, kill } };
+    }
+    const request = { command: a.command, cwd, timeoutMs, detach };
     const key = JSON.stringify(request);
     if (this.denied.has(key)) throw new Error('permission_denied');
     if (!this.allowed.has(key)) {
@@ -32,6 +39,6 @@ export class PermissionPolicy {
       if (choice !== 'once' && choice !== 'session') throw new Error('invalid_approval_decision');
       if (choice === 'session') this.allowed.add(key);
     }
-    return { name: 'bash', args: request };
+    return { name: 'bash', args: { command: a.command, cwd, timeoutMs, detach, kill: null } };
   }
 }
