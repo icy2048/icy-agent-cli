@@ -20,16 +20,33 @@ function nativeRealpath(p: string): Promise<string> {
   return new Promise((resolve, reject) => nativeRealpathCallback.native(p, (error, resolved) => error ? reject(error) : resolve(resolved)));
 }
 
+async function realpathForPlatform(p: string, platform: string): Promise<string> {
+  if (platform !== 'win32') return realpath(p);
+  try { return await nativeRealpath(p); }
+  catch { return realpath(p); }
+}
+
 /** Resolve a workspace path, expanding native Windows path aliases when available. */
 export async function resolveWorkspacePath(p: string, platform = process.platform): Promise<string> {
   const pathModule = platform === 'win32' ? path.win32 : path;
   const resolved = pathModule.resolve(p);
-  let target = resolved;
-  try {
-    target = platform === 'win32' ? await nativeRealpath(resolved) : await realpath(resolved);
-  } catch {
-    try { target = await realpath(resolved); }
-    catch { /* A removed workspace is still a valid filter. */ }
+  let target: string | undefined;
+  const remainder: string[] = [];
+  let ancestor = resolved;
+  while (target === undefined) {
+    try {
+      const realAncestor = await realpathForPlatform(ancestor, platform);
+      target = pathModule.join(realAncestor, ...remainder);
+    } catch {
+      const parent = pathModule.dirname(ancestor);
+      if (parent === ancestor) {
+        // A removed workspace is still a valid filter, even if no ancestor exists.
+        target = resolved;
+      } else {
+        remainder.unshift(pathModule.basename(ancestor));
+        ancestor = parent;
+      }
+    }
   }
   return canonicalPath(target, platform);
 }

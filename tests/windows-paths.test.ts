@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { BigIntStats } from 'node:fs';
@@ -26,6 +26,22 @@ const errorWithCode = (code: string) => Object.assign(new Error(code), { code })
 
 test('resolveWorkspacePath uses Windows separators and falls back for a missing Windows path', async () => {
   assert.equal(await resolveWorkspacePath('c:/Users/Runner/ws/nested', 'win32'), 'C:\\Users\\Runner\\ws\\nested');
+});
+
+test('resolveWorkspacePath canonicalizes missing paths through their existing ancestor', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'icy-realpath-'));
+  try {
+    const real = path.join(root, 'real'), link = path.join(root, 'link');
+    await mkdir(real);
+    await makeSymlink(real, link, 'dir');
+    assert.equal(
+      await resolveWorkspacePath(path.join(link, 'missing', 'sub')),
+      path.join(await realpath(real), 'missing', 'sub'),
+    );
+
+    const missing = path.join(root, 'not-created', 'also-missing');
+    assert.equal(await resolveWorkspacePath(missing), path.join(await realpath(root), 'not-created', 'also-missing'));
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test('workspacePath rejects symlinks and Windows junctions', async () => {

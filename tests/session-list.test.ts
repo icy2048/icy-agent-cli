@@ -102,6 +102,10 @@ test('cwd filters realpath through a symlink and tolerate a removed workspace', 
     await fixtureSession(home, 'linked-workspace', { status: 'failed', cwd: await realpath(nested) });
     assert.deepEqual((await listSessions(home, { cwd: path.join(root, 'link', 'sub') })).map(summary => summary.id), ['linked-workspace']);
 
+    const missingNested = path.join(await realpath(real), 'nested', 'deep');
+    await fixtureSession(home, 'missing-nested-workspace', { status: 'failed', cwd: missingNested });
+    assert.deepEqual((await listSessions(home, { cwd: path.join(link, 'nested', 'deep') })).map(summary => summary.id), ['missing-nested-workspace']);
+
     const removed = path.join(root, 'removed', 'sub');
     assert.deepEqual(await listSessions(home, { cwd: removed }), []);
     await assert.rejects(access(removed), { code: 'ENOENT' });
