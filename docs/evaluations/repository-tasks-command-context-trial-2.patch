@@ -1,0 +1,139 @@
+diff --git a/README.md b/README.md
+index 63c3f6d..d881221 100644
+--- a/README.md
++++ b/README.md
+@@ -30,7 +30,7 @@ icy --version
+ 
+ `--cwd <目录>` 指定工作区，默认是启动目录。`run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。执行成功的退出码为 0；遇到未批准的 shell 为 2，取消为 130，其他运行失败为 1。非交互模式没有授权弹窗，因此通常应进入 Workbench 后用 `/verify npm test` 审批并验收；`--verify` 不绕过 shell 权限。
+ 
+-`icy sessions --json` 输出逐行会话摘要。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
++`icy sessions --json` 输出逐行会话摘要。可用 `--status running|awaiting_approval|cancelled|limited|failed|answered|verified|interrupted|legacy` 按状态过滤，也可用 `--cwd <目录>` 按解析后的绝对工作区路径过滤；两者会同时生效。筛选损坏快照时不会返回无法判断的条目，未筛选时仍显示错误摘要。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
+ 
+ ## 模型配置
+ 
+diff --git a/src/cli.tsx b/src/cli.tsx
+index 5334934..7eeee42 100644
+--- a/src/cli.tsx
++++ b/src/cli.tsx
+@@ -22,7 +22,7 @@ const help = `icy — AI agent CLI
+   icy run "目标"              单次非交互运行
+   icy run "目标" --json       输出 NDJSON 事件
+   icy --resume <会话ID>        恢复会话，不重放中断的工具
+-  icy sessions [--json]       查看已有会话、目标与状态
++  icy sessions [--status <状态>] [--cwd <目录>] [--json]       查看已有会话、目标与状态
+   icy run --resume <ID> --continue  用新的运行预算继续原任务
+   icy run --resume <ID> --verify "命令"  执行用户指定验收（沿用 bash 审批）
+   icy --demo                  离线只读演示，不调用模型
+@@ -42,15 +42,16 @@ bash 需批准（包括列目录和搜索）。非交互模式不执行未批准
+ export async function main(argv = process.argv.slice(2)) {
+   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
+     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' }, plain: { type: 'boolean' }, demo: { type: 'boolean' }, 'read-only': { type: 'boolean' },
+-    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
++    model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, status: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
+   } });
++  if (values.status !== undefined && positionals[0] !== 'sessions') throw new Error('--status 只能用于 sessions。');
+   if (values.help) { process.stdout.write(help); return; }
+   if (values.version) { const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); process.stdout.write(pkg.version + '\n'); return; }
+   const overrides = Object.fromEntries(Object.entries({ model: values.model, provider: values.provider, baseUrl: values['base-url'], permissions: values['read-only'] || values.demo ? 'read-only' : undefined }).filter(([, value]) => value !== undefined));
+   let config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
+   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
+   if (positionals[0] === 'sessions') {
+-    const sessions = await listSessions(config.home);
++    const sessions = await listSessions(config.home, { status: values.status, cwd: values.cwd });
+     if (values.json) for (const session of sessions) process.stdout.write(JSON.stringify({ type: 'session_summary', ...session }) + '\n');
+     else process.stdout.write(sessions.length ? sessions.map(s => s.error ? `${s.id} · 无法读取：${s.error}` : `${s.id} · ${s.status} · ${s.updatedAt}\n  ${s.model} · ${s.cwd}\n  ${s.goal || '空会话'}`).join('\n') + '\n' : '暂无会话。\n');
+     return;
+diff --git a/src/sessions/list.ts b/src/sessions/list.ts
+index 1d38b42..036a2fb 100644
+--- a/src/sessions/list.ts
++++ b/src/sessions/list.ts
+@@ -8,8 +8,17 @@ export interface SessionSummary {
+   goal?: string; status?: string; error?: string;
+ }
+ 
++export const sessionStatuses = ['running', 'awaiting_approval', 'cancelled', 'limited', 'failed', 'answered', 'verified', 'interrupted', 'legacy'] as const;
++export type SessionStatus = typeof sessionStatuses[number];
++export interface SessionListOptions { cwd?: string; status?: string; }
++
+ /** Read-only discovery: listing never acquires locks, migrates, or recovers a session. */
+-export async function listSessions(home: string): Promise<SessionSummary[]> {
++export async function listSessions(home: string, options: SessionListOptions = {}): Promise<SessionSummary[]> {
++  const hasFilter = options.cwd !== undefined || options.status !== undefined;
++  if (options.status !== undefined && !(sessionStatuses as readonly string[]).includes(options.status)) {
++    throw new Error(`未知会话状态：${options.status}`);
++  }
++  const wantedCwd = options.cwd === undefined ? undefined : path.resolve(options.cwd);
+   let entries;
+   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
+   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error; }
+@@ -18,9 +27,14 @@ export async function listSessions(home: string): Promise<SessionSummary[]> {
+       const data = parseSessionData(JSON.parse(await readFile(path.join(home, 'sessions', entry.name, 'session.json'), 'utf8')), entry.name);
+       const task = 'task' in data ? data.task as { goal?: string; status?: string } | undefined : undefined;
+       const first = data.messages.find(m => m.role === 'user');
+-      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
+-    } catch (error) { return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
++      const summary = { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
++      if ((wantedCwd !== undefined && path.resolve(summary.cwd) !== wantedCwd) || (options.status !== undefined && summary.status !== options.status)) return undefined;
++      return summary;
++    } catch (error) {
++      if (hasFilter) return undefined;
++      return { id: entry.name, error: redact(errorText(error)).slice(0, 240) };
++    }
+   }));
+-  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries, (_key, value) => typeof value === 'string' ? redact(value) : value));
++  const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries.filter(Boolean), (_key, value) => typeof value === 'string' ? redact(value) : value));
+   return safe.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '') || a.id.localeCompare(b.id));
+ }
+diff --git a/tests/session-filters.test.ts b/tests/session-filters.test.ts
+new file mode 100644
+index 0000000..0e3031b
+--- /dev/null
++++ b/tests/session-filters.test.ts
+@@ -0,0 +1,47 @@
++import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import path from 'node:path';
++import { execFile } from 'node:child_process';
++import { promisify } from 'node:util';
++import { test } from 'node:test';
++import assert from 'node:assert/strict';
++import { listSessions } from '../src/sessions/list.js';
++
++const execFileAsync = promisify(execFile);
++const snapshot = (id: string, cwd: string, status?: string) => ({ version: 2, id, cwd, provider: 'responses', model: 'test', baseUrl: 'https://example.test/v1', updatedAt: '2024-01-01T00:00:00.000Z', messages: [{ role: 'user', content: 'goal' }], runs: [], ...(status ? { task: { id: 'task', goal: 'goal', status, remaining: [], completed: [], mutationRevision: 0, verificationChecks: [], verificationRecords: [] } } : {}) });
++
++async function fixture() {
++  const home = await mkdtemp(path.join(tmpdir(), 'icy-session-filter-'));
++  const work = path.join(home, 'work');
++  await mkdir(path.join(home, 'sessions'), { recursive: true });
++  await mkdir(work);
++  for (const [id, data] of [['one', snapshot('one', work, 'answered')], ['two', snapshot('two', path.join(home, 'other'), 'answered')], ['legacy', snapshot('legacy', work)]] as const) {
++    await mkdir(path.join(home, 'sessions', id));
++    await writeFile(path.join(home, 'sessions', id, 'session.json'), JSON.stringify(data));
++  }
++  await mkdir(path.join(home, 'sessions', 'broken'));
++  await writeFile(path.join(home, 'sessions', 'broken', 'session.json'), '{bad');
++  return { home, work };
++}
++
++test('combines cwd and status, includes legacy, and excludes bad snapshots when filtered', async () => {
++  const { home, work } = await fixture();
++  assert.deepEqual((await listSessions(home, { cwd: work, status: 'answered' })).map(s => s.id), ['one']);
++  assert.deepEqual((await listSessions(home, { status: 'legacy' })).map(s => s.id), ['legacy']);
++  assert.ok((await listSessions(home)).find(s => s.id === 'broken')?.error);
++  assert.equal((await listSessions(home, { cwd: work })).find(s => s.id === 'broken'), undefined);
++});
++
++test('rejects unknown statuses without touching snapshots', async () => {
++  const { home } = await fixture();
++  const before = await readFile(path.join(home, 'sessions', 'one', 'session.json'), 'utf8');
++  await assert.rejects(listSessions(home, { status: 'nope' }));
++  assert.equal(await readFile(path.join(home, 'sessions', 'one', 'session.json'), 'utf8'), before);
++});
++
++test('CLI applies both session filters and emits JSON summaries', async () => {
++  const { home, work } = await fixture();
++  const { stdout } = await execFileAsync(process.execPath, ['--import', 'tsx', 'src/cli.tsx', 'sessions', '--status', 'answered', '--cwd', work, '--json'], { env: { ...process.env, ICY_HOME: home } });
++  const lines = stdout.trim().split('\n').map(line => JSON.parse(line));
++  assert.deepEqual(lines.map(line => line.id), ['one']);
++});

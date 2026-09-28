@@ -12,11 +12,11 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
 }) {
   const [step, setStep] = useState<Step>('source'), [index, setIndex] = useState(0);
   const [profiles, setProfiles] = useState<ModelProfile[]>([]), [models, setModels] = useState<string[]>([]);
-  const [draft, setDraft] = useState<ModelProfile>({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions' });
+  const [draft, setDraft] = useState<ModelProfile>({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions', allowPrivateHttp: config.allowPrivateHttp });
   const [input, setInput] = useState(''), [error, setError] = useState(''), [loading, setLoading] = useState(true);
   const [discoveryNote, setDiscoveryNote] = useState('');
   const abort = useRef(new AbortController()), operation = useRef(false), listing = useRef<AbortController | undefined>(undefined);
-  const current: ModelProfile = { name: '当前服务', baseUrl: config.baseUrl, provider: config.provider, model: config.model, apiKey: config.apiKey, reasoningEffort: config.reasoningEffort, reasoningSummary: config.reasoningSummary };
+  const current: ModelProfile = { name: '当前服务', baseUrl: config.baseUrl, provider: config.provider, model: config.model, apiKey: config.apiKey, reasoningEffort: config.reasoningEffort, reasoningSummary: config.reasoningSummary, allowPrivateHttp: config.allowPrivateHttp };
   useEffect(() => {
     void services.discover().then(p => { if (!abort.current.signal.aborted) setProfiles(p); }).catch(() => setDiscoveryNote('未能读取 CC Switch，可继续使用当前服务或手动配置。')).finally(() => setLoading(false));
     return () => abort.current.abort();
@@ -42,8 +42,9 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
     if (operation.current) return;
     operation.current = true; move('testing');
     try {
-      await services.verify(draft, config, abort.current.signal);
+      const result = await services.verify(draft, config, abort.current.signal);
       if (abort.current.signal.aborted) return;
+      if (!result.ok) { setStep('confirm'); setError(result.message); return; }
       setStep('saving'); await onApply(draft);
     } catch (e) {
       if (!abort.current.signal.aborted) { setStep('confirm'); setError(redact(errorText(e), [draft.apiKey])); }
@@ -52,7 +53,7 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
   const select = () => {
     if (step === 'source') {
       if (selected < sources.length) void pickProfile(sources[selected]);
-      else { setDraft({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions' }); move('url'); }
+      else { setDraft({ name: '自定义服务', baseUrl: '', apiKey: '', model: '', provider: 'chat-completions', allowPrivateHttp: config.allowPrivateHttp }); move('url'); }
     } else if (step === 'protocol') { void pickProfile({ ...draft, provider: selected === 1 ? 'responses' : 'chat-completions' }); }
     else if (step === 'models') {
       if (selected === options.length - 1) move('source');
@@ -62,7 +63,7 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
   };
   const submit = (value: string) => {
     try {
-      if (step === 'url') { setDraft({ ...draft, baseUrl: validateBaseUrl(value.trim()) }); move('key'); }
+      if (step === 'url') { setDraft({ ...draft, baseUrl: validateBaseUrl(value.trim(), config.allowPrivateHttp) }); move('key'); }
       else if (step === 'key') { if (!value.trim()) throw new Error('请输入 API key。'); setDraft({ ...draft, apiKey: value.trim() }); move('protocol'); }
       else if (step === 'manual-model') { if (!value.trim()) throw new Error('请输入模型名。'); setDraft({ ...draft, model: value.trim() }); move('confirm'); }
       else if (step === 'models') select();
@@ -93,8 +94,8 @@ export function ModelWizard({ config, width, onClose, onApply, services = modelS
       <Text bold>{clean(draft.model)}</Text><Text>{clean(draft.baseUrl)}</Text><Text dimColor>{draft.provider} · 密钥已就绪</Text>
       <Text> </Text><Text>Enter 测试连接并启用</Text><Text dimColor>发送一次简短测试；通过后保存并开始新会话，旧会话保留。</Text>
     </Box>}
-    {step === 'testing' && <Text color="cyan">正在测试连接… Esc 取消</Text>}
-    {step === 'saving' && <Text color="cyan">正在保存并启用…</Text>}
+    {step === 'testing' && <Box flexDirection="column"><Text color="cyan">测试文本响应…</Text><Text color="cyan">测试工具调用…</Text><Text dimColor>正在测试连接… Esc 取消</Text></Box>}
+    {step === 'saving' && <Box flexDirection="column"><Text color="green">连接测试通过：文本响应与工具调用正常</Text><Text color="cyan">正在保存并启用…</Text></Box>}
     {error && <Text color="yellow">{clean(error).slice(0, 300)}</Text>}
     <Text> </Text><Text dimColor>{step === 'source' && loading ? '正在读取本机配置… · ' : ''}↑↓ 选择 · Enter 确认 · Esc 关闭</Text>
   </Box>;

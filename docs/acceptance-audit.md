@@ -1,0 +1,58 @@
+# 原计划逐项验收核对
+
+核对日期：2026-09-28。范围来自 [原迭代计划](iteration-plan.md) 的三个核心迭代、模块边界和硬门禁，以及 [四项缺口](gap-closure.md)。原计划最后列出的长命令、MCP、多 Agent 仍是后续队列，不是本轮交付；只读仓库探索、模型能力诊断与会话过滤已由第四轮迭代交付（会话过滤按规格实现，评测候选 patch 未合入），逐项见下方新增行及[第四轮记录](gap-closure.md)。六个实施单元合并在同一个工作分支和 PR 中，没有发布版本、合并 PR 或创建发布 tag。
+
+以下“通过”对应实现行为和所列检查，不把模型文字收尾当作验收，也不把有限任务样本当作通用成功率。长任务最终续跑运行时为 `ad9871e`；随后 `a5dc186` 增加用户明确启用的私有 IPv4 HTTP 及无工具 Chat Completions 兼容。正确配置 vLLM 的完整评测来源为 `961231e`，两种模型名和实际预处理状态均保存。
+
+| 原计划要求 | 已核对的实现与证据 | 结论 |
+| --- | --- | --- |
+| PR 1：超限输入整次拒绝并保留草稿；20,000 边界、中英文、组合 emoji | `tests/composer-limits.test.ts` 检查实际 Ink 输入、立即 Enter、光标位置和 grapheme 边界；`src/ui/Composer.tsx` 使用统一输入限制 | 通过 |
+| PR 1：完整快照校验；损坏原件保留；重试与锁所有权 | `tests/session.test.ts` 对缺 calls、错误 role、重复／孤立结果、JSON 损坏等逐项检查错误、原件与锁；覆盖保存失败、重试及他人活锁 | 通过 |
+| PR 1/5：合法未完成调用分别恢复为未知／未执行，不重放副作用 | `src/sessions/store.ts` 恢复只补结果；`tests/agent-recovery.test.ts` 检查真实写入后的恢复只发起 read；真实仓库报告核对 SIGKILL 标记、未知写入先读及恢复前后文件 hash | 自动化及实际中断证据通过；完整任务见下方 |
+| PR 2：默认 local；显式 model/off 保持；原文不被有损提炼覆盖 | `tests/fidelity.test.ts` 遍历 12 类需求，检查实际发送原文、顺序和引用边界；`tests/config.test.ts`、`tests/harness.test.ts` 检查配置与缓存 | 通过 |
+| PR 2：工具结果中的指令不能升级为用户要求 | fidelity 直接回归在 off/local/model 下检查不可信工具结果仍为 tool 消息，不进入用户消息、语义提炼请求或约束提醒；Provider 将工具结果标为不可信数据 | 通过 |
+| PR 2：保真夹具及 off/local/model 实际任务比较 | [保真报告](evaluations/prompt-fidelity.json) 36 个组合；[正确配置 vLLM 的 45 次汇总](evaluations/repeated-tasks-vllm-configured-summary.json) 与[逐项回复审查](evaluations/repeated-tasks-vllm-configured-response-review.json)，包含顺序、修改范围、验证、usage 和预处理状态 | 通过；三模式各 15/15，模型提炼 14 次应用、1 次校验回退；有限样本不代表通用成功率 |
+| 质量门禁：锁文件安装，源码／测试类型检查、测试、构建，Node 22 macOS/Linux | `.github/workflows/ci.yml` 使用 npm ci；`e9af951` 的 [双平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36337839369) 各通过 255 项测试及全部门禁；本机亦完成类型检查、测试、构建、PTY、安装包 | 通过；最终交付提交状态见 PR 检查 |
+| 质量门禁：CLI 成功 0、审批 2、取消 130、错误 1；NDJSON 纯净；空 home 安装 | `tests/cli.test.ts` 用真实子进程与 HTTP 服务检查退出码、逐行 JSON 和输出通道；`scripts/package-smoke.mjs` 临时安装后运行 help/version/demo | 通过 |
+| PR 3：每轮 ContextManager；50,000 字符案例连续 20 次读完收尾 | `tests/context.test.ts` 两协议各执行 20 次真实 read，检查每次请求大小、源会话完整和调用顺序；Provider 请求计量含指令与工具 | 通过 |
+| PR 3：可回读引用、缓存、不覆盖源历史、保留配对和 opaque 顺序 | `tests/context.test.ts` 重建完整归档并与原历史逐项比较，检查引用缓存和原对象不变；`tests/runtime.test.ts` 分页回读 Unicode 长输出及尾部 | 通过；旧 opaque 随完整交换归档，活动 opaque 保持原样及顺序 |
+| PR 3：不可容纳或存储失败时明确停止／回退 | context 回归检查不可压缩用户输入不发模型请求、保存引用失败恢复原视图；Agent 保存停止原因 | 通过 |
+| PR 4：预处理和主模型共用预算；输入预留、输出限额、双协议 usage／估算 | `tests/budget.test.ts`、`tests/agent-budget.test.ts`、`tests/provider-budget.test.ts` 检查真实 HTTP 参数、预处理消耗、缺 usage、取消估算和响应超额 | 通过；费用仍为文档说明的软上限 |
+| PR 4：超额文本不能成功；超额工具不能执行；停止状态一致 | agent-budget 回归核对返回值、事件、磁盘快照和没有写入；provider-timeout 覆盖两协议持续流截止；providers/runtime 拒绝缺失输出或失败终止事件中的调用，即使终止状态字段错误地声称 completed | 通过 |
+| PR 5：Session/Run/Task 分离、原任务继续、新预算记录、检查点和全部状态 | `src/core/run-state.ts` 保留 taskId、continuationOf、budgetSource 和历史快照；run-state、agent-recovery、cli-resume 回归核对关闭／重开后的状态 | 通过 |
+| PR 5：副作用前、执行后未落盘、结果落盘后的故障恢复；旧会话数据未知 | session-verification-recovery 对 running/unstarted/completed 分别检查副作用证据失效、未知结果和重复恢复；v1 不补造 task 或已验证状态 | 通过 |
+| PR 5：只有用户指定检查与当前修改版本相符，且待办为空才验证完成 | `canVerifyTask` 检查所有登记命令的最近结果；agent-recovery 和 review-regressions 覆盖普通 bash 不升级、失败重试、取消、工作区变化和未知指纹失效 | 通过 |
+| PR 6：统一在线／恢复投影，工具参数、结果、diff、未知状态和验证记录 | `tests/transcript-recovery.test.ts` 比较在线事件和持久化恢复的实际投影；UI 测试检查展开内容、任务状态及历史变更 | 通过 |
+| PR 6：会话入口、模型／工作区匹配、切换失败保留当前会话；展示阶段与预算 | `tests/cli-resume.test.ts`、agent-recovery、ui-task；`src/ui/transcript.ts` 显示检查点、原因和新预算来源；Linux PTY 实际切换与恢复 | 通过 |
+| 模块边界：Registry / PermissionPolicy / Executor | 三个模块职责分离；`tests/permissions.test.ts` 核对精确 command/cwd/timeout、会话隔离、取消及审批后目录替换 | 通过 |
+| 补充缺口：真正 Linux 交互终端 | [Linux 证据](evaluations/linux-pty.json) 和[终端记录](evaluations/linux-pty-transcript.txt)；POSIX PTY 自动门禁在两个平台运行 | 通过；由 Codex 操作，不是真人可用性研究 |
+| 补充缺口：真实仓库跨文件任务，取消、SIGKILL、恢复，最终独立验收 | [最终运行记录](evaluations/repository-tasks-final.json) 两项均通过；[源码与新增测试复核](evaluations/repository-final-review.json) 核对原任务全部要求，含正常列举的目录条目和原始内容比较 | 通过；经过两轮明确审查反馈及多次独立预算续跑 |
+| 用户追加：接入 Pi vLLM 并补齐剩余比较 | [连接证据](evaluations/vllm-connection.json)，主模型与 compactionModel 均为 Qwen；config/models 回归检查用户 opt-in、项目不能启用、公网拒绝及保存；实际 45 次执行和回复逐项核验 | 通过；安装的 icy 指向本仓库已构建入口，凭据只在本机 |
+| 后续队列：只读仓库探索 | `5f0f9f8` 让 `read` 以 `depth`/`pattern`/`regex` 免审批列举与搜索，上限 500 项 / 200 匹配 / 2,000 文件 / 1 MB / 10 秒；`3b4d301` 加正则 `node:vm` 隔离、有界行走与提示对齐；`tests/explore.test.ts` 覆盖边界、敏感与符号链接跳过、VM 超时、分页与严格 schema；探索调用与拒绝记录见[批次 A](evaluations/repeated-tasks-iter4-explore.json)、[批次 B](evaluations/repeated-tasks-iter4-explore-tuned.json)与[汇总](evaluations/repeated-tasks-iter4-summary.json) | 通过；批次 B 45 次全部免审批完成探索且检查为空；小样本不证明一般可靠性，CI 未运行 |
+| 后续队列：模型能力诊断 | `58e5a17` 在 `/model` 增加探针：文本请求 + `icy_probe` 诊断调用 + 工具结果续接，按 auth/connect/protocol/model/text/tool_call/tool_result 分级，不执行主机工具；`tests/model-probe.test.ts` 覆盖双协议各失败分类、探针工具白名单与向导界面；第四轮评测批次运行于含该功能的提交（[汇总](evaluations/repeated-tasks-iter4-summary.json)） | 通过；已配置 vLLM 实测完整通过 2.2 秒、错误模型名归入模型不存在；该服务接受任意 API key，认证失败分支只有回归证据 |
+| 后续队列：会话过滤 | `73c4b14` 按规格实现 `icy sessions --status/--cwd` 与 `/sessions status=... cwd=...`：九种状态、非法状态退出 2、列举只读；早前评测候选 patch 未被采用；`tests/session-list.test.ts`、`tests/cli-resume.test.ts`、`tests/ui-task.test.ts` 覆盖状态枚举、嵌套工作区、非法值与界面；第四轮评测见[批次 B](evaluations/repeated-tasks-iter4-explore-tuned.json) | 通过；行为以规格与回归为准，没有针对该功能的真实模型批次；CI 未运行 |
+
+## 可复现场景索引
+
+原计划的任务夹具分布在以下 12 类场景中。确定性控制流夹具由 `npm test` 执行；真实模型场景由 `scripts/evaluate-tasks.ts` 和 `scripts/evaluate-repository.ts` 的显式 `--live` 模式执行，结果分开记录。12 类场景和额外的 12 条需求保真文本不是同一个统计口径。
+
+| 场景 | 可执行夹具 |
+| --- | --- |
+| 仓库文件阅读 | cli HTTP fixture、实际 read 工具、临时 README |
+| 跨文件修改 | live `cross-file` |
+| 先读、修改、再验证 | live `ordered-edit`；执行审查检查读写及验证顺序 |
+| 中文与结构化迁移 | live `structured-migration`，保留中文、数组顺序、false、0、空字符串 |
+| 条件与例外分支 | live `conditional-exception` |
+| 条件不成立时保持原文件且不重写 | live `conditional-no-change` |
+| 长输出与循环上下文 | runtime 长输出分页、context 20 轮实际读取 |
+| 模型响应中断／失败 | providers、provider-timeout HTTP 终止与持续流夹具 |
+| 用户取消 | cli SIGINT/SIGTERM、agent-recovery 实际写入后取消 |
+| 批准与拒绝 | permissions、cli 审批退出码、实际 PTY 的 Y/N 流程 |
+| 损坏会话与锁恢复 | session 非法快照矩阵与失败重试 |
+| 进程崩溃后恢复原任务 | repository 实际 SIGKILL；session-verification-recovery 不同执行阶段 |
+
+真实仓库任务要求的会话过滤功能当时仅保存为评测候选 patch；第四轮已按规格另行实现并合入工作分支（见上方表格），候选 patch 本身仍未合入。其安装入口等审查问题也发生在评测副本中；当前项目安装门禁已通过。最终复核已确认功能、新增测试、文档、原文件保护、未知副作用核对和补齐后的安装验收。
+
+## 本轮验收结论
+
+原计划六个实施单元、四项补充缺口及用户追加的 vLLM 配置均已有对应实现与验收证据。真实仓库任务经过明确审查反馈和多次预算续跑；重复比较采用独立、正确配置的 Qwen 批次。历史余额错误、配置漏项和不完整验收记录均保留，不能替代或混入当前结果。未来队列、发布及 PR 合并不属于本轮已执行范围。

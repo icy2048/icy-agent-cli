@@ -1,0 +1,156 @@
+{
+  "kind": "iteration-4-exploration-comparison",
+  "complete": true,
+  "batches": [
+    {
+      "file": "repeated-tasks-vllm-configured.json",
+      "sourceCommit": "961231ebfbb3210cd046d18587f704178e703f7b",
+      "description": "Baseline at commit 961231e, before read exploration existed: read had no depth/pattern/regex arguments and the system prompt still suggested bash for ls/find/rg/grep. All 7 denials were exploratory shell commands (ls/cat/rg/grep).",
+      "modes": {
+        "off": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 0,
+          "deniedCommands": [],
+          "approvals": 15,
+          "inputTokens": 125507,
+          "outputTokens": 5452,
+          "durationMsTotal": 161563,
+          "explorationReadCalls": 0
+        },
+        "local": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 4,
+          "deniedCommands": [
+            "cat -A input.txt; echo \"---\"; cat verify.cjs; echo \"---\"; ls -la",
+            "ls -la && cat -A input.txt && echo \"---VERIFY---\" && cat verify.cjs",
+            "ls -la; echo ---; cat verify.cjs; echo ---; cat untouched.txt",
+            "ls -la"
+          ],
+          "approvals": 15,
+          "inputTokens": 134775,
+          "outputTokens": 5806,
+          "durationMsTotal": 171236,
+          "explorationReadCalls": 0
+        },
+        "model": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 3,
+          "deniedCommands": [
+            "ls -la; echo '---'; cat settings.json 2>/dev/null; echo '---'; cat defaults.json 2>/dev/null; echo '---'; cat verify.cjs 2>/dev/null | head -100",
+            "rg -n \"hello\" greeting.txt guide.txt; cat -A keep.txt; echo; echo \"---\"; cat greeting.txt; echo \"---\"; cat guide.txt",
+            "grep -n \"hello\" greeting.txt guide.txt; echo \"---\"; cat -A keep.txt; echo \"---\"; cat greeting.txt; echo \"---\"; cat guide.txt"
+          ],
+          "approvals": 15,
+          "inputTokens": 156098,
+          "outputTokens": 9040,
+          "durationMsTotal": 236681,
+          "explorationReadCalls": 0
+        }
+      }
+    },
+    {
+      "file": "repeated-tasks-iter4-explore.json",
+      "sourceCommit": "17a6e59832b0169d9646a2f2c68dd88b29af2108",
+      "description": "Batch A at commit 17a6e59, after read gained depth/pattern/regex exploration but before the system prompt was aligned: the prompt still told the model to use bash for ls/find/rg/grep, conflicting with the new tool descriptions.",
+      "modes": {
+        "off": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 3,
+          "deniedCommands": [
+            "node -e '\nconst fs=require(\"fs\");\nconst s=JSON.parse(fs.readFileSync(\"settings.json\",\"utf8\"));\nconst d=JSON.parse(fs.readFileSync(\"defaults.json\",\"utf8\"));\nif(s.schema===1){\n  const out={schema:2};\n  for(const[k,v]of Object.entries(s)){\n    if(k===\"schema\")continue;\n    if(k===\"retries\")continue;\n    out[k]=v;\n  }\n  // insert retryCount at old retries position: simplest rebuild preserving order\n  const out2={schema:2};\n  for(const[k,v]of Object.entries(s)){\n    if(k===\"schema\")continue;\n    if(k===\"retries\"){out2.retryCount=v;continue;}\n    if(k===\"timeout\"){out2.timeout=(v===null?d.timeout:v);continue;}\n    out2[k]=v;\n  }\n  fs.writeFileSync(\"settings.json\",JSON.stringify(out2)+\"\\n\");\n}\n' && node verify.cjs",
+            "sha256sum settings.json",
+            "ls -la"
+          ],
+          "approvals": 15,
+          "inputTokens": 171003,
+          "outputTokens": 8037,
+          "durationMsTotal": 238140,
+          "explorationReadCalls": 17
+        },
+        "local": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 6,
+          "deniedCommands": [
+            "ls -la && node verify.cjs",
+            "ls -la",
+            "ls -1 && cat input.txt",
+            "ls -1",
+            "sha256sum config.json",
+            "shasum -a 256 config.json"
+          ],
+          "approvals": 15,
+          "inputTokens": 159416,
+          "outputTokens": 7421,
+          "durationMsTotal": 217452,
+          "explorationReadCalls": 11
+        },
+        "model": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 1,
+          "deniedCommands": [
+            "cat -A config.json"
+          ],
+          "approvals": 16,
+          "inputTokens": 174518,
+          "outputTokens": 10077,
+          "durationMsTotal": 261421,
+          "explorationReadCalls": 14
+        }
+      }
+    },
+    {
+      "file": "repeated-tasks-iter4-explore-tuned.json",
+      "sourceCommit": "3b4d30146c5091c7087d6636d4d0514be25a3339",
+      "description": "Batch B at commit 3b4d301, after both the tool descriptions (b41d75f) and the system prompt (3b4d301) steered the model toward read exploration. Review fixes for bounded walking, VM-isolated regex and prompt alignment are included.",
+      "modes": {
+        "off": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 0,
+          "deniedCommands": [],
+          "approvals": 15,
+          "inputTokens": 176730,
+          "outputTokens": 7677,
+          "durationMsTotal": 234800,
+          "explorationReadCalls": 27
+        },
+        "local": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 1,
+          "deniedCommands": [
+            "pwd && ls -la"
+          ],
+          "approvals": 15,
+          "inputTokens": 165976,
+          "outputTokens": 7314,
+          "durationMsTotal": 215230,
+          "explorationReadCalls": 15
+        },
+        "model": {
+          "attempts": 15,
+          "passed": 15,
+          "denials": 0,
+          "deniedCommands": [],
+          "approvals": 15,
+          "inputTokens": 167602,
+          "outputTokens": 9289,
+          "durationMsTotal": 247681,
+          "explorationReadCalls": 10
+        }
+      }
+    }
+  ],
+  "model": "qwen3.8-27b",
+  "provider": "chat-completions",
+  "compactionModel": "qwen3.8-27b",
+  "repetitions": 3,
+  "countingRule": "A read call counts as exploration when its arguments contain a non-null pattern or a non-null depth. Denials, approvals, token sums and durations are computed from the raw per-attempt records in each source file; all input/output usage breakdowns were available (no estimates).",
+  "note": "Three sequential 45-attempt cohorts (5 fixtures x 3 modes x 3 repetitions) on the same fixtures, budgets and execution order as the configured-vLLM baseline. Denials dropped from 7 to 1 only after both the tool descriptions and the system prompt were aligned (commits b41d75f and 3b4d301); an intermediate batch after the description change alone was stopped after 23 attempts (23 passed, 4 denials) when the prompt conflict was discovered, its file was deleted and it is not a sample. Input tokens and wall time rose versus the baseline because listing/search results enter the context and tool descriptions are longer. All 45 attempts in the tuned batch passed the execution-order, mutation-scope, verification, protected-file and output checks (unmetRequirements empty). A small finite sample does not prove general reliability or a cost benefit. An independent final-reply review is being written to repeated-tasks-iter4-explore-tuned-response-review.json. CI has not run for these commits and nothing is merged or released."
+}

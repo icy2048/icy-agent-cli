@@ -1,0 +1,168 @@
+{
+  "kind": "live-synthetic-tasks",
+  "model": "gpt-5.6-sol",
+  "provider": "responses",
+  "reasoningEffort": "low",
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50
+  },
+  "repetitions": 1,
+  "note": "A small smoke baseline; not a statistically reliable success-rate comparison. Only synthetic temporary files and the exact verification command were authorized.",
+  "results": [
+    {
+      "id": "ordered-edit",
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 5394,
+        "estimated": false,
+        "inputTokens": 5041,
+        "outputTokens": 353,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 37999
+    },
+    {
+      "id": "conditional-exception",
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 5906,
+        "estimated": false,
+        "inputTokens": 5493,
+        "outputTokens": 413,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 27846
+    },
+    {
+      "id": "cross-file",
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 6860,
+        "estimated": false,
+        "inputTokens": 6378,
+        "outputTokens": 482,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 27439
+    },
+    {
+      "id": "ordered-edit",
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 5333,
+        "estimated": false,
+        "inputTokens": 4993,
+        "outputTokens": 340,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 19671
+    },
+    {
+      "id": "conditional-exception",
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 5294,
+        "estimated": false,
+        "inputTokens": 4883,
+        "outputTokens": 411,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 41560
+    },
+    {
+      "id": "cross-file",
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 6946,
+        "estimated": false,
+        "inputTokens": 6443,
+        "outputTokens": 503,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 28731
+    },
+    {
+      "id": "ordered-edit",
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 6810,
+        "estimated": false,
+        "inputTokens": 6268,
+        "outputTokens": 542,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 35301
+    },
+    {
+      "id": "conditional-exception",
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 7528,
+        "estimated": false,
+        "inputTokens": 6896,
+        "outputTokens": 632,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 50888
+    },
+    {
+      "id": "cross-file",
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "checked": true,
+      "usage": {
+        "tokens": 8982,
+        "estimated": false,
+        "inputTokens": 8168,
+        "outputTokens": 814,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 40506
+    }
+  ]
+}

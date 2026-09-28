@@ -6,11 +6,13 @@ import { profileConfig, saveModelProfile, type ModelProfile, type ModelServices 
 import { ModelProvider } from '../providers/model.js';
 import { Composer } from './Composer.js';
 import { commands, matchCommands } from './commands.js';
-import { cachedEntryLines, entryLines, type Entry } from './transcript.js';
+import { cachedEntryLines, changedFiles, entryLines, projectTranscriptEvent, taskStatusLabel, taskSummary, transcriptFromMessages, type Entry } from './transcript.js';
 import { saveThinkingPreference } from '../config/load.js';
 import wrapAnsi from 'wrap-ansi';
 import type { Agent } from '../core/agent.js';
-import type { AgentEvent, ApprovalDecision, ApprovalRequest, Approve } from '../core/types.js';
+import type { AgentEvent, ApprovalDecision, ApprovalRequest, Approve, RunResult } from '../core/types.js';
+import type { RunState, TaskState } from '../core/run-state.js';
+import { invalidStatusText, listSessions, parseStatusFilter, type SessionFilter } from '../sessions/list.js';
 import { clean, errorText } from '../core/text.js';
 
 export interface ApprovalBridge { current?: Approve }
@@ -23,17 +25,19 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   const width = Math.max(30, columns || 80), dual = width >= 120;
   const [modelOpen, setModelOpen] = useState(false);
   const [entries, setEntries] = useState<Entry[]>(() => {
-    const restored: Entry[] = agent.store.data.messages.flatMap((m): Entry[] => m.role === 'tool' ? [] : [
-      ...(m.role === 'assistant' && m.reasoning ? [{ kind: 'thinking' as const, text: m.reasoning }] : []),
-      { kind: m.role, text: m.content },
-    ]);
+    const restored = transcriptFromMessages(agent.store.data.messages);
     return [...restored, ...(recovery ? [{ kind: 'notice' as const, text: `已恢复会话；${recovery} 个未完成调用已标记中断。请核对实际文件状态。` }] : [])];
   });
   const [input, setInput] = useState(''), [running, setRunning] = useState(false), [stream, setStream] = useState('');
-  const [status, setStatus] = useState('Ready'), [turn, setTurn] = useState(0), [tokens, setTokens] = useState('—');
+  const latestRun = () => (agent.store.data.runs ?? []).at(-1);
+  const [taskState, setTaskState] = useState<TaskState | undefined>(() => agent.store.data.task && structuredClone(agent.store.data.task));
+  const [runState, setRunState] = useState<RunState | undefined>(() => latestRun() && structuredClone(latestRun()!));
+  const taskStateRef = useRef(taskState);
+  const [status, setStatus] = useState(taskState ? taskStatusLabel(taskState.status) : 'Ready'), [turn, setTurn] = useState(runState?.turns ?? 0), [tokens, setTokens] = useState(runState ? `${runState.usage.estimated ? '~' : ''}${runState.usage.tokens.toLocaleString()}` : '—');
   const [spin, setSpin] = useState(0), [elapsed, setElapsed] = useState(0);
-  const [task, setTask] = useState(initialPrompt), [pending, setPending] = useState<Pending>();
-  const [details, setDetails] = useState(false), [scroll, setScroll] = useState(0), [changes, setChanges] = useState<string[]>([]);
+  const [task, setTask] = useState(initialPrompt || taskState?.goal || agent.store.data.messages.findLast(message => message.role === 'user')?.content || ''), [pending, setPending] = useState<Pending>();
+  const [details, setDetails] = useState(false), [scroll, setScroll] = useState(0);
+  const changes = useMemo(() => changedFiles(entries), [entries]);
   const [approvalPage, setApprovalPage] = useState(0);
   const [thinkingExpanded, setThinkingExpanded] = useState(agent.config.thinkingExpanded ?? false);
   const thinkingRef = useRef(thinkingExpanded), preferenceSave = useRef(Promise.resolve());
@@ -46,20 +50,22 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   const exitAfterCancel = useRef(false);
   const streamBuf = useRef(''), reasoningBuf = useRef(''), flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notice = (text: string) => setEntries(v => [...v, { kind: 'notice', text }]);
+  const showTaskState = (nextTask?: TaskState, nextRun?: RunState) => {
+    taskStateRef.current = nextTask && structuredClone(nextTask);
+    setTaskState(taskStateRef.current); setRunState(nextRun && structuredClone(nextRun));
+    if (nextTask) { setTask(nextTask.goal); setStatus(taskStatusLabel(nextTask.status)); }
+    if (nextRun) { setTurn(nextRun.turns); setTokens(`${nextRun.usage.estimated ? '~' : ''}${nextRun.usage.tokens.toLocaleString()}`); }
+  };
   const setThinking = (expanded: boolean) => {
     thinkingRef.current = expanded; setThinkingExpanded(expanded); setScroll(0);
     preferenceSave.current = preferenceSave.current.then(() => saveThinkingPreference(agent.config.home, expanded)).catch(e => notice(`思考显示设置未保存：${errorText(e)}`));
   };
   const exitSaved = () => { void preferenceSave.current.then(() => exit()); };
-  const updateThinking = (entries: Entry[], update: (e: Entry) => Entry) => {
-    const index = entries.findLastIndex(e => e.kind === 'thinking');
-    return entries.map((e, i) => i === index ? update(e) : e);
-  };
   const flushBuffers = () => {
     const delta = streamBuf.current, reasoning = reasoningBuf.current;
     streamBuf.current = ''; reasoningBuf.current = '';
     if (delta) { setStream(s => s + delta); setStatus('正在回答'); }
-    if (reasoning) setEntries(v => updateThinking(v, e => ({ ...e, text: e.text + reasoning })));
+    if (reasoning) setEntries(v => projectTranscriptEvent(v, { type: 'reasoning_delta', text: reasoning }));
   };
   const flushNow = () => { if (flushTimer.current) { clearTimeout(flushTimer.current); flushTimer.current = null; } flushBuffers(); };
   const queueFlush = () => {
@@ -69,24 +75,24 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   };
   const listener = useCallback((event: AgentEvent) => {
     switch (event.type) {
-      case 'user': setEntries(v => [...v, { kind: 'user', text: event.text }]); setTask(event.text); setScroll(0); break;
+      case 'user': setEntries(v => projectTranscriptEvent(v, event)); setTask(event.text); setScroll(0); break;
       case 'harness_start': setStatus('整理提示词'); break;
       case 'harness_end':
         if (event.stats.savedChars > 0) notice(`上下文已精简 ${event.stats.savedChars.toLocaleString()} 字符 · 原文保留`);
         else if (event.stats.fallback) notice('提示词预处理未完成，已保留原文和关键字。');
         else if (event.stats.semantic === 'applied') notice('需求已提炼 · 关键字与约束已保留');
         break;
-      case 'turn': flushNow(); setTurn(event.turn); setStream(''); setStatus('思考中'); setEntries(v => [...v, { kind: 'thinking', text: '', active: true }]); break;
+      case 'context': setEntries(v => projectTranscriptEvent(v, event)); break;
+      case 'task': showTaskState(event.task, event.run); break;
+      case 'turn': flushNow(); setTurn(event.turn); setStream(''); setStatus('思考中'); setEntries(v => projectTranscriptEvent(v, event)); break;
       case 'reasoning_delta': reasoningBuf.current += event.text; queueFlush(); break;
-      case 'reasoning': flushNow(); setEntries(v => updateThinking(v, e => ({ ...e, text: event.text, active: false }))); break;
+      case 'reasoning': flushNow(); setEntries(v => projectTranscriptEvent(v, event)); break;
       case 'delta': streamBuf.current += event.text; queueFlush(); break;
-      case 'assistant': flushNow(); setStream(''); setEntries(v => [...v, { kind: 'assistant', text: event.text }]); break;
-      case 'tool_start': setStatus(`Running ${event.call.name}`); setEntries(v => [...v, { kind: 'tool', text: event.call.name, call: event.call }]); break;
-      case 'tool_end':
-        setEntries(v => v.map(e => e.call?.id === event.call.id ? { ...e, result: event.result } : e));
-        if (event.result.changedFile) setChanges(v => [...new Set([...v, event.result.changedFile!])]); break;
+      case 'assistant': flushNow(); setStream(''); setEntries(v => projectTranscriptEvent(v, event)); break;
+      case 'tool_start': setStatus(`Running ${event.call.name}`); setEntries(v => projectTranscriptEvent(v, event)); break;
+      case 'tool_end': setEntries(v => projectTranscriptEvent(v, event)); break;
       case 'usage': setTokens(`${event.estimated ? '~' : ''}${event.tokens.toLocaleString()}`); break;
-      case 'done': flushNow(); setEntries(v => updateThinking(v, e => ({ ...e, active: false, interrupted: e.active }))); setStatus(event.ok ? 'Completed' : event.reason === 'cancelled' ? 'Cancelled' : 'Stopped'); setStream(''); if (!event.ok) notice(`已停止：${event.reason}`); break;
+      case 'done': flushNow(); setEntries(v => projectTranscriptEvent(v, event)); setStatus(taskStateRef.current ? taskStatusLabel(taskStateRef.current.status) : event.ok ? '已回答 · 未验证' : event.reason === 'cancelled' ? 'Cancelled' : 'Stopped'); setStream(''); break;
     }
   }, []);
   agent.setListener(listener);
@@ -97,6 +103,19 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     const item = { request, resolve: finish }; pendingRef.current = item; setApprovalPage(0); setPending(item); setStatus('Awaiting approval');
     signal.addEventListener('abort', cancel, { once: true });
   });
+  const localAction = async (action: () => Promise<void>) => {
+    busy.current = true; setRunning(true);
+    try { await action(); }
+    catch (e) { notice(errorText(e)); }
+    finally { busy.current = false; setRunning(false); if (exitAfterCancel.current) exitSaved(); }
+  };
+  const runTask = async (action: (signal: AbortSignal) => Promise<RunResult>) => {
+    busy.current = true; setRunning(true); setStatus('准备中'); setTurn(0); setTokens('—');
+    controller.current = new AbortController();
+    try { await action(controller.current.signal); }
+    catch (e) { notice(errorText(e)); setStatus('Stopped'); }
+    finally { busy.current = false; setRunning(false); controller.current = null; if (exitAfterCancel.current) exitSaved(); }
+  };
   const submit = async (value: string) => {
     const prompt = value.trim(); if (!prompt || busy.current) return;
     changeInput(''); setScroll(0);
@@ -107,24 +126,62 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
       notice(`思考内容已${thinkingRef.current ? '展开' : '收起'}，后续启动沿用此设置。`); return;
     }
     if (prompt === '/model') { if (demo) notice('当前为离线演示；请运行 icy 后使用 /model 配置模型。'); else setModelOpen(true); return; }
+    if (prompt === '/task') { notice(taskSummary(agent.store.data.task, latestRun())); return; }
+    if (prompt === '/continue') { notice('继续原任务，将开启并记录新预算；已执行工具不会自动重放。'); await runTask(signal => agent.continue(signal)); return; }
+    if (prompt === '/sessions' || prompt.startsWith('/sessions ')) {
+      const argument = prompt.slice('/sessions'.length).trim();
+      let filter: SessionFilter | undefined;
+      try {
+        for (const token of argument ? argument.split(/\s+/) : []) {
+          const eq = token.indexOf('='), key = eq === -1 ? '' : token.slice(0, eq), value = eq === -1 ? '' : token.slice(eq + 1);
+          if (key === 'status' && value) (filter ??= {}).status = parseStatusFilter(value);
+          else if (key === 'cwd' && value) (filter ??= {}).cwd = value;
+          else throw new Error('用法：/sessions [status=<状态，逗号分隔>] [cwd=<目录>]');
+        }
+      } catch (error) { notice(invalidStatusText(error) ?? errorText(error)); return; }
+      await localAction(async () => {
+        const sessions = await listSessions(agent.config.home, filter);
+        notice(sessions.length ? sessions.map(session => session.error ? `${session.id} · 无法读取：${session.error}`
+          : `${session.id}\n${session.goal || '尚无目标'} · ${session.model} · ${session.updatedAt}\n工作区：${session.cwd}`).join('\n\n') + '\n\n/resume <会话 ID> 恢复；不会自动执行任务。' : '尚无已保存会话。');
+      });
+      return;
+    }
+    const command = prompt.split(/\s/, 1)[0], argument = prompt.slice(command.length).trim();
+    if (['/verify', '/todo', '/done', '/resume'].includes(command)) {
+      if (!argument) { notice(`用法：${command} ${command === '/verify' ? '<验收命令>' : command === '/todo' ? '<待办事项>' : command === '/done' ? '<待办编号，从 1 开始>' : '<会话 ID>'}`); changeInput(command + ' '); return; }
+      if (command === '/verify') { await runTask(signal => agent.verify(argument, signal)); return; }
+      if (command === '/done' && (!/^[1-9]\d*$/.test(argument) || !Number.isSafeInteger(Number(argument)))) { notice('待办编号必须是从 1 开始的整数。'); return; }
+      await localAction(async () => {
+        if (command === '/todo') { await agent.addTodo(argument); showTaskState(agent.store.data.task, latestRun()); notice('待办已添加。使用 /task 查看编号。'); }
+        else if (command === '/done') { await agent.completeTodo(Number(argument) - 1); showTaskState(agent.store.data.task, latestRun()); notice(`待办 ${argument} 已完成。`); }
+        else {
+          const restored = await agent.resumeSession(argument);
+          flushNow(); setStream('');
+          setEntries([...transcriptFromMessages(agent.store.data.messages), { kind: 'notice', text: `已恢复会话 ${agent.store.data.id}；${restored.recovered} 个未完成调用已标记。/task 查看状态，/continue 以新预算继续。` }]);
+          setTask(agent.store.data.task?.goal || agent.store.data.messages.findLast(message => message.role === 'user')?.content || '');
+          showTaskState(agent.store.data.task, latestRun());
+          if (!agent.store.data.task) { setStatus('Ready'); setTurn(0); setTokens('—'); }
+          history.current = []; historyIndex.current = 0;
+        }
+      });
+      return;
+    }
     if (prompt === '/new') {
       busy.current = true; setRunning(true); setStatus('准备中');
       try {
         await agent.newConversation();
         setEntries([{ kind: 'notice', text: '新对话已开启，原会话已保留。' }]);
-        setChanges([]); setTask(''); setStream(''); setTurn(0); setTokens('—'); setStatus('Ready');
+        showTaskState();
+        setTask(''); setStream(''); setTurn(0); setTokens('—'); setStatus('Ready');
         history.current = []; historyIndex.current = 0;
       } catch (e) { notice(errorText(e)); setStatus('Stopped'); }
       finally { busy.current = false; setRunning(false); if (exitAfterCancel.current) exitSaved(); }
       return;
     }
-    if (prompt === '/clear') { await agent.clear(); setEntries([]); setChanges([]); setTask(''); return; }
+    if (prompt === '/clear') { await localAction(async () => { await agent.clear(); setEntries([]); setTask(''); showTaskState(); setStatus('Ready'); setTurn(0); setTokens('—'); }); return; }
     if (prompt.startsWith('/')) { notice('未知命令。输入 /help 查看帮助。'); return; }
     history.current.push(prompt); historyIndex.current = history.current.length;
-    busy.current = true; setRunning(true); setStatus('准备中'); setTurn(0); setTokens('—'); setChanges([]);
-    controller.current = new AbortController();
-    try { await agent.run(prompt, controller.current.signal); } catch (e) { notice(errorText(e)); setStatus('Stopped'); }
-    finally { busy.current = false; setRunning(false); controller.current = null; if (exitAfterCancel.current) exitSaved(); }
+    await runTask(signal => agent.run(prompt, signal));
   };
   useEffect(() => {
     if (!running) return;
@@ -164,11 +221,14 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     const config = profileConfig(agent.config, profile);
     await agent.configure(config, new ModelProvider(config), () => saveModelProfile(config.home, profile));
     setEntries([{ kind: 'notice', text: `已连接 ${config.model}，配置已保存。旧会话保留，可用 --resume 恢复。` }]);
-    setChanges([]); setTask(''); setTurn(0); setTokens('—'); setStatus('Ready'); setModelOpen(false);
+    showTaskState();
+    setTask(''); setTurn(0); setTokens('—'); setStatus('Ready'); setModelOpen(false);
   };
   const leftWidth = dual ? width - 28 : width;
   const contentWidth = Math.max(10, leftWidth - 4);
-  const menuRows = menuOpen ? matches.length + 1 : 0;
+  const selectedIndex = Math.min(commandIndex, matches.length - 1);
+  const menuStart = Math.max(0, selectedIndex - 5), visibleCommands = matches.slice(menuStart, menuStart + 6);
+  const menuRows = menuOpen ? visibleCommands.length + 1 : 0;
   const lineBudget = Math.max(3, (rows || 30) - (pending ? 15 : 9) - menuRows);
   const approvalLines = pending ? wrapAnsi(clean(`command:\n${pending.request.command}\n\ncwd: ${pending.request.cwd}\ntimeout: ${pending.request.timeoutMs / 1000}s`), contentWidth, { hard: true, trim: false }).split('\n') : [];
   const approvalPages = Math.max(1, Math.ceil(approvalLines.length / lineBudget));
@@ -186,7 +246,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
         </Box>
         {scroll > 0 && <Text dimColor>↑ 历史视图 · PgDn 返回最新</Text>}
         {menuOpen && <Box flexDirection="column">
-          {matches.map((item, i) => <Text key={item.command} color={i === Math.min(commandIndex, matches.length - 1) ? accent : undefined} dimColor={i !== Math.min(commandIndex, matches.length - 1)} wrap="truncate-end">{i === Math.min(commandIndex, matches.length - 1) ? '❯' : ' '} {item.command}  {item.description}</Text>)}
+          {visibleCommands.map((item, i) => <Text key={item.command} color={i + menuStart === selectedIndex ? accent : undefined} dimColor={i + menuStart !== selectedIndex} wrap="truncate-end">{i + menuStart === selectedIndex ? '❯' : ' '} {item.command}  {item.description}</Text>)}
           <Text dimColor wrap="truncate-end">↑↓ 选择 · Enter 执行 · Tab 补全 · Esc 关闭</Text>
         </Box>}
         {pending ? <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1}>
@@ -196,13 +256,14 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
           <Text dimColor>bash 在主机执行，可访问工作区之外的资源。</Text>
         </Box> : <Box flexDirection="column" marginTop={1}><Text dimColor>{'─'.repeat(leftWidth - 2)}</Text><Box paddingX={1}>
           <Text color={accent}>❯ </Text>
-          {running ? <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text> : <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />}
+          {running ? <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text> : <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.takesArgument || selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />}
         </Box></Box>}
       </Box>
       {dual && <Box flexDirection="column" width={28} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor="gray" paddingX={1}>
-        <Text dimColor>CURRENT TASK</Text><Text wrap="truncate-end">{task || '等待目标'}</Text><Text color={accent}>{status}</Text>
+        <Text dimColor>CURRENT TASK</Text><Text wrap="truncate-end">{clean(task) || '等待目标'}</Text><Text color={accent}>{taskState ? taskStatusLabel(taskState.status) : status}</Text>
+        {runState && <Box flexDirection="column"><Text dimColor wrap="truncate-end">检查点 {clean(runState.checkpoint)}</Text><Text>剩余 tokens {Math.max(0, runState.budget.maxTokens - runState.usage.tokens).toLocaleString()}</Text>{runState.reason && <Text color="yellow" wrap="truncate-end">停止：{clean(runState.reason)}</Text>}</Box>}
         <Box marginTop={1} flexDirection="column"><Text dimColor>执行</Text><Text>模型请求 {turn}</Text><Text>Tokens {tokens}</Text><Text>{entries.filter(e => e.kind === 'tool').length} 次工具调用 / 会话</Text></Box>
-        <Box marginTop={1} flexDirection="column"><Text dimColor>本轮变更</Text>{changes.length ? changes.slice(-6).map(file => <Text color={accent} key={file} wrap="truncate-end">{file}</Text>) : <Text dimColor>—</Text>}</Box>
+        <Box marginTop={1} flexDirection="column"><Text dimColor>会话变更</Text>{changes.length ? changes.slice(-6).map(file => <Text color={accent} key={file} wrap="truncate-end">{file}</Text>) : <Text dimColor>—</Text>}</Box>
         <Box marginTop={1} flexDirection="column"><Text dimColor>会话</Text><Text wrap="truncate-end">{agent.store.data.id}</Text></Box>
       </Box>}
     </Box>

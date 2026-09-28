@@ -1,0 +1,447 @@
+{
+  "kind": "audited-task-summary",
+  "complete": true,
+  "sourceReport": "repeated-tasks-audited.json",
+  "sourceReportSha256": "e9f204b238eb8a519dd96b28c1d37f8114531ef95f1b11f53f98337a19957035",
+  "replyReview": "repeated-tasks-response-review.json",
+  "sourceCommit": "a477d8a46fe9a58d5b8fd9e2742b4542bbb07a43",
+  "criteriaVersion": 2,
+  "model": "gpt-5.6-sol",
+  "provider": "responses",
+  "reasoningEffort": "low",
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50,
+    "maxContextChars": 120000,
+    "requestTimeoutMs": 30000,
+    "runTimeoutMs": 90000
+  },
+  "modes": {
+    "off": {
+      "attempts": 15,
+      "passed": 7,
+      "passRate": 0.4666666666666667,
+      "outputCorrect": 11,
+      "executionAuditPassed": 8,
+      "successfulVerification": 8,
+      "missingReplies": 8,
+      "unmetExecutionRequirements": {
+        "run_completed": 8,
+        "successful_verification_after_changes": 7,
+        "read_before_changes:README.md": 1,
+        "read_before_changes:input.txt": 1,
+        "expected_output": 4,
+        "read_before_changes:config.json": 2,
+        "read_before_changes:greeting.txt": 1,
+        "read_before_changes:guide.txt": 1,
+        "read_before_changes:settings.json": 1,
+        "read_before_changes:defaults.json": 1
+      },
+      "reportedOrEstimatedTokens": 80646,
+      "attemptsIncludingEstimates": 8,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 37449,
+          "attemptsWithBreakdown": 7,
+          "attemptsMissingBreakdown": 8
+        },
+        "outputTokens": {
+          "availableSum": 2545,
+          "attemptsWithBreakdown": 7,
+          "attemptsMissingBreakdown": 8
+        },
+        "cachedInputTokens": {
+          "availableSum": 1536,
+          "attemptsWithBreakdown": 7,
+          "attemptsMissingBreakdown": 8
+        }
+      },
+      "durationMsTotal": 360855,
+      "durationMsMedian": 15503,
+      "approvals": 8,
+      "denials": 0
+    },
+    "local": {
+      "attempts": 15,
+      "passed": 8,
+      "passRate": 0.5333333333333333,
+      "outputCorrect": 10,
+      "executionAuditPassed": 8,
+      "successfulVerification": 8,
+      "missingReplies": 7,
+      "unmetExecutionRequirements": {
+        "successful_verification_after_changes": 7,
+        "run_completed": 7,
+        "expected_output": 5,
+        "read_before_changes:README.md": 1,
+        "read_before_changes:input.txt": 1,
+        "read_before_changes:config.json": 2,
+        "read_before_changes:greeting.txt": 1,
+        "read_before_changes:guide.txt": 1,
+        "read_before_changes:settings.json": 1,
+        "read_before_changes:defaults.json": 1
+      },
+      "reportedOrEstimatedTokens": 74263,
+      "attemptsIncludingEstimates": 7,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 41726,
+          "attemptsWithBreakdown": 8,
+          "attemptsMissingBreakdown": 7
+        },
+        "outputTokens": {
+          "availableSum": 2829,
+          "attemptsWithBreakdown": 8,
+          "attemptsMissingBreakdown": 7
+        },
+        "cachedInputTokens": {
+          "availableSum": 1536,
+          "attemptsWithBreakdown": 8,
+          "attemptsMissingBreakdown": 7
+        }
+      },
+      "durationMsTotal": 384314,
+      "durationMsMedian": 18058,
+      "approvals": 8,
+      "denials": 0
+    },
+    "model": {
+      "attempts": 15,
+      "passed": 4,
+      "passRate": 0.26666666666666666,
+      "outputCorrect": 7,
+      "executionAuditPassed": 4,
+      "successfulVerification": 4,
+      "missingReplies": 11,
+      "unmetExecutionRequirements": {
+        "successful_verification_after_changes": 11,
+        "run_completed": 11,
+        "read_before_changes:README.md": 2,
+        "read_before_changes:input.txt": 2,
+        "expected_output": 8,
+        "read_before_changes:config.json": 4,
+        "read_before_changes:greeting.txt": 2,
+        "read_before_changes:guide.txt": 2,
+        "read_before_changes:settings.json": 2,
+        "read_before_changes:defaults.json": 2
+      },
+      "reportedOrEstimatedTokens": 76305,
+      "attemptsIncludingEstimates": 14,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 8100,
+          "attemptsWithBreakdown": 1,
+          "attemptsMissingBreakdown": 14
+        },
+        "outputTokens": {
+          "availableSum": 768,
+          "attemptsWithBreakdown": 1,
+          "attemptsMissingBreakdown": 14
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 1,
+          "attemptsMissingBreakdown": 14
+        }
+      },
+      "durationMsTotal": 281677,
+      "durationMsMedian": 1734,
+      "approvals": 4,
+      "denials": 0
+    }
+  },
+  "failures": [
+    {
+      "key": "1/off/conditional-no-change",
+      "runReason": "model_request_timeout: 30000ms",
+      "unmetRequirements": [
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "1/off/structured-migration",
+      "runReason": "model_request_timeout: 30000ms",
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "1/local/cross-file",
+      "runReason": "model_request_timeout: 30000ms",
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "1/model/structured-migration",
+      "runReason": "model_request_timeout: 30000ms",
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/off/structured-migration",
+      "runReason": "model_request_timeout: 30000ms",
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/local/structured-migration",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/model/ordered-edit",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/model/conditional-exception",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/model/cross-file",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/model/conditional-no-change",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "2/model/structured-migration",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/off/ordered-edit",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/off/conditional-exception",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/off/cross-file",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/off/conditional-no-change",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/off/structured-migration",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/local/ordered-edit",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/local/conditional-exception",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/local/cross-file",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/local/conditional-no-change",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/local/structured-migration",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/model/ordered-edit",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/model/conditional-exception",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/model/cross-file",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/model/conditional-no-change",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    },
+    {
+      "key": "3/model/structured-migration",
+      "runReason": "403 insufficient balance",
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "replyReview": "unavailable"
+    }
+  ],
+  "limitations": [
+    "All 45 attempts remain unchanged; no retries replace failures. Passing combines execution/output assertions and explicit final-reply review.",
+    "Reported/estimated totals include preprocessing. Where the runtime supplies only an estimate, input/output/cache breakdowns are unavailable, not zero; available sums are not complete per-mode totals.",
+    "Different criteria and runtime versions prevent direct success-rate comparisons with historical cohorts. Finite synthetic samples do not prove general reliability.",
+    "Sequential runs reduce local model-evaluation contention but do not control upstream latency or service conditions.",
+    "Pass rates include service-unavailable attempts and must not be interpreted as comparative model capability. Billing-rejected requests can carry conservative local estimates; these are not evidence that the provider billed those tokens."
+  ],
+  "evaluationRequirementSatisfied": false,
+  "externalBlocker": "The service returned 403 insufficient balance from attempt 25 onward. Twenty-one attempts could not finish normal model execution. The planned three-repetition comparison remains incomplete."
+}

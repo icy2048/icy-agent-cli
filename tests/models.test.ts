@@ -35,7 +35,7 @@ test('model discovery uses the configured prefix and refuses redirects', async (
   } finally { server.close(); }
 });
 
-test('model configuration saves a private credential file and preserves unrelated settings', async () => {
+test('model configuration saves a private credential file and preserves unrelated settings', { skip: process.platform === 'win32' && 'Windows does not preserve POSIX 0o600 permissions' }, async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-model-save-'));
   try {
     await writeFile(path.join(home, 'config.json'), JSON.stringify({ permissions: 'read-only', maxToolCalls: 9, thinkingExpanded: true }));
@@ -51,7 +51,7 @@ test('model configuration saves a private credential file and preserves unrelate
 
 test('switching models opens a new session and keeps the previous session intact; failed save keeps current model', async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-switch-'));
-  const config: Config = { home, cwd: home, model: 'old-model', apiKey: 'old-key', apiKeyEnv: 'ICY_API_KEY', baseUrl: 'https://old.test/v1', provider: 'responses', permissions: 'read-only', promptCompaction: 'off', maxModelTurns: 2, maxToolCalls: 3, maxTokens: 10000, maxContextChars: 10000, requestTimeoutMs: 1000 };
+  const config: Config = { home, cwd: home, model: 'old-model', apiKey: 'old-key', apiKeyEnv: 'ICY_API_KEY', baseUrl: 'https://old.test/v1', provider: 'responses', permissions: 'read-only', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 2, maxToolCalls: 3, maxTokens: 10000, maxContextChars: 10000, requestTimeoutMs: 1000 };
   const store = await SessionStore.create(home, { cwd: home, model: config.model, provider: config.provider, baseUrl: config.baseUrl });
   store.data.messages.push({ role: 'user', content: 'old conversation' }); await store.save();
   const provider = { complete: async () => ({ text: 'new provider', calls: [] }) };
@@ -66,4 +66,19 @@ test('switching models opens a new session and keeps the previous session intact
     assert.deepEqual(agent.tools.definitions().map(t => t.name), ['read']);
     assert.equal((await agent.run('hello', new AbortController().signal)).text, 'new provider');
   } finally { await agent.store.close(); await rm(home, { recursive: true, force: true }); }
+});
+
+test('private HTTP profile opt-in survives save and is removed when switching back', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'icy-private-profile-'));
+  const local = { ...profile, baseUrl: 'http://192.168.1.10:8000/v1', allowPrivateHttp: true };
+  try {
+    assert.equal(profileConfig({} as Config, local).allowPrivateHttp, true);
+    assert.throws(() => profileConfig({ allowPrivateHttp: true } as Config, { ...local, allowPrivateHttp: undefined }), /HTTPS/);
+    await saveModelProfile(home, local);
+    let saved = JSON.parse(await readFile(path.join(home, 'config.json'), 'utf8'));
+    assert.equal(saved.allowPrivateHttp, true); assert.equal(saved.baseUrl, local.baseUrl);
+    await saveModelProfile(home, profile);
+    saved = JSON.parse(await readFile(path.join(home, 'config.json'), 'utf8'));
+    assert.equal(saved.allowPrivateHttp, undefined); assert.equal(saved.baseUrl, profile.baseUrl);
+  } finally { await rm(home, { recursive: true, force: true }); }
 });

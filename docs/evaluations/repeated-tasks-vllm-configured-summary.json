@@ -1,0 +1,153 @@
+{
+  "kind": "audited-task-summary",
+  "complete": true,
+  "sourceReport": "repeated-tasks-vllm-configured.json",
+  "sourceReportSha256": "48e7faf059ff2263c5474fc556aa4da0959a4527c52a965c0e2761e352ea0dee",
+  "replyReview": "repeated-tasks-vllm-configured-response-review.json",
+  "sourceCommit": "961231ebfbb3210cd046d18587f704178e703f7b",
+  "criteriaVersion": 2,
+  "model": "qwen3.8-27b",
+  "provider": "chat-completions",
+  "reasoningEffort": null,
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50,
+    "maxContextChars": 120000,
+    "requestTimeoutMs": 30000,
+    "runTimeoutMs": 90000
+  },
+  "modes": {
+    "off": {
+      "attempts": 15,
+      "passed": 15,
+      "passRate": 1.0,
+      "outputCorrect": 15,
+      "executionAuditPassed": 15,
+      "successfulVerification": 15,
+      "missingReplies": 0,
+      "unmetExecutionRequirements": {},
+      "reportedOrEstimatedTokens": 130959,
+      "attemptsIncludingEstimates": 0,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 125507,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "outputTokens": {
+          "availableSum": 5452,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        }
+      },
+      "durationMsTotal": 161563,
+      "durationMsMedian": 11631,
+      "approvals": 15,
+      "denials": 0,
+      "semanticOutcomes": {
+        "off": 15
+      },
+      "preprocessingReportedTokens": 0,
+      "fallbacks": 0,
+      "meanTokensPerSuccessfulTask": 8730.6,
+      "meanDurationMsPerSuccessfulTask": 10770.866666666667
+    },
+    "local": {
+      "attempts": 15,
+      "passed": 15,
+      "passRate": 1.0,
+      "outputCorrect": 15,
+      "executionAuditPassed": 15,
+      "successfulVerification": 15,
+      "missingReplies": 0,
+      "unmetExecutionRequirements": {},
+      "reportedOrEstimatedTokens": 140581,
+      "attemptsIncludingEstimates": 0,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 134775,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "outputTokens": {
+          "availableSum": 5806,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        }
+      },
+      "durationMsTotal": 171236,
+      "durationMsMedian": 10062,
+      "approvals": 15,
+      "denials": 4,
+      "semanticOutcomes": {
+        "off": 15
+      },
+      "preprocessingReportedTokens": 0,
+      "fallbacks": 0,
+      "meanTokensPerSuccessfulTask": 9372.066666666668,
+      "meanDurationMsPerSuccessfulTask": 11415.733333333334
+    },
+    "model": {
+      "attempts": 15,
+      "passed": 15,
+      "passRate": 1.0,
+      "outputCorrect": 15,
+      "executionAuditPassed": 15,
+      "successfulVerification": 15,
+      "missingReplies": 0,
+      "unmetExecutionRequirements": {},
+      "reportedOrEstimatedTokens": 165138,
+      "attemptsIncludingEstimates": 0,
+      "usageBreakdown": {
+        "inputTokens": {
+          "availableSum": 156098,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "outputTokens": {
+          "availableSum": 9040,
+          "attemptsWithBreakdown": 15,
+          "attemptsMissingBreakdown": 0
+        },
+        "cachedInputTokens": {
+          "availableSum": 0,
+          "attemptsWithBreakdown": 0,
+          "attemptsMissingBreakdown": 15
+        }
+      },
+      "durationMsTotal": 236681,
+      "durationMsMedian": 15152,
+      "approvals": 15,
+      "denials": 3,
+      "semanticOutcomes": {
+        "applied": 14,
+        "invalid": 1
+      },
+      "preprocessingReportedTokens": 7571,
+      "fallbacks": 1,
+      "meanTokensPerSuccessfulTask": 11009.2,
+      "meanDurationMsPerSuccessfulTask": 15778.733333333334
+    }
+  },
+  "failures": [],
+  "limitations": [
+    "All 45 attempts remain unchanged; no retries replace failures. Passing combines execution/output assertions and explicit final-reply review.",
+    "Reported/estimated totals include preprocessing. Where the runtime supplies only an estimate, input/output/cache breakdowns are unavailable, not zero; available sums are not complete per-mode totals.",
+    "Different criteria and runtime versions prevent direct success-rate comparisons with historical cohorts. Finite synthetic samples do not prove general reliability.",
+    "Sequential runs reduce local model-evaluation contention but do not control upstream latency or service conditions."
+  ],
+  "evaluationRequirementSatisfied": true,
+  "compactionModel": "qwen3.8-27b",
+  "comparisonScope": "Independent complete cohort with Qwen configured for both main requests and semantic preprocessing. Historical failures and the incorrectly configured fallback cohort are preserved separately."
+}

@@ -1,0 +1,70 @@
+{
+  "kind": "linux-live-pty-acceptance",
+  "operator": "Codex via interactive PTY; not a human usability study",
+  "platform": "linux",
+  "release": "6.12.76-linuxkit",
+  "arch": "arm64",
+  "node": "v22.23.3",
+  "passed": true,
+  "checks": [
+    "Chinese and emoji input preserved",
+    "approval granted by Y",
+    "explicit verification and todo completion",
+    "Esc cancels a real process group",
+    "restart renders the cancelled tool result",
+    "resume issues no model request before explicit continue",
+    "continue records a new budget without replaying bash",
+    "session switching restores verified task and details",
+    "N denies command without side effect",
+    "terminal resize switches 80-column and 140-column layouts",
+    "all locks released and tool IDs paired"
+  ],
+  "sessions": [
+    {
+      "id": "2d122b16-2e4e-415b-9652-015930488f26",
+      "goal": "拒绝这个命令",
+      "status": "answered",
+      "runs": [
+        {
+          "status": "answered",
+          "toolCalls": 1,
+          "budgetSource": "new_task"
+        }
+      ]
+    },
+    {
+      "id": "54b202a5-26d0-4e6c-ab0f-7f38f010dba7",
+      "goal": "执行长命令，然后观察取消",
+      "status": "answered",
+      "runs": [
+        {
+          "status": "cancelled",
+          "toolCalls": 1,
+          "budgetSource": "new_task"
+        },
+        {
+          "status": "answered",
+          "toolCalls": 0,
+          "budgetSource": "explicit_resume"
+        }
+      ]
+    },
+    {
+      "id": "ebb2b741-e980-4bfb-b49d-1adbd1f946e0",
+      "goal": "创建中文文件🙂",
+      "status": "verified",
+      "runs": [
+        {
+          "status": "answered",
+          "toolCalls": 1,
+          "budgetSource": "new_task"
+        },
+        {
+          "status": "verified",
+          "toolCalls": 1,
+          "budgetSource": "explicit_resume"
+        }
+      ]
+    }
+  ]
+}

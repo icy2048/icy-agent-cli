@@ -1,0 +1,3576 @@
+{
+  "kind": "live-synthetic-tasks",
+  "sourceCommit": "961231ebfbb3210cd046d18587f704178e703f7b",
+  "criteriaVersion": 2,
+  "startedAt": "2026-09-27T17:48:29.107Z",
+  "updatedAt": "2026-09-27T17:57:59.166Z",
+  "complete": true,
+  "planned": 45,
+  "model": "qwen3.8-27b",
+  "provider": "chat-completions",
+  "compactionModel": "qwen3.8-27b",
+  "reasoningEffort": null,
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50,
+    "maxContextChars": 120000,
+    "requestTimeoutMs": 30000,
+    "runTimeoutMs": 90000
+  },
+  "repetitions": 3,
+  "concurrency": 1,
+  "note": "All attempts are retained; no automatic reruns. Checks cover required reads before changes, mutation scope, final verification, protected files and expected outputs. Final replies are retained for separate requirement review. Finite synthetic samples do not prove general task reliability.",
+  "results": [
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 176,
+        "afterChars": 176,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-bea432bf2aab000c",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-bc5cfee976469ecf",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8ce33b93deffa9cb",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-904b5eab3f12c79a",
+          "name": "write",
+          "arguments": "{\"path\": \"input.txt\", \"content\": \"after\\n\", \"expectedHash\": \"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a3a5a85a58ee74b5",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成，验证通过。\n\n**改动：**\n- 读取了 README.md（要求任务文件为 input.txt 并保留 sentinel）和 input.txt（原内容为 `before`）。\n- 将 input.txt 中的 `before` 精确替换为 `after`（保留末尾换行）。\n\n**未改动：**\n- verify.cjs、untouched.txt 均未修改。\n\n**验证：**\n- 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0。\n\n任务目标已达成，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 11128,
+        "estimated": false,
+        "inputTokens": 10692,
+        "outputTokens": 436
+      },
+      "durationMs": 12587
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 172,
+        "afterChars": 172,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-849e398b8e316043",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b42e671119f13699",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\", \"newText\": \"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b17d2d02cdeb415f",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 30000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n- **读取 config.json**：`cache` 为 `false`，因此将 `timeout` 从 `30` 改为 `45`，其余字段保持不变（`cache`、`label` 的中文 `保持中文` 与值类型均原样保留）。\n- **verify.cjs** 未做任何修改。\n- **验证**：`node verify.cjs` 实际执行成功，输出 `fixture checks passed`，退出码 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 7932,
+        "estimated": false,
+        "inputTokens": 7609,
+        "outputTokens": 323
+      },
+      "durationMs": 12214
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 171,
+        "afterChars": 171,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9d216f654f06b4bd",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 100}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9ce9d3a6d0b53606",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 100}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b9807c547036b87e",
+          "name": "read",
+          "arguments": "{\"path\": \"keep.txt\", \"offset\": 1, \"limit\": 100}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9c9d9838cf9d112a",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8b51e287b933d310",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b360f2c81722373f",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- **修改文件**：\n  - `greeting.txt`：`hello` → `你好`\n  - `guide.txt`：`message: hello` → `message: 你好`\n- **未修改**：`keep.txt`（保持 `untouched` 及原有换行）、`verify.cjs`\n- **验证**：执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0，测试通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 9048,
+        "estimated": false,
+        "inputTokens": 8634,
+        "outputTokens": 414
+      },
+      "durationMs": 9896
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 160,
+        "afterChars": 160,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-84ce068d9b482d33",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a9c964cfb30186b7",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成，说明如下：\n\n- **读取 `config.json`**：`\"cache\": true`（第 1 行，含非标准空格与 emoji，需按字节保留）。\n- **走的分支**：`cache === true`，因此**未修改 `config.json`**，文件字节保持原样（未触发任何写入，也未做格式化重写）。\n- **未改动 `verify.cjs`**。\n- **运行 `node verify.cjs`**：输出 `fixture checks passed`，Exit code 0，通过。\n\n实际分支：cache 为 true → 保持文件不变。验证结果：通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 5496,
+        "estimated": false,
+        "inputTokens": 5251,
+        "outputTokens": 245
+      },
+      "durationMs": 8787
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 305,
+        "afterChars": 305,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-8239186599c6e26a",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 2000}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-807ad9dfc3250d74",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 2000}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a9a012d9c6f4a254",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 2000}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ad134adaf27118a2",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9a3fe7ba02f041e1",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 30000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n**所做的更改**（settings.json，schema 1 → 2）：\n- `retries` 改名为 `retryCount`，保留数值 `0`，旧字段已删除\n- `timeout` 为 `null`，从 defaults.json 复制为 `45`\n- `labels` 顺序、`enabled: false`、`empty: \"\"` 均原样保留，未新增字段\n\n**验证**：`node verify.cjs` 运行成功，输出 `fixture checks passed`（退出码 0）。defaults.json 和 verify.cjs 均未修改。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 9961,
+        "estimated": false,
+        "inputTokens": 9428,
+        "outputTokens": 533
+      },
+      "durationMs": 14441
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 176,
+        "afterChars": 176,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-a2a5c9eac92fa535",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a57c7a12f236898e",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a9c15874741e5487",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b54490cba65a8027",
+          "name": "read",
+          "arguments": "{\"path\": \"untouched.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9d36de1b729eecab",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-984b9c8fff2eeceb",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成：\n\n1. 读取了 README.md 和 input.txt\n2. 将 input.txt 中的 `before` 精确替换为 `after`\n3. 运行 `node verify.cjs` 验证，输出 `fixture checks passed`，退出码 0\n\n未修改 verify.cjs 和 untouched.txt。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 11412,
+        "estimated": false,
+        "inputTokens": 11026,
+        "outputTokens": 386
+      },
+      "durationMs": 12276
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 172,
+        "afterChars": 172,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-ba61c9fb44be7579",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 2000}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-939f6e7b8f6095d8",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\", \"newText\": \"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-953c7426cc478ee4",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n- `config.json` 中 `cache` 为 `false`，因此把 `timeout` 从 30 改为 45。其他字段（`cache`、`label` 的中文值 `\"保持中文\"`）和值类型（布尔/数字/字符串）均保持不变，未触碰 `verify.cjs`。\n- 执行 `node verify.cjs`，实际输出 `fixture checks passed`，退出码 0 —— 验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 7930,
+        "estimated": false,
+        "inputTokens": 7607,
+        "outputTokens": 323
+      },
+      "durationMs": 9306
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 171,
+        "afterChars": 171,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9a5861848513eabf",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9f11baf5144ff27b",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9977de3980975f88",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-bf7659a23c7854ec",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-818044629e30aeec",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a33883ef7908e644",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- **修改文件**\n  - `greeting.txt`：`hello` → `你好`\n  - `guide.txt`：`message: hello` → `message: 你好`\n  - `keep.txt`：未修改\n  - `verify.cjs`：未修改\n\n- **验证结果**\n  - 已执行 `node verify.cjs`\n  - 输出：`fixture checks passed`\n  - 退出码：`0`",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 9438,
+        "estimated": false,
+        "inputTokens": 9021,
+        "outputTokens": 417
+      },
+      "durationMs": 10026
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 160,
+        "afterChars": 160,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9d8dc568690ad9d8",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9845757c354c8de8",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成。\n\n- **实际分支**：`cache` 为 `true`，因此按规则保持 `config.json` **字节完全不变**（未做任何写入）。\n- **未修改** `verify.cjs`。\n- **验证结果**：运行 `node verify.cjs`，退出码 `0`，输出 `fixture checks passed`，校验通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 5440,
+        "estimated": false,
+        "inputTokens": 5251,
+        "outputTokens": 189
+      },
+      "durationMs": 7149
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 305,
+        "afterChars": 305,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-bced10435c7e9f45",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-be54dd992135ea81",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-983e76d83d4b4b5d",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9e74a02340e2e600",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b52a1194ceba9dd0",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 10}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "完成迁移并验证通过：\n\n- 原 `settings.json` schema 为 1，已迁移到 2：`retries: 0` 改名为 `retryCount: 0`（数值保留）\n- `timeout` 原为 `null`，已从 `defaults.json` 复制 `timeout: 45`\n- 删除了旧 `retries` 字段\n- 保留 `labels` 数组顺序 `[\"中文\",\"🙂\"]`、`enabled: false`、`empty: \"\"`，未新增额外字段\n- 未修改 `defaults.json` 和 `verify.cjs`\n\n验证：`node verify.cjs` 输出 `fixture checks passed`，退出码 0。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 11541,
+        "estimated": false,
+        "inputTokens": 11040,
+        "outputTokens": 501
+      },
+      "durationMs": 15330
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 176,
+        "afterChars": 456,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 476,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 476,
+          "inputTokens": 312,
+          "outputTokens": 164
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-934cce07999b2671",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-bbd3d48f3c2f46ef",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a8109ee05f600fd2",
+          "name": "read",
+          "arguments": "{\"path\": \"icy-output:547bd6b0-6f1d-492f-9a28-5e643051fbec.txt\", \"offset\": 1, \"limit\": 100}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8e45bf0d6e3f312c",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9633bd4f72f29a56",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a8785ffcbe229b21",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成。验证已通过。\n\n**执行步骤：**\n1. 读取了 `README.md`（提示：任务文件是 input.txt，保留 sentinel）和 `input.txt`（内容为 `before`）。\n2. 将 `input.txt` 中的 `before` 精确替换为 `after`（现在是 `after`）。\n3. 运行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0 —— **验证通过**。\n\n**未改动：** `verify.cjs` 和 `untouched.txt` 均保持原样。\n\n验证成功，任务完成。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 13105,
+        "estimated": false,
+        "inputTokens": 12432,
+        "outputTokens": 673
+      },
+      "durationMs": 16885
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 172,
+        "afterChars": 476,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 553,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 553,
+          "inputTokens": 318,
+          "outputTokens": 235
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9eb5c3416a91d0f4",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-80bbed3a38c0ef5d",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\", \"newText\": \"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-83289959a3577cb9",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取 `config.json`：`cache` 为 `false`，所以按要求将 `timeout` 从 `30` 改为 `45`。\n- 保留其他字段：`cache` 仍为 `false`，`label` 仍为 `\"保持中文\"`，值类型保持不变。\n- 未修改 `verify.cjs`。\n- 通过 bash 执行 `node verify.cjs`，实际验证结果为：\n\n```text\nfixture checks passed\n\nExit code: 0\n```",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 9183,
+        "estimated": false,
+        "inputTokens": 8644,
+        "outputTokens": 539
+      },
+      "durationMs": 15152
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 171,
+        "afterChars": 592,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 419,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 419,
+          "inputTokens": 315,
+          "outputTokens": 104
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-8b20a61de87af8dd",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9433f092effd74fe",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b6c92975adee5bcd",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ba5f1adda0e3b3a4",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"message: hello\", \"newText\": \"message: 你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-97cb161ff07f0004",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成。\n\n修改文件：\n- `greeting.txt`：`hello` → `你好`（原有换行保留）\n- `guide.txt`：`message: hello` → `message: 你好`（原有换行保留）\n\n未修改：`keep.txt`、`verify.cjs`。\n\n验证结果：`node verify.cjs` 执行成功，输出 `fixture checks passed`，退出码 0。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 9826,
+        "estimated": false,
+        "inputTokens": 9359,
+        "outputTokens": 467
+      },
+      "durationMs": 11496
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 160,
+        "afterChars": 411,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 433,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 433,
+          "inputTokens": 312,
+          "outputTokens": 121
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-af58f76a12b413b5",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-aa14fb97de4de048",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "**实际分支：`cache === true`**\n\n- **config.json 未做任何修改**，保持整个文件字节不变（未重写、未格式化）。\n  - 当前内容：`{ \"cache\": true, \"timeout\": 30, \"label\": \"保留 空格🙂\" }`\n- **verify.cjs 未修改**。\n- 按要求 `timeout` 保持为 `30`（只有 cache 为 false 才改 45，此分支不适用）。\n\n**运行结果：** `node verify.cjs` → 输出 `fixture checks passed`，**退出码 0（通过）**。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 6400,
+        "estimated": false,
+        "inputTokens": 6007,
+        "outputTokens": 393
+      },
+      "durationMs": 11340
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 305,
+        "afterChars": 943,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 705,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 705,
+          "inputTokens": 361,
+          "outputTokens": 344
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-876d479600444722",
+          "name": "bash",
+          "arguments": "{\"command\": \"ls -la; echo '---'; cat settings.json 2>/dev/null; echo '---'; cat defaults.json 2>/dev/null; echo '---'; cat verify.cjs 2>/dev/null | head -100\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 0,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-b9b3f88e2f23a764",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 100}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-be9fb15fc407bbfc",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 100}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b1f611243d0fbb74",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ba5f307335b0df32",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-95ce3cc09a940e3d",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "迁移完成：\n\n- settings.json（原 schema=1）已迁移为 schema 2：`retries` → `retryCount`（值 0 保留），`timeout` 为 null 故从 defaults.json 复制为 45；`labels` 顺序、`enabled:false`、`empty:\"\"` 均未改动，无新增字段。\n- defaults.json 与 verify.cjs 未修改。\n- 已运行 `node verify.cjs`，输出 `fixture checks passed`（exit 0）。",
+      "approvedChecks": 1,
+      "deniedRequests": 1,
+      "approvals": [
+        {
+          "command": "ls -la; echo '---'; cat settings.json 2>/dev/null; echo '---'; cat defaults.json 2>/dev/null; echo '---'; cat verify.cjs 2>/dev/null | head -100",
+          "granted": false
+        },
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 17533,
+        "estimated": false,
+        "inputTokens": 16613,
+        "outputTokens": 920
+      },
+      "durationMs": 24732
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 176,
+        "afterChars": 176,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-94163cc695a4f7e1",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b0633b6a904e563b",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-996c8eada895da83",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a89b8e2efa073a82",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": null}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成，验证通过：\n\n1. 读取了 README.md 和 input.txt。\n2. 将 input.txt 中的 `before` 精确替换为 `after`（仅一行改动）。\n3. 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0。\n\n未修改 verify.cjs 和 untouched.txt。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 8115,
+        "estimated": false,
+        "inputTokens": 7829,
+        "outputTokens": 286
+      },
+      "durationMs": 8238
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 172,
+        "afterChars": 172,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-946f7aaa6a74ab2e",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9ecf2a53da774aa9",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\", \"newText\": \"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9cd6c288c3beb9dc",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": null}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- **读取 config.json**：`cache` 为 `false`，因此按规则修改 timeout。\n- **修改**：`timeout` 从 `30` → `45`，其余保持不变（`cache: false`、`label: \"保持中文\"`，值类型未变）。\n- **未改动** verify.cjs。\n\n**实际验证结果**：`node verify.cjs` 输出 `fixture checks passed`，退出码 **0**，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 7842,
+        "estimated": false,
+        "inputTokens": 7549,
+        "outputTokens": 293
+      },
+      "durationMs": 8977
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 171,
+        "afterChars": 171,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9fdd0657f89da7b5",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b67581c2fb26a45d",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8a84b8a6bcf010c8",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8c5434db4e9bf7d5",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"message: hello\", \"newText\": \"message: 你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b223e95e9943146a",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 60000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 修改文件：`greeting.txt`、`guide.txt`，将 `hello` 分别替换为 `你好`，保留原有换行。\n- 未修改：`keep.txt`、`verify.cjs`。\n- 验证结果：执行 `node verify.cjs`，输出 `fixture checks passed`，退出码为 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 8561,
+        "estimated": false,
+        "inputTokens": 8210,
+        "outputTokens": 351
+      },
+      "durationMs": 11824
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 160,
+        "afterChars": 160,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-b5efdd2109a6febe",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 100}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b348ab593b887731",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9edc79bb4d4fbff2",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 10}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "完成，结果如下：\n\n**实际分支**：`cache` 为 `true` → 走\"保持文件不变\"分支，未做任何修改。\n\n- 读 `config.json`：内容为 `{ \"cache\": true, \"timeout\": 30, \"label\": \"保留 空格🙂\" }`\n- 未改写文件（无格式化、未动 timeout），SHA256 在操作前后一致：`fea11716…`\n- `node verify.cjs`：退出码 0，输出 `fixture checks passed`\n\n未修改 `verify.cjs`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 7596,
+        "estimated": false,
+        "inputTokens": 7307,
+        "outputTokens": 289
+      },
+      "durationMs": 9568
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 305,
+        "afterChars": 305,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-84a30aa8c86bc404",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 100}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-84f81c7b270a128a",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 100}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-81c8459c0e1408b0",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9d9c2643ff9e3081",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-91d3ec47d09db7ac",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成迁移：settings.json 原 schema 为 1，已更新为 `{\"schema\":2,\"retryCount\":0,\"timeout\":45,\"labels\":[\"中文\",\"🙂\"],\"enabled\":false,\"empty\":\"\"}`——retries→retryCount（保留值 0）、timeout 为 null 已从 defaults.json 复制为 45、未新增字段、labels 顺序与 enabled/empty 均保留。\n\n验证：`node verify.cjs` 通过（exit 0，输出 \"fixture checks passed\"）。defaults.json 与 verify.cjs 未修改。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 11797,
+        "estimated": false,
+        "inputTokens": 11330,
+        "outputTokens": 467
+      },
+      "durationMs": 13064
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 176,
+        "afterChars": 176,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-a724977811975903",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-be74a319cebfb505",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-80c89988ed880cd0",
+          "name": "bash",
+          "arguments": "{\"command\": \"cat -A input.txt; echo \\\"---\\\"; cat verify.cjs; echo \\\"---\\\"; ls -la\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 2,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-a0efe8c9b815f704",
+          "name": "bash",
+          "arguments": "{\"command\": \"ls -la && cat -A input.txt && echo \\\"---VERIFY---\\\" && cat verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 3,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-943e34e897cf14aa",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b0c0b4c44ea02f6b",
+          "name": "read",
+          "arguments": "{\"path\": \"untouched.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 5,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9e787dd67d8594a0",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 6,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-aba8a33b018de6dd",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 7,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成。\n\n**变更：**\n- 读取了 `README.md`（提示任务文件为 input.txt，保留哨兵）和 `input.txt`\n- 将 `input.txt` 中的 `before` 精确替换为 `after`（结果文件内容为 `after\\n`）\n- `verify.cjs` 和 `untouched.txt` 均未修改\n\n**验证：** `node verify.cjs` 退出码 0，输出 `fixture checks passed`。验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 2,
+      "approvals": [
+        {
+          "command": "cat -A input.txt; echo \"---\"; cat verify.cjs; echo \"---\"; ls -la",
+          "granted": false
+        },
+        {
+          "command": "ls -la && cat -A input.txt && echo \"---VERIFY---\" && cat verify.cjs",
+          "granted": false
+        },
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 7,
+      "toolCalls": 8,
+      "usage": {
+        "tokens": 16639,
+        "estimated": false,
+        "inputTokens": 16022,
+        "outputTokens": 617
+      },
+      "durationMs": 21064
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 172,
+        "afterChars": 172,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-96c76e1ef64cfd53",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ae63d81ba6305c70",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"\\\"timeout\\\":30\", \"newText\": \"\\\"timeout\\\":45\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b6ea1e50be1214b8",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n- **判断**：`config.json` 中 `cache` 为 `false`，所以按要求把 `timeout` 从 `30` 改为 `45`。\n- **修改**：只改了 `timeout`，保留了 `cache`、`label`（\"保持中文\"）及各自值类型；未改动 `verify.cjs`。\n  - 改后内容：`{\"cache\":false,\"timeout\":45,\"label\":\"保持中文\"}`\n- **验证**：执行 `node verify.cjs`，实际输出 `fixture checks passed`，退出码 `0`（通过）。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 7888,
+        "estimated": false,
+        "inputTokens": 7561,
+        "outputTokens": 327
+      },
+      "durationMs": 9735
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 171,
+        "afterChars": 171,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-bcfc652d2baf3731",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9f55a5da8fc19138",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8aa072f0f6f16ec5",
+          "name": "read",
+          "arguments": "{\"path\": \"keep.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-be2b673e818d279c",
+          "name": "write",
+          "arguments": "{\"path\": \"greeting.txt\", \"content\": \"你好\\n\", \"expectedHash\": \"5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a5c13bb262f08dd2",
+          "name": "write",
+          "arguments": "{\"path\": \"guide.txt\", \"content\": \"message: 你好\\n\", \"expectedHash\": \"3782b1ba05f329a33120eda0453f68547cf1603b2e4d2ece8572c8e8bcf9dd3d\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9bb814907d2cf948",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- `greeting.txt`：将 `hello` 改为 `你好`，保留原有换行。\n- `guide.txt`：将 `message: hello` 中的 `hello` 改为 `你好`，保留原有换行。\n- `keep.txt`：未修改。\n- `verify.cjs`：未修改。\n\n测试结果：`node verify.cjs` 执行成功，输出为 `fixture checks passed`，退出码 0。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 9397,
+        "estimated": false,
+        "inputTokens": 8866,
+        "outputTokens": 531
+      },
+      "durationMs": 11772
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 160,
+        "afterChars": 160,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-860d4c4c4c98439e",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 2000}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9dea913ee3f70545",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 30000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已执行完成。\n\n**实际分支:**`config.json` 中 `cache` 为 `true`,因此**保持整个文件字节不变**,未做任何修改(没有改 `timeout`,也没有重格式化)。\n\n**验证结果:** 运行 `node verify.cjs`,退出码 0,输出 `fixture checks passed`,验证通过。\n\n按要求,`verify.cjs` 未做改动。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 5448,
+        "estimated": false,
+        "inputTokens": 5253,
+        "outputTokens": 195
+      },
+      "durationMs": 7953
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 305,
+        "afterChars": 305,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9fbc47e2c3d823e1",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-bb87c6c6905fbe73",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a85b45f27d0cda2a",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a16a4d273233566f",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-92267b7b4355ae3b",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "完成迁移：\n\n- settings.json 的 schema 为 1，已迁移到 2：\n  - `retries: 0` → `retryCount: 0`（保留数值，删除旧字段）\n  - `timeout: null` → 从 defaults.json 复制为 `45`\n  - `labels` 顺序（`[\"中文\",\"🙂\"]`）、`enabled: false`、`empty: \"\"` 均保留，未新增字段\n- defaults.json 与 verify.cjs 未修改\n- 验证：`node verify.cjs` 输出 `fixture checks passed`（exit 0）",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 9776,
+        "estimated": false,
+        "inputTokens": 9297,
+        "outputTokens": 479
+      },
+      "durationMs": 13741
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 176,
+        "afterChars": 739,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 454,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 454,
+          "inputTokens": 312,
+          "outputTokens": 142
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-833fa59c30f83fb6",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b057bf28be3d1123",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9d06a1834f4e5f8b",
+          "name": "write",
+          "arguments": "{\"path\": \"input.txt\", \"content\": \"after\\n\", \"expectedHash\": \"9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9817be52cbd7c1f8",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "任务已完成：\n\n1. **读取** `README.md` 和 `input.txt`：input.txt 内容为 `before`。\n2. **替换**：将 input.txt 中的 `before` 精确替换为 `after`。\n3. **验证**：执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0，验证通过。\n4. 未修改 `verify.cjs` 和 `untouched.txt`。\n\n验证通过，任务成功完成。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 9949,
+        "estimated": false,
+        "inputTokens": 9436,
+        "outputTokens": 513
+      },
+      "durationMs": 12638
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 172,
+        "afterChars": 518,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 486,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 486,
+          "inputTokens": 318,
+          "outputTokens": 168
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-a7ee76b630c0dbee",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a39130bd0f7c8690",
+          "name": "read",
+          "arguments": "{\"path\": \"icy-output:a26683c6-f5b5-4dd4-b74c-df7b1b74bda7.txt\", \"offset\": 1, \"limit\": 6000}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8c68ea3df401bea5",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"\\\"timeout\\\":30\", \"newText\": \"\\\"timeout\\\":45\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9adbbb53974cdd89",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成。\n\n- 读取 `config.json`：`cache` 为 `false`，因此将 `timeout` 从 `30` 改为 `45`。\n- 保留其他字段、中文 label 和值类型；未修改 `verify.cjs`。\n\n当前 `config.json` 内容：\n\n```json\n{\"cache\":false,\"timeout\":45,\"label\":\"保持中文\"}\n```\n\n验证结果：通过 `bash` 执行 `node verify.cjs`，实际输出为：\n\n```text\nfixture checks passed\n\nExit code: 0\n```\n\n即验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 9790,
+        "estimated": false,
+        "inputTokens": 9238,
+        "outputTokens": 552
+      },
+      "durationMs": 13869
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 171,
+        "afterChars": 374,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": true,
+        "semantic": "invalid",
+        "preprocessingTokens": 446,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 446,
+          "inputTokens": 315,
+          "outputTokens": 131
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-908b5d0c03579b96",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9a1bd7e2cb7495f1",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-81628ed1deaedd60",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a956ec1ad53101ab",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"message: hello\", \"newText\": \"message: 你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9ce2b8f2ee6e4432",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 60000}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ac350fc27a6fb462",
+          "name": "bash",
+          "arguments": "{\"command\": \"rg -n \\\"hello\\\" greeting.txt guide.txt; cat -A keep.txt; echo; echo \\\"---\\\"; cat greeting.txt; echo \\\"---\\\"; cat guide.txt\", \"cwd\": \".\", \"timeoutMs\": 60000}",
+          "index": 5,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-9dbe58ea4bb13e22",
+          "name": "bash",
+          "arguments": "{\"command\": \"grep -n \\\"hello\\\" greeting.txt guide.txt; echo \\\"---\\\"; cat -A keep.txt; echo \\\"---\\\"; cat greeting.txt; echo \\\"---\\\"; cat guide.txt\", \"cwd\": \".\", \"timeoutMs\": 60000}",
+          "index": 6,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-81d2d68f1162579d",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 10}",
+          "index": 7,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a54bc8b4b62456d6",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 10}",
+          "index": 8,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-abad24ecdaa33060",
+          "name": "read",
+          "arguments": "{\"path\": \"keep.txt\", \"offset\": 1, \"limit\": 10}",
+          "index": 9,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成。\n\n**修改文件：**\n- `greeting.txt`：`hello` → `你好`\n- `guide.txt`：`message: hello` → `message: 你好`\n\n**未修改：**\n- `keep.txt`：内容仍为 `untouched`，原有换行保留\n- `verify.cjs`：未做改动\n\n**测试结果：**\n- `node verify.cjs` 执行成功，输出 `fixture checks passed`，退出码 `0`",
+      "approvedChecks": 1,
+      "deniedRequests": 2,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        },
+        {
+          "command": "rg -n \"hello\" greeting.txt guide.txt; cat -A keep.txt; echo; echo \"---\"; cat greeting.txt; echo \"---\"; cat guide.txt",
+          "granted": false
+        },
+        {
+          "command": "grep -n \"hello\" greeting.txt guide.txt; echo \"---\"; cat -A keep.txt; echo \"---\"; cat greeting.txt; echo \"---\"; cat guide.txt",
+          "granted": false
+        }
+      ],
+      "turns": 7,
+      "toolCalls": 10,
+      "usage": {
+        "tokens": 18421,
+        "estimated": false,
+        "inputTokens": 17591,
+        "outputTokens": 830
+      },
+      "durationMs": 23085
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 160,
+        "afterChars": 483,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 459,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 459,
+          "inputTokens": 312,
+          "outputTokens": 147
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-b4709f9754e19180",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 2000}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a3879bd968c1436a",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 30000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n**实际分支：`cache` 为 `true`** —— 保持整个文件字节不变，未对 `config.json` 做任何修改（也未动 `verify.cjs`）。\n\n**验证结果：**\n```\n$ node verify.cjs\nfixture checks passed\n（退出码 0）\n```\n\n`config.json` 当前内容保持原样：\n```\n{ \"cache\": true, \"timeout\": 30, \"label\": \"保留 空格🙂\" }\n```\n文件字节未变，verify.cjs 未修改，校验通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 6513,
+        "estimated": false,
+        "inputTokens": 6131,
+        "outputTokens": 382
+      },
+      "durationMs": 10082
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 305,
+        "afterChars": 935,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 668,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 668,
+          "inputTokens": 361,
+          "outputTokens": 307
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-ac129829486370f4",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b5029b5dd51be030",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-bfcbcf7e9a580466",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9ce392159fe2fcbe",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9f6d0066fca8179b",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "Done. `settings.json` was at schema 1, so I migrated it to schema 2:\n\n- `retries: 0` → `retryCount: 0` (renamed, value preserved, old field removed)\n- `timeout: null` → `45` (copied from `defaults.json`)\n- `labels` order, `enabled: false`, `empty: \"\"` preserved unchanged; no fields added.\n\n`defaults.json` and `verify.cjs` were left untouched. `node verify.cjs` passed with \"fixture checks passed\".",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 12180,
+        "estimated": false,
+        "inputTokens": 11364,
+        "outputTokens": 816
+      },
+      "durationMs": 20465
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 176,
+        "afterChars": 176,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-91ebc5faa74792ca",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-836f5c03d86fd6d3",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a648d6276512b7c8",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-aab10a8f90808c60",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a2a5926d0d238aa1",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成 ✅\n\n**执行步骤：**\n1. **读取 README.md**：说明任务文件是 `input.txt`，需保留 sentinel。\n2. **读取 input.txt**：内容为 `before`（SHA256: `9160d4be...`）。\n3. **替换**：将 `before` 精确替换为 `after`（新 SHA256: `7b9a7246...`）。\n4. **验证**：执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0。\n\n**约束遵守：**\n- 未修改 `verify.cjs`（保持原始内容）\n- 未修改 `untouched.txt`\n\n验证通过，任务成功完成。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 11008,
+        "estimated": false,
+        "inputTokens": 10582,
+        "outputTokens": 426
+      },
+      "durationMs": 12200
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 172,
+        "afterChars": 172,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9d2392fbf3b6ca8a",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 100}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8dad3fc3ade74a78",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 100}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9fa4daf06e1eb617",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"\\\"timeout\\\":30\", \"newText\": \"\\\"timeout\\\":45\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-82a84d09b9ed2a54",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成。\n\n- **读取 config.json**：`cache` 为 `false`，因此按要求将 `timeout` 从 `30` 改为 `45`。\n- **修改**：仅 `timeout` 字段变化，`cache`、`label`（中文\"保持中文\"）及其他字段和值类型均保留，格式未变。\n- **verify.cjs**：未改动。\n- **验证**：`node verify.cjs` 退出码 0，输出 `fixture checks passed`，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 8649,
+        "estimated": false,
+        "inputTokens": 8311,
+        "outputTokens": 338
+      },
+      "durationMs": 9596
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 171,
+        "afterChars": 171,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-85dcf0e11938a105",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-99ac94cfa2d27341",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-bd0f55821aefb079",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-88a1ed3b4f6fb19c",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b4451eb0220a2e74",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 修改了 `greeting.txt`：`hello` → `你好`\n- 修改了 `guide.txt`：`message: hello` → `message: 你好`\n- 未修改 `keep.txt` 和 `verify.cjs`\n- 运行 `node verify.cjs`，测试通过（输出 `fixture checks passed`，退出码 0）",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 8541,
+        "estimated": false,
+        "inputTokens": 8196,
+        "outputTokens": 345
+      },
+      "durationMs": 11631
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 160,
+        "afterChars": 160,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-8491c77b568fcc1e",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-90cbc5db2b1993fc",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n- **读取 config.json**：`{ \"cache\": true, \"timeout\": 30, \"label\": \"保留 空格🙂\" }`\n- **实际分支**：`cache` 为 **true** → 保持整个文件字节不变，未做任何修改（未改 timeout，未重写/重格式化）。\n- **verify.cjs**：未修改。\n- **运行 `node verify.cjs`**：输出 `fixture checks passed`，退出码 0，通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 5470,
+        "estimated": false,
+        "inputTokens": 5251,
+        "outputTokens": 219
+      },
+      "durationMs": 6490
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "off",
+      "preprocessing": {
+        "mode": "off",
+        "beforeChars": 305,
+        "afterChars": 305,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-ba54df57458942bb",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b08c469d046d768e",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-aa0ef5e4d817a1e7",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b139bb258e0e0055",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-af9ec96311b0ca8d",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "迁移完成并验证通过。\n\n**变更（settings.json）**：\n- `schema`: `1` → `2`\n- `retries` → `retryCount`，值保留为 `0`\n- `timeout`: `null` → `45`（从 defaults.json 复制）\n- 未改动：`labels` 顺序 `[\"中文\",\"🙂\"]`、`enabled: false`、`empty: \"\"`，未新增字段\n\n**验证**：`node verify.cjs` 输出 `fixture checks passed`（exit 0）。defaults.json 与 verify.cjs 均未修改。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 9815,
+        "estimated": false,
+        "inputTokens": 9328,
+        "outputTokens": 487
+      },
+      "durationMs": 12050
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 176,
+        "afterChars": 176,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-b2442fb88194c56c",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b5cbc6cb8212516d",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b60e1412d717514c",
+          "name": "bash",
+          "arguments": "{\"command\": \"ls -la; echo ---; cat verify.cjs; echo ---; cat untouched.txt\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 2,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-91cce4e300281487",
+          "name": "bash",
+          "arguments": "{\"command\": \"ls -la\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 3,
+          "ok": false,
+          "error": "tool_error"
+        },
+        {
+          "id": "chatcmpl-tool-81f4fc083151105a",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b061b691113c9bd7",
+          "name": "read",
+          "arguments": "{\"path\": \"untouched.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 5,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a72c7881a36dd3e6",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 6,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a3ec147510af5605",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 7,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取了 `README.md` 和 `input.txt`\n- 将 `input.txt` 中的 `before` 精确替换为 `after`\n- 运行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0\n- 未修改 `verify.cjs` 和 `untouched.txt`\n\n任务验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 2,
+      "approvals": [
+        {
+          "command": "ls -la; echo ---; cat verify.cjs; echo ---; cat untouched.txt",
+          "granted": false
+        },
+        {
+          "command": "ls -la",
+          "granted": false
+        },
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 6,
+      "toolCalls": 8,
+      "usage": {
+        "tokens": 14159,
+        "estimated": false,
+        "inputTokens": 13633,
+        "outputTokens": 526
+      },
+      "durationMs": 15641
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 172,
+        "afterChars": 172,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-a247a796004ba0b5",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8b6b113f28cd0b03",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a803e951887031e1",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"\\\"timeout\\\":30\", \"newText\": \"\\\"timeout\\\":45\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-81b59de5e43a3700",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": \".\", \"timeoutMs\": 60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n- `config.json`：`cache` 为 `false`，已将 `timeout` 从 `30` 改为 `45`；`label`（保持中文）和其他字段未动。\n- `verify.cjs`：未修改。\n- 实际验证：运行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 8616,
+        "estimated": false,
+        "inputTokens": 8311,
+        "outputTokens": 305
+      },
+      "durationMs": 10062
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 171,
+        "afterChars": 171,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-81353255ef4e6702",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 50}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-aa28ff0a739cc6a5",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 50}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b7140265de254102",
+          "name": "edit",
+          "arguments": "{\"path\": \"greeting.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ada7c38b41de6c73",
+          "name": "edit",
+          "arguments": "{\"path\": \"guide.txt\", \"oldText\": \"hello\", \"newText\": \"你好\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ab38dd7fe61be757",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": null}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n**修改文件：**\n- `greeting.txt`：`hello` → `你好`\n- `guide.txt`：`message: hello` → `message: 你好`\n\n**未改动：**\n- `keep.txt`（未触碰，内容与换行保持原样）\n- `verify.cjs`（未修改）\n\n**验证结果：** 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0，测试通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 8552,
+        "estimated": false,
+        "inputTokens": 8190,
+        "outputTokens": 362
+      },
+      "durationMs": 9259
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 160,
+        "afterChars": 160,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-a1c2e4dd4883770c",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8d61403b4d2587aa",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "完成。\n\n- **实际分支**：`config.json` 中 `cache` 为 `true`，因此走「保持整个文件字节不变」分支，未做任何修改。\n- **结果**：`node verify.cjs` 输出 `fixture checks passed`，退出码 0。\n\n未改动 `config.json` 或 `verify.cjs`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 5509,
+        "estimated": false,
+        "inputTokens": 5290,
+        "outputTokens": 219
+      },
+      "durationMs": 6515
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "local",
+      "preprocessing": {
+        "mode": "local",
+        "beforeChars": 305,
+        "afterChars": 305,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": false,
+        "fallback": false,
+        "semantic": "off",
+        "preprocessingTokens": 0,
+        "preprocessingEstimated": false
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-913a08a7fdb4d415",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8042739523cf3739",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a3a0d40d6a37f82e",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9e1fe184d61af93c",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成迁移并验证通过。\n\n具体变更（settings.json，schema 1 → 2）：\n- `retries: 0` → 重命名为 `retryCount: 0`（数值保留）\n- `timeout: null` → 从 defaults.json 复制为 `45`\n- 保留 `labels` 数组顺序（`[\"中文\",\"🙂\"]`）、`enabled: false`、`empty: \"\"`\n- 未新增额外字段\n\n运行 `node verify.cjs` 输出：`fixture checks passed`（退出码 0）。defaults.json 与 verify.cjs 未做任何修改。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 8836,
+        "estimated": false,
+        "inputTokens": 8407,
+        "outputTokens": 429
+      },
+      "durationMs": 11407
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 176,
+        "afterChars": 452,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 473,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 473,
+          "inputTokens": 312,
+          "outputTokens": 161
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-8389f84ead238efd",
+          "name": "read",
+          "arguments": "{\"path\": \"README.md\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8eb62fd5844fee9c",
+          "name": "read",
+          "arguments": "{\"path\": \"input.txt\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-83a20099f74f31d2",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b457c4d84a51c4c6",
+          "name": "edit",
+          "arguments": "{\"path\": \"input.txt\", \"oldText\": \"before\", \"newText\": \"after\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-88be6d1c34ef3b4d",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成。\n\n- 已读取 `README.md` 和 `input.txt`。\n- 将 `input.txt` 中的 `before` 精确替换为 `after`（保留哨兵，仅改动一处）。\n- 未修改 `verify.cjs` 和 `untouched.txt`。\n- 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0，验证通过。\n\n验证确实通过，任务已完成。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 5,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 12404,
+        "estimated": false,
+        "inputTokens": 11836,
+        "outputTokens": 568
+      },
+      "durationMs": 16683
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 172,
+        "afterChars": 518,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 471,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 471,
+          "inputTokens": 318,
+          "outputTokens": 153
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-8ecb99e291bfecd8",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-93bfe86e43810f26",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-808442f360fa444c",
+          "name": "edit",
+          "arguments": "{\"path\": \"config.json\", \"oldText\": \"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\", \"newText\": \"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9d8151698193f6a5",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成，验证通过。\n\n- `config.json` 的 `cache` 为 `false`，因此把 `timeout` 从 `30` 改为 `45`\n- 其他字段保留不变：`cache: false`（布尔）、`label: \"保持中文\"`（中文字符串）\n- 未修改 `verify.cjs`\n- 实际验证：`node verify.cjs` 执行成功，退出码 0，输出 `fixture checks passed`",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 10041,
+        "estimated": false,
+        "inputTokens": 9542,
+        "outputTokens": 499
+      },
+      "durationMs": 12899
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 171,
+        "afterChars": 643,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 445,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 445,
+          "inputTokens": 315,
+          "outputTokens": 130
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9edf99b4d33e7128",
+          "name": "read",
+          "arguments": "{\"path\": \"greeting.txt\", \"offset\": 1, \"limit\": 100}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b8a4b966d57b4c6a",
+          "name": "read",
+          "arguments": "{\"path\": \"guide.txt\", \"offset\": 1, \"limit\": 100}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-afc22336d31931b7",
+          "name": "write",
+          "arguments": "{\"path\": \"greeting.txt\", \"content\": \"你好\\n\", \"expectedHash\": \"5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-b6613ed0124dc2e5",
+          "name": "write",
+          "arguments": "{\"path\": \"guide.txt\", \"content\": \"message: 你好\\n\", \"expectedHash\": \"3782b1ba05f329a33120eda0453f68547cf1603b2e4d2ece8572c8e8bcf9dd3d\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-abf5f270b32c4c39",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成。\n\n**修改文件：**\n- `greeting.txt`：`hello` → `你好`\n- `guide.txt`：`message: hello` → `message: 你好`\n\n`keep.txt` 未做改动，`verify.cjs` 未做修改。\n\n**测试结果：**\n使用 bash 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码 0，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 10357,
+        "estimated": false,
+        "inputTokens": 9756,
+        "outputTokens": 601
+      },
+      "durationMs": 16777
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 160,
+        "afterChars": 480,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 456,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 456,
+          "inputTokens": 312,
+          "outputTokens": 144
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9064df8e743e8b39",
+          "name": "read",
+          "arguments": "{\"path\": \"config.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a49e54a866519f4b",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-a8d01fdae61684b9",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 30000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成，实际走的是 **cache = true 分支**：\n\n- `config.json` 当前内容为：\n  ```json\n  { \"cache\": true, \"timeout\": 30, \"label\": \"保留 空格🙂\" }\n  ```\n- 因为 `cache` 是 `true`，按要求**未修改 `config.json`**（整个文件字节保持不变），也没有修改 `verify.cjs`。\n- 最后运行：\n  ```bash\n  node verify.cjs\n  ```\n  结果：\n  ```text\n  fixture checks passed\n  Exit code: 0\n  ```\n\n所以本次没有执行 `timeout -> 45` 的修改；验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 7147,
+        "estimated": false,
+        "inputTokens": 6688,
+        "outputTokens": 459
+      },
+      "durationMs": 11438
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "model",
+      "preprocessing": {
+        "mode": "model",
+        "beforeChars": 305,
+        "afterChars": 935,
+        "savedChars": 0,
+        "compactedToolResults": 0,
+        "inputChanged": true,
+        "fallback": false,
+        "semantic": "applied",
+        "preprocessingTokens": 627,
+        "preprocessingEstimated": false,
+        "semanticModel": "qwen3.8-27b",
+        "preprocessingUsage": {
+          "totalTokens": 627,
+          "inputTokens": 361,
+          "outputTokens": 266
+        }
+      },
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "chatcmpl-tool-9c9448506979c7a3",
+          "name": "read",
+          "arguments": "{\"path\": \"settings.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-8826c2081b1431a4",
+          "name": "read",
+          "arguments": "{\"path\": \"defaults.json\", \"offset\": 1, \"limit\": 200}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-ac6ef6a35140e108",
+          "name": "read",
+          "arguments": "{\"path\": \"verify.cjs\", \"offset\": 1, \"limit\": 200}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-96d7ea70c0b44636",
+          "name": "write",
+          "arguments": "{\"path\": \"settings.json\", \"content\": \"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\", \"expectedHash\": \"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "chatcmpl-tool-9e705a53454a2842",
+          "name": "bash",
+          "arguments": "{\"command\": \"node verify.cjs\", \"cwd\": null, \"timeoutMs\": 60000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "任务完成，验证通过（`fixture checks passed`）。\n\n**变更内容（settings.json，schema 1 → 2）：**\n- `retries`(0) → `retryCount`(0)，保留数值\n- `timeout` 为 null → 从 defaults.json 复制为 `45`\n- 删除旧 `retries` 字段\n- 保留 `labels` 数组顺序（`[\"中文\",\"🙂\"]`）、`enabled: false`、`empty: \"\"`\n- 未新增额外字段\n\ndefaults.json 和 verify.cjs 未修改。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 12289,
+        "estimated": false,
+        "inputTokens": 11461,
+        "outputTokens": 828
+      },
+      "durationMs": 19140
+    }
+  ]
+}

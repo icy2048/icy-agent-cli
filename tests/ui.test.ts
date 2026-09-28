@@ -47,13 +47,13 @@ test('Workbench switches to one column and long approvals require paging through
 test('slash menu filters, selects, completes and dismisses without invoking the model', async () => {
   let modelRuns = 0;
   const agent = { config: { cwd: '/fixture', model: 'menu-model', provider: 'responses', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { modelRuns++; } } as unknown as Agent;
-  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => {} } }));
+  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => ({ ok: true as const, textReply: true as const, toolCalls: true as const }) } }));
   try {
     await tick(); ui.stdin.write('/'); await tick();
     assert.match(ui.lastFrame()!, /❯ \/help/); assert.match(ui.lastFrame()!, /Tab 补全/);
     ui.stdin.write('\x1b[B'); await tick(); assert.match(ui.lastFrame()!, /❯ \/model/);
     ui.stdin.write('\r'); await tick(); assert.match(ui.lastFrame()!, /模型设置/); assert.match(ui.lastFrame()!, /menu-model · responses/); assert.equal(modelRuns, 0);
-    ui.stdin.write('\x1b'); await tick();
+    ui.stdin.write('\x1b'); await tick(); await tick(); await tick();
     ui.stdin.write('/th'); await tick(); assert.match(ui.lastFrame()!, /❯ \/thinking/); assert.doesNotMatch(ui.lastFrame()!, /❯ \/help/);
     ui.stdin.write('\t'); await tick(); assert.match(ui.lastFrame()!, /\/thinking expanded/); assert.match(ui.lastFrame()!, /\/thinking collapsed/);
     ui.stdin.write('\x1b'); await tick(); assert.doesNotMatch(ui.lastFrame()!, /Tab 补全/);
@@ -76,7 +76,7 @@ test('thinking streams separately, collapses without content leakage and persist
   };
   let listener: (event: import('../src/core/types.js').AgentEvent) => void = () => {};
   const agent = { config: { home, cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: (next: typeof listener) => { listener = next; } } as unknown as Agent;
-  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => {} } }));
+  const ui = render(React.createElement(App, { agent, approval: {}, configureServices: { discover: async () => [], list: async () => [], verify: async () => ({ ok: true as const, textReply: true as const, toolCalls: true as const }) } }));
   try {
     await tick(); listener({ type: 'user', text: '用户问题' }); listener({ type: 'turn', turn: 1 }); listener({ type: 'reasoning_delta', text: '可见摘要片段' }); await tick();
     assert.match(ui.lastFrame()!, /▸ 思考/); assert.doesNotMatch(ui.lastFrame()!, /可见摘要片段/);
@@ -122,8 +122,8 @@ test('model wizard imports a service, searches models, tests then applies withou
   let applied = '', verified = false;
   const config = { model: 'old', baseUrl: 'http://localhost', provider: 'responses', apiKey: '' } as import('../src/config/load.js').Config;
   const ui = render(React.createElement(ModelWizard, { config, width: 80, onClose: () => {}, onApply: async p => { assert.equal(verified, true); applied = p.model; }, services: {
-    discover: async () => [{ name: 'Imported', model: 'initial', provider: 'responses', baseUrl: 'https://example.test', apiKey: secret }],
-    list: async () => ['target-model', 'other-model'], verify: async () => { verified = true; },
+    discover: async () => [{ name: 'Imported', model: 'initial', provider: 'responses' as const, baseUrl: 'https://example.test', apiKey: secret }],
+    list: async () => ['target-model', 'other-model'], verify: async () => { verified = true; return { ok: true as const, textReply: true as const, toolCalls: true as const }; },
   } }));
   try {
     await tick(); await tick(); assert.match(ui.lastFrame()!, /Imported/);
@@ -200,7 +200,9 @@ test('Esc after slash clears the input before submit', async () => {
 
 test('running line shows a spinner and elapsed seconds', async () => {
   let finished = false;
-  const agent = { config: { cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { await new Promise(resolve => setTimeout(resolve, 250)); finished = true; } } as unknown as Agent;
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const agent = { config: { cwd: '/fixture', model: 'test', baseUrl: 'http://localhost', permissions: 'workspace-edit' }, store: { data: { id: 'fixture', messages: [] } }, setListener: () => {}, run: async () => { await pending; finished = true; } } as unknown as Agent;
   const ui = render(React.createElement(App, { agent, approval: {} }));
   try {
     await tick(); ui.stdin.write('hello'); await tick(); ui.stdin.write('\r'); await tick();
@@ -208,7 +210,11 @@ test('running line shows a spinner and elapsed seconds', async () => {
     let frame = '', matched = false;
     for (let i = 0; i < 20; i++) { await tick(); frame = ui.lastFrame()!; if (running.test(frame)) { matched = true; break; } }
     assert.ok(matched);
-    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(finished, false);
+    // Hold the run open until the UI has observed it, independent of machine load.
+    for (let i = 0; i < 100 && !/[1-9]\d*s · Esc 取消/.test(ui.lastFrame()!); i++) await tick();
+    assert.match(ui.lastFrame()!, /[1-9]\d*s · Esc 取消/);
+    finish(); await tick();
     assert.equal(finished, true);
-  } finally { ui.unmount(); ui.cleanup(); }
+  } finally { finish(); ui.unmount(); ui.cleanup(); }
 });

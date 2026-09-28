@@ -1,0 +1,372 @@
+{
+  "kind": "independent-final-reply-review",
+  "complete": true,
+  "sourceReport": "repeated-tasks-audited.json",
+  "sourceCommit": "a477d8a46fe9a58d5b8fd9e2742b4542bbb07a43",
+  "criteriaVersion": 2,
+  "reviewMethod": "Codex read each final reply against the exact fixture instructions, successful tool trace, expected output and protected-file assertions. This is explicit semantic review, not keyword scoring. Hashes bind each reviewed result to the raw report; the raw results remain unchanged.",
+  "reviewedAt": "2026-09-27T17:28:32.332856+00:00",
+  "results": [
+    {
+      "key": "1/off/ordered-edit",
+      "rawResultSha256": "4914571792320455009307fd6d01c756e958177c37de9e971d2c52b7171fa419",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/conditional-exception",
+      "rawResultSha256": "997597b46c74c820d10b1415f9c42d9159ed8a743a1c7c4fa637099d6fea660a",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/cross-file",
+      "rawResultSha256": "9c6a81ad13afac2e70c3df7af7c23afd081cb8596172008c274ad7c018010a28",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/off/conditional-no-change",
+      "rawResultSha256": "fe202f99bf17d7d68873beddc9b41f69143e4eff9af7ce17843013383ccced64",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "Request timeout left no final reply. Keep the attempt failed; correct output or an earlier successful check does not supply the missing reply.",
+      "combinedPassed": false
+    },
+    {
+      "key": "1/off/structured-migration",
+      "rawResultSha256": "f8055a3016d4574c18a4c5cea4d7eee1ddf6e0679f836ff99394327ef274d6af",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "Request timeout left no final reply. Keep the attempt failed; correct output or an earlier successful check does not supply the missing reply.",
+      "combinedPassed": false
+    },
+    {
+      "key": "1/local/ordered-edit",
+      "rawResultSha256": "c141dab94c06eb3ceeaf848e7d49d689e776b0ce430ec1e204827f641b14ed96",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/conditional-exception",
+      "rawResultSha256": "551e96cb568c369a452f3070d070456ad26dc35ac067f7c376cd11b05ba00af3",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/cross-file",
+      "rawResultSha256": "a983bcc3affd039ce852451cd596002534dc181594780b7b3c6ca0a27320ff29",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "Request timeout left no final reply. Keep the attempt failed; correct output or an earlier successful check does not supply the missing reply.",
+      "combinedPassed": false
+    },
+    {
+      "key": "1/local/conditional-no-change",
+      "rawResultSha256": "a130341e5131e671c863b478aba01f7ff5cbbb0b7e4d9bf17fcf190aa089034f",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/local/structured-migration",
+      "rawResultSha256": "6cbcff02c4daad50ba124fdc4af84d42c287df7a5f14bdecb9881de118528bc8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately describes schema/retry/timeout changes and preserved values, with successful verification.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/ordered-edit",
+      "rawResultSha256": "ee733c6e3d32416085510d4ddcad3e94e8a699d5a18c9622064ecec2393c4ba7",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/conditional-exception",
+      "rawResultSha256": "5fd39a158dca673680a87eb95274b030b0ca43d3dd211c0c7574dd3a5f84e939",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/cross-file",
+      "rawResultSha256": "b9f6b6981894dd9545ff503b431fbbea1187340f73423eb1a9d5a349de82884d",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/conditional-no-change",
+      "rawResultSha256": "8d4c00e1020cd4ec26909197f27ae6ed701ebd2f3e3e587dd3f8529312633f36",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "1/model/structured-migration",
+      "rawResultSha256": "347ccaf6e59df9fe6c39a91bda818d7a47bd39cfbc51c00e9cd6a9054af707c8",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "Request timeout left no final reply or successful verification. The attempt remains failed despite correct file output.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/off/ordered-edit",
+      "rawResultSha256": "7f43a483c6035e9568595f18fa98df8fc95de36454720baf7a783718cc390ce4",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/conditional-exception",
+      "rawResultSha256": "c465a27c69533942771d41d69e5901c7c28566a2893783d8202e258db5117db8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/cross-file",
+      "rawResultSha256": "e8785d7c01c68ae3bb687154ad826b7374de273efe3d1514577e50b3177faae8",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/conditional-no-change",
+      "rawResultSha256": "b09a257fef3bbb01aaa453876f2896cba331f68fb6c5d92e3d24a63c79e59b9f",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/off/structured-migration",
+      "rawResultSha256": "c7eb626a6cee7e843c9b84b975b19cd8bf91ebad63d53fa1f26db47221f078de",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: model_request_timeout: 30000ms. Unmet execution requirements: successful_verification_after_changes, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/local/ordered-edit",
+      "rawResultSha256": "dde7e7c295c308a0c4091023eca7f3ef2b8a308717ee35d1c25f7e8423324aba",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply accurately reports before→after and successful verification; the required reads precede the edit and final check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/conditional-exception",
+      "rawResultSha256": "bbf7dea9f062dca2b5f3ea7fa64518bd48a94a04f6ac39eaa1ba40ca6dfbf5cf",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply reports cache=false, numeric timeout 30→45, preserved fields and the actual successful check.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/cross-file",
+      "rawResultSha256": "8f6b6b0578a365386b55490e1cb033840de046d4d4ada1dd3ffc2164654b44d3",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply names both changed files and successful verification; recorded edits preserve the newline and protected files.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/conditional-no-change",
+      "rawResultSha256": "1c394e6efd06cd595db0d65e99823e64edea54837132450f995b06bc2858e573",
+      "replyReview": "satisfied",
+      "replyClaimsSupported": true,
+      "note": "Final reply identifies cache=true, unchanged bytes and successful verification; the trace contains no mutation.",
+      "combinedPassed": true
+    },
+    {
+      "key": "2/local/structured-migration",
+      "rawResultSha256": "37564af1f9d13286cc0e7981f37ee7557029efe9fbdfb305174c47df61ee7037",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/model/ordered-edit",
+      "rawResultSha256": "83a13bced78c33ed8face1fd4910a082706c1acac1a883b55e920b6df97bea2a",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:README.md, read_before_changes:input.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/model/conditional-exception",
+      "rawResultSha256": "ece70c3a2382278da00ce60150bd9b3599a586eedfdff09f1046018c96e3f78b",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/model/cross-file",
+      "rawResultSha256": "af634fae0651364eae0b140337a62d2b47b7ae0970edb6db4a2f917049d78ac1",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:greeting.txt, read_before_changes:guide.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/model/conditional-no-change",
+      "rawResultSha256": "53e6daab0dce7bce1fb4404838c13e79350f86e05456396ef510392fb58a57c1",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "2/model/structured-migration",
+      "rawResultSha256": "c6ca2d8d9eedf25cef6ac6b9cfda67164e7e2da0fbaf45b7eb5144c1884b5427",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:settings.json, read_before_changes:defaults.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/off/ordered-edit",
+      "rawResultSha256": "7f9b16e709b003f2b280d73b8090a6afe4211bcf06c068b9751677d60b0b9468",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:README.md, read_before_changes:input.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/off/conditional-exception",
+      "rawResultSha256": "db98a6cf083598384c78909e2a9227660c6fedc7d1fc9628068e258aab8f40d6",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/off/cross-file",
+      "rawResultSha256": "0902591a1d4a2a2978083d4d6f37cb84e676afa9b221bfaec3b155575ea9520c",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:greeting.txt, read_before_changes:guide.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/off/conditional-no-change",
+      "rawResultSha256": "8028d3999763169aaed9067f73079ccbd88315f82b4f0fc502827d81fc523643",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/off/structured-migration",
+      "rawResultSha256": "2195546aa109ab1a8894ffb9bb5485bcc5e3cc6af839675cfc500d1fd74efb6c",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:settings.json, read_before_changes:defaults.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/local/ordered-edit",
+      "rawResultSha256": "8d63a4e77aa361c7e41d5a21034547c1d046e08889378804655cc3b8b7264827",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:README.md, read_before_changes:input.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/local/conditional-exception",
+      "rawResultSha256": "8d1761a11c6ed9c0c8ff4e0627f64c8646b9e14ececae5c536ce15e37e7d07de",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/local/cross-file",
+      "rawResultSha256": "f0124beff81395408c7bde3e0d6dfa38deee68e69be1929541ee48971033e3fb",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:greeting.txt, read_before_changes:guide.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/local/conditional-no-change",
+      "rawResultSha256": "200c51cef4545a4181a91d97707a833c05219b010ee47049bf4ab4fe1781724f",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/local/structured-migration",
+      "rawResultSha256": "8e7916aff5ddeb397e5452e691ad61f0227d49c68dc4fb28a0ae1218c0042d22",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:settings.json, read_before_changes:defaults.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/model/ordered-edit",
+      "rawResultSha256": "ebcb588420425f9b703d4c7dfc4dcb890f5d0c13591f7eaddbac4f7e34f7d75f",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:README.md, read_before_changes:input.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/model/conditional-exception",
+      "rawResultSha256": "8784430358a23c620c088ff974df0531847ee867b3726e84431ff5fc8a9cbce5",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/model/cross-file",
+      "rawResultSha256": "bfd6ff6fe2b7973ef1a5be8a437da9b7041c503959461b762e62509fe3eef306",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:greeting.txt, read_before_changes:guide.txt, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/model/conditional-no-change",
+      "rawResultSha256": "bb9dd3193f4d5efda4a4fd47b99cabb085653d0953c74af08220e79c98a77dec",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:config.json, successful_verification_after_changes, run_completed.",
+      "combinedPassed": false
+    },
+    {
+      "key": "3/model/structured-migration",
+      "rawResultSha256": "41eafb2c8e3ac0dbe0a8a1f93b298de465286cd8c0b73daba781dbe4a6ab3583",
+      "replyReview": "unavailable",
+      "replyClaimsSupported": null,
+      "note": "No final reply was returned; the attempt remains failed. Recorded stop reason: 403 insufficient balance. Unmet execution requirements: read_before_changes:settings.json, read_before_changes:defaults.json, successful_verification_after_changes, expected_output, run_completed.",
+      "combinedPassed": false
+    }
+  ],
+  "sourceReportSha256": "e9f204b238eb8a519dd96b28c1d37f8114531ef95f1b11f53f98337a19957035"
+}

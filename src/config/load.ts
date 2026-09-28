@@ -3,10 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
+import { canonicalPath } from '../tools/paths.js';
 
 const schema = z.object({
   provider: z.enum(['chat-completions', 'responses']).default('chat-completions'),
   baseUrl: z.string().url().default('https://api.openai.com/v1'),
+  allowPrivateHttp: z.boolean().optional(),
   model: z.string().default(''),
   apiKeyEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/).default('ICY_API_KEY'),
   apiKeyFile: z.string().optional(),
@@ -28,12 +30,12 @@ async function readJson(file: string): Promise<Record<string, unknown>> {
   try { return JSON.parse(await readFile(file, 'utf8')); }
   catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return {}; throw new Error(`无法读取配置 ${file}: ${e instanceof Error ? e.message : e}`); }
 }
-export async function loadConfig(cwd: string, overrides: Record<string, unknown> = {}): Promise<Config> {
+export async function loadConfig(cwd: string, overrides: Record<string, unknown> = {}, platform = process.platform): Promise<Config> {
   const home = path.resolve(process.env.ICY_HOME || path.join(homedir(), '.icy'));
   const user = await readJson(path.join(home, 'config.json'));
   const ui = await readJson(path.join(home, 'ui.json'));
   const project = await readJson(path.join(cwd, '.icy/config.json'));
-  const defaults = schema.parse(user);
+  const defaults = schema.parse({ promptCompaction: 'local', ...user });
   const safeProject: Record<string, unknown> = {};
   if (typeof project.model === 'string') safeProject.model = project.model;
   for (const key of ['maxModelTurns', 'maxToolCalls', 'maxTokens', 'maxContextChars'] as const) {
@@ -41,7 +43,7 @@ export async function loadConfig(cwd: string, overrides: Record<string, unknown>
   }
   const env = Object.fromEntries(Object.entries({ model: process.env.ICY_MODEL, baseUrl: process.env.ICY_BASE_URL, provider: process.env.ICY_PROVIDER }).filter(([, v]) => v !== undefined));
   const config = schema.parse({ ...defaults, ...(typeof ui.thinkingExpanded === 'boolean' ? { thinkingExpanded: ui.thinkingExpanded } : {}), ...safeProject, ...env, ...overrides });
-  validateBaseUrl(config.baseUrl);
+  validateBaseUrl(config.baseUrl, config.allowPrivateHttp);
   let apiKey = process.env[config.apiKeyEnv] || '';
   if (!apiKey && config.apiKeyFile) {
     const keyFile = path.resolve(home, config.apiKeyFile);
@@ -49,12 +51,16 @@ export async function loadConfig(cwd: string, overrides: Record<string, unknown>
     if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('私有密钥文件必须位于 ICY_HOME 内。');
     apiKey = (await readFile(keyFile, 'utf8')).trim();
   }
-  return { ...config, baseUrl: config.baseUrl.replace(/\/$/, ''), home, cwd: path.resolve(cwd), apiKey };
+  return { ...config, baseUrl: config.baseUrl.replace(/\/$/, ''), home, cwd: canonicalPath(path.resolve(cwd), platform), apiKey };
 }
-export function validateBaseUrl(value: string): string {
+export function validateBaseUrl(value: string, allowPrivateHttp = false): string {
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash) throw new Error('API 地址不能包含凭据、查询参数或 fragment。');
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) throw new Error('远程 API 必须使用 HTTPS；本机服务可用 HTTP。');
+  const parts = url.hostname.split('.').map(Number);
+  const privateV4 = parts.length === 4 && parts.every(n => Number.isInteger(n) && n >= 0 && n <= 255)
+    && (parts[0] === 10 || (parts[0] === 172 && parts[1]! >= 16 && parts[1]! <= 31) || (parts[0] === 192 && parts[1] === 168));
+  const httpAllowed = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || (allowPrivateHttp && privateV4);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && httpAllowed)) throw new Error('远程 API 必须使用 HTTPS；本机服务可用 HTTP，私有 IPv4 服务需在用户配置启用 allowPrivateHttp。');
   return url.href.replace(/\/$/, '');
 }
 export async function saveThinkingPreference(home: string, thinkingExpanded: boolean): Promise<void> {
@@ -68,6 +74,6 @@ export async function saveThinkingPreference(home: string, thinkingExpanded: boo
 export async function initConfig(home: string): Promise<string> {
   await mkdir(home, { recursive: true, mode: 0o700 });
   const file = path.join(home, 'config.json');
-  await writeFile(file, JSON.stringify({ provider: 'chat-completions', baseUrl: 'https://api.openai.com/v1', model: '', apiKeyEnv: 'ICY_API_KEY', permissions: 'workspace-edit', maxModelTurns: 20, maxToolCalls: 50 }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+  await writeFile(file, JSON.stringify({ provider: 'chat-completions', baseUrl: 'https://api.openai.com/v1', model: '', apiKeyEnv: 'ICY_API_KEY', permissions: 'workspace-edit', promptCompaction: 'local', maxModelTurns: 20, maxToolCalls: 50 }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   return file;
 }

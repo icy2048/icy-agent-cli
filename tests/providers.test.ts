@@ -21,7 +21,7 @@ async function server(events: unknown[]) {
   const baseUrl = `http://127.0.0.1:${(http.address() as {port:number}).port}/v1`;
   return { requests, baseUrl, close: () => new Promise<void>((resolve, reject) => http.close(e => e ? reject(e) : resolve())) };
 }
-const config = (baseUrl: string, provider: 'chat-completions' | 'responses' = 'chat-completions'): Config => ({ baseUrl, provider, model: 'fixture-model', apiKey: 'fixture-key', apiKeyEnv: 'ICY_KEY', home: '/unused', cwd: '/unused', permissions: 'read-only', maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100000, maxContextChars: 100000, requestTimeoutMs: 1000 });
+const config = (baseUrl: string, provider: 'chat-completions' | 'responses' = 'chat-completions'): Config => ({ baseUrl, provider, model: 'fixture-model', apiKey: 'fixture-key', apiKeyEnv: 'ICY_KEY', home: '/unused', cwd: '/unused', permissions: 'read-only', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100000, maxContextChars: 100000, requestTimeoutMs: 1000 });
 function advertisedTools(baseUrl: string) {
   const c = { ...config(baseUrl), permissions: 'workspace-edit' as const };
   const store = new SessionStore(c.home, { version: 1, id: 'fixture', cwd: c.cwd, provider: c.provider, model: c.model, baseUrl, messages: [], updatedAt: '' });
@@ -63,6 +63,28 @@ test('Responses preserves opaque reasoning items and function call IDs on the ne
     assert.deepEqual((s.requests[1].input as unknown[])[1], output[0]);
     assert.equal((s.requests[1].input as {call_id?:string}[]).at(-1)!.call_id, 'call_1');
   } finally { await s.close(); }
+});
+
+test('Responses rejects missing terminal output with a useful upstream or protocol error', async () => {
+  for (const item of [
+    { event: { type: 'response.failed', response: { status: 'failed', error: { message: 'upstream overloaded' } } }, expected: /invalid_response: upstream overloaded/ },
+    { event: { type: 'response.completed', response: { status: 'completed' } }, expected: /invalid_response:.*output/ },
+    { event: { type: 'response.completed' }, expected: /invalid_response:.*output/ },
+  ]) {
+    const s = await server([item.event]);
+    try { await assert.rejects(new ModelProvider(config(s.baseUrl, 'responses')).complete([], [], new AbortController().signal, () => {}), item.expected); }
+    finally { await s.close(); }
+  }
+});
+
+test('Responses failed or incomplete terminal events cannot be upgraded by a conflicting completed status', async () => {
+  for (const type of ['response.failed', 'response.incomplete']) {
+    const s = await server([{ type, response: { status: 'completed', output: [{ type: 'function_call', call_id: 'unsafe', name: 'write', arguments: '{"path":"never.txt","content":"unsafe","expectedHash":null}' }] } }]);
+    try {
+      const result = await new ModelProvider(config(s.baseUrl, 'responses')).complete([], [], new AbortController().signal, () => {});
+      assert.equal(result.incomplete, type, 'the runtime must reject this completion before any tools execute');
+    } finally { await s.close(); }
+  }
 });
 
 test('Responses streams visible summaries separately and falls back to completed summary', async () => {
@@ -108,7 +130,9 @@ test('preprocessor can override agent instructions and cap output in both protoc
       const body = s.requests[0];
       if (protocol === 'responses') { assert.equal(body.instructions, 'Compress only.'); assert.equal(body.max_output_tokens, 2048); }
       else { assert.equal((body.messages as {content:string}[])[0].content, 'Compress only.'); assert.equal(body.max_completion_tokens, 2048); }
-      assert.deepEqual(body.tools, []); assert.doesNotMatch(JSON.stringify(body), /local-only metadata/);
+      if (protocol === 'responses') assert.deepEqual(body.tools, []);
+      else assert.equal(Object.hasOwn(body, 'tools'), false, 'vLLM rejects an empty tools array');
+      assert.doesNotMatch(JSON.stringify(body), /local-only metadata/);
     } finally { await s.close(); }
   }
 });

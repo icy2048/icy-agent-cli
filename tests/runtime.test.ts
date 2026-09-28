@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm, symlink, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Config } from '../src/config/load.js';
@@ -10,11 +10,12 @@ import { Agent } from '../src/core/agent.js';
 import type { Approve, Completion, Provider, Message, AgentEvent } from '../src/core/types.js';
 import { runBash } from '../src/tools/bash.js';
 import { reminderMessage } from '../src/core/harness.js';
+import { makeSymlink } from './helpers/fs.js';
 
 async function setup(approve?: Approve, options: Partial<Config> = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-test-'));
   const cwd = path.join(dir, 'workspace'), home = path.join(dir, 'home'); await mkdir(cwd);
-  const config: Config = { home, cwd, provider: 'chat-completions', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: 'test-secret-value', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000, ...options };
+  const config: Config = { home, cwd, provider: 'chat-completions', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: 'test-secret-value', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000, ...options };
   const store = await SessionStore.create(home, { cwd, provider: config.provider, model: config.model, baseUrl: config.baseUrl }, [config.apiKey]);
   const tools = new ToolRegistry(config, store, approve);
   const cleanup = async () => { await store.close(); await rm(dir, { recursive: true, force: true }); };
@@ -106,7 +107,7 @@ test('write conflicts, traversal, symlinks, secrets, and read-only writes are bl
     await writeFile(path.join(s.cwd, 'a.txt'), 'original');
     assert.equal((await s.call('write', { path: 'a.txt', content: 'oops', expectedHash: sha256('old') })).ok, false);
     assert.equal(await readFile(path.join(s.cwd, 'a.txt'), 'utf8'), 'original');
-    await writeFile(path.join(s.dir, 'outside'), 'private'); await symlink(s.dir, path.join(s.cwd, 'link'));
+    await writeFile(path.join(s.dir, 'outside'), 'private'); await makeSymlink(s.dir, path.join(s.cwd, 'link'), 'dir');
     for (const file of ['../outside', 'link/outside', '.env', '.ssh/id_rsa']) {
       assert.equal((await s.call('read', { path: file, offset: null, limit: null })).ok, false, file);
       assert.equal((await s.call('write', { path: file, content: 'oops', expectedHash: null })).ok, false, file);
@@ -209,6 +210,7 @@ test('large output uses read references and can reach the tail of a single long 
     await writeFile(path.join(s.cwd, 'large'), '🙂'.repeat(12_000) + 'TAIL_MARKER');
     const result = await s.call('read', { path: 'large', offset: null, limit: null });
     assert.equal(result.truncated, true); assert.ok(result.content.length < 10000);
+    assert.match(result.content, /TAIL_MARKER/);
     const reference = result.content.match(/path="(icy-output:[a-f0-9-]+\.txt)"/)![1];
     let offset = 1, content = '';
     for (let count = 0; count < 10; count++) {
@@ -222,6 +224,23 @@ test('large output uses read references and can reach the tail of a single long 
     assert.equal((await s.call('read', { path: 'icy-output:../session.json', offset: null, limit: null })).ok, false);
     assert.equal((await s.call('write', { path: reference, content: 'bad', expectedHash: null })).ok, false);
     assert.equal((await s.call('edit', { path: reference, oldText: 'a', newText: 'b' })).ok, false);
+  } finally { await s.cleanup(); }
+});
+
+test('failed long commands expose a middle diagnostic and tail while preserving the full redacted output', async () => {
+  const s = await setup(async () => 'once');
+  try {
+    const output = 'begin\n' + 'ordinary output\n'.repeat(2000) + '\nnot ok 1 - useful failure\nAssertionError: expected true\n' + 'more output\n'.repeat(2000) + s.config.apiKey + '\nfinal summary\n';
+    await writeFile(path.join(s.cwd, 'log.txt'), output);
+    const result = await s.call('bash', { command: 'cat log.txt; exit 1', cwd: null, timeoutMs: 1000 });
+    assert.equal(result.ok, false); assert.equal(result.error, 'command_failed');
+    assert.match(result.content, /useful failure/); assert.match(result.content, /final summary/);
+    assert.match(result.content, /Exit code: 1/); assert.ok(result.content.length < 10000);
+    assert.ok(!result.content.includes(s.config.apiKey));
+    const reference = result.content.match(/path="icy-output:([a-f0-9-]+\.txt)"/)![1];
+    const full = await s.store.readOutput(reference);
+    assert.ok(full.length > 50000); assert.match(full, /useful failure/);
+    assert.ok(!full.includes(s.config.apiKey));
   } finally { await s.cleanup(); }
 });
 

@@ -1,100 +1,265 @@
-import type { AgentEvent, Message, Provider, RunResult, ToolCall } from './types.js';
+import { randomUUID } from 'node:crypto';
+import type { AgentEvent, Provider, RunResult, ToolCall, ToolResult } from './types.js';
 import type { Config } from '../config/load.js';
 import { ToolRegistry } from '../tools/registry.js';
 import { SessionStore } from '../sessions/store.js';
 import { errorText, redact } from './text.js';
-import type { SemanticProviderFactory } from './semantic.js';
+import { PreprocessingInterrupted, type SemanticProviderFactory } from './semantic.js';
 import { preparePrompt, modelMessage, reminderMessage } from './harness.js';
+import { ContextManager } from './context.js';
+import { Budget } from './budget.js';
+import { fingerprintWorkspace } from './workspace-fingerprint.js';
+import { startRun, updateRun, finishRun, isActiveRun, canVerifyTask, markMutation, registerVerification, recordVerification, setRemaining, completeRemaining, type RunProgress, type RunOutcome } from './run-state.js';
 
+const limitedReasons = new Set(['context_limit', 'token_budget', 'budget_exceeded', 'max_tool_calls', 'max_model_turns']);
 export class Agent {
   private busy = false;
+  private executing?: string;
+  private startedCalls = new Set<string>();
+  private endedCalls = new Set<string>();
   constructor(public config: Config, public provider: Provider, public tools: ToolRegistry, public store: SessionStore, private emit: (event: AgentEvent) => void = () => {}, private semanticFactory?: SemanticProviderFactory) {}
   async configure(config: Config, provider: Provider, persist: () => Promise<void>) {
     if (this.busy) throw new Error('请先结束当前任务。');
     this.busy = true;
     try {
       const next = await SessionStore.create(config.home, { cwd: config.cwd, model: config.model, provider: config.provider, baseUrl: config.baseUrl }, [config.apiKey]);
-      try { await persist(); } catch (e) { await next.close(); throw e; }
-      await this.store.close();
+      try { await persist(); await this.store.close(); } catch (e) { await next.close(); throw e; }
       this.tools = this.tools.forSession(config, next);
       this.config = config; this.provider = provider; this.store = next;
     } finally { this.busy = false; }
   }
   async newConversation() { await this.configure(this.config, this.provider, async () => {}); }
+  async resumeSession(id: string): Promise<{ recovered: number }> {
+    if (this.busy) throw new Error('请先结束当前任务。');
+    if (id === this.store.data.id) return { recovered: 0 };
+    this.busy = true;
+    let next: SessionStore | undefined;
+    try {
+      const restored = await SessionStore.resume(this.config.home, id, [this.config.apiKey]); next = restored.store;
+      if (next.data.cwd !== this.config.cwd || next.data.provider !== this.config.provider || next.data.model !== this.config.model || next.data.baseUrl !== this.config.baseUrl) throw new Error('恢复需要相同工作区、provider、model 和 baseUrl；请从对应工作区启动并选择原模型。');
+      await this.store.close();
+      this.store = next; this.tools = this.tools.forSession(this.config, next); next = undefined;
+      return { recovered: restored.recovered };
+    } finally { await next?.close(); this.busy = false; }
+  }
   setListener(emit: (event: AgentEvent) => void) { this.emit = emit; }
   private async event(event: AgentEvent) {
     const safe = JSON.parse(JSON.stringify(event, (_k, v) => typeof v === 'string' ? redact(v, [this.config.apiKey]) : v)) as AgentEvent;
-    this.emit(safe); await this.store.event(safe);
+    await this.store.event(safe); this.emit(safe);
   }
-  async run(input: string, signal: AbortSignal): Promise<RunResult> {
+  private async progress(patch: RunProgress) {
+    updateRun(this.store.data, patch);
+    await this.store.save();
+    await this.event({ type: 'task', task: this.store.data.task, run: this.store.data.runs.at(-1) });
+  }
+  private observeApproval() {
+    this.tools.setApprovalListener(async waiting => {
+      await this.progress({ status: waiting ? 'awaiting_approval' : 'running', checkpoint: waiting ? 'awaiting_approval' : 'approval_resolved' });
+    });
+  }
+  private runBudget() {
+    const { maxModelTurns, maxToolCalls, maxTokens, maxContextChars } = this.config;
+    return { maxModelTurns, maxToolCalls, maxTokens, maxContextChars };
+  }
+  private async executeTool(call: ToolCall, signal: AbortSignal, verification = false): Promise<ToolResult> {
+    const fingerprintOptions = { ignorePaths: [this.store.dir], signal };
+    const before = verification ? await fingerprintWorkspace(this.config.cwd, fingerprintOptions) : undefined;
+    // Invalidate evidence before any possibly mutating operation, including uncertain failures.
+    if (!verification && ['write', 'edit', 'bash'].includes(call.name)) markMutation(this.store.data);
+    this.store.data.running = call.id;
+    await this.progress({ toolCalls: (this.store.data.runs.at(-1)?.toolCalls ?? 0) + 1, checkpoint: `before_tool:${call.id}` });
+    this.startedCalls.add(call.id); await this.event({ type: 'tool_start', call });
+    this.executing = call.id;
+    let result: ToolResult;
+    try { result = await this.tools.execute(call, signal); }
+    catch (error) {
+      if (verification) markMutation(this.store.data);
+      throw error;
+    }
+    this.executing = undefined;
+    this.store.data.messages.push({ role: 'tool', id: call.id, content: JSON.stringify(result) });
+    this.store.data.running = undefined;
+    if (verification) {
+      // Keep a known tool result even when cancellation interrupts the post-check.
+      // A changed or unobservable workspace makes all earlier evidence stale.
+      const after = signal.aborted ? undefined : await fingerprintWorkspace(this.config.cwd, fingerprintOptions).catch(() => undefined);
+      if (before === undefined || after === undefined || before !== after) markMutation(this.store.data);
+    }
+    await this.progress({ checkpoint: `after_tool:${call.id}` });
+    await this.event({ type: 'tool_end', call, result }); this.endedCalls.add(call.id);
+    return result;
+  }
+  private async closePending(pending: ToolCall[], reason: string) {
+    const results = new Map(this.store.data.messages.filter(m => m.role === 'tool').map(m => [m.id, m.content]));
+    const events: AgentEvent[] = [];
+    for (const call of pending) {
+      if (results.has(call.id)) {
+        // Execution may have succeeded before a checkpoint write failed. Preserve
+        // that known result and finish the live event; never relabel it unknown.
+        if (!this.endedCalls.has(call.id)) {
+          if (!this.startedCalls.has(call.id)) events.push({ type: 'tool_start', call });
+          events.push({ type: 'tool_end', call, result: JSON.parse(results.get(call.id)!) as ToolResult });
+        }
+        continue;
+      }
+      const unknown = this.executing === call.id;
+      const result: ToolResult = { ok: false, error: unknown ? 'interrupted_unknown' : 'not_executed', content: unknown ? '执行结果未知。先检查实际状态，不要自动重放有副作用的操作。' : reason };
+      this.store.data.messages.push({ role: 'tool', id: call.id, content: JSON.stringify(result) });
+      if (!this.startedCalls.has(call.id)) events.push({ type: 'tool_start', call });
+      events.push({ type: 'tool_end', call, result });
+    }
+    this.executing = undefined; this.store.data.running = undefined;
+    // Close the entire batch before saving, so a cancellation always preserves valid pairs.
+    await this.store.save();
+    for (const event of events) {
+      await this.event(event);
+      if (event.type === 'tool_end') this.endedCalls.add(event.call.id);
+    }
+  }
+  private async finish(reason: string, ok: boolean, pending: ToolCall[], text?: string): Promise<RunResult> {
+    await this.closePending(pending, reason);
+    const run = this.store.data.runs.at(-1);
+    if (run && isActiveRun(run)) {
+      const status: RunOutcome = ok ? canVerifyTask(this.store.data) ? 'verified' : 'answered' : reason === 'cancelled' ? 'cancelled' : limitedReasons.has(reason) ? 'limited' : 'failed';
+      finishRun(this.store.data, status, reason);
+    }
+    await this.store.save();
+    await this.event({ type: 'task', task: this.store.data.task, run: this.store.data.runs.at(-1) });
+    await this.event({ type: 'done', reason, ok });
+    return { ok, reason, text };
+  }
+  async run(input: string, signal: AbortSignal, options: { resume?: boolean } = {}): Promise<RunResult> {
     if (this.busy) throw new Error('已有任务在运行。');
-    this.busy = true;
-    let count = 0, spent = 0, estimated = false, repeated = 0, previousError = '', pending: ToolCall[] = [];
+    this.busy = true; this.startedCalls.clear(); this.endedCalls.clear();
+    let runStarted = false;
+    let repeated = 0, previousError = '', pending: ToolCall[] = [];
+    let unaccountedInput = 0, partialText = '', partialReasoning = '';
     const history = this.store.data.messages;
-    const finish = async (reason: string, ok: boolean, text?: string): Promise<RunResult> => {
-      // Close the rest of the batch on cancellation or limits so the next user turn has valid call/result pairs.
-      for (const call of pending) history.push({ role: 'tool', id: call.id, content: JSON.stringify({ ok: false, error: 'not_executed', content: reason }) });
-      pending = []; this.store.data.running = undefined;
-      await this.store.save(); await this.event({ type: 'done', reason, ok }); return { ok, reason, text };
+    const budget = new Budget(this.config.maxTokens);
+    const accounting = async () => {
+      const { tokens, estimated, usage } = budget.snapshot();
+      await this.progress({ usage: { tokens, estimated, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cachedInputTokens: usage.cachedInputTokens } });
+      await this.event({ type: 'usage', tokens, estimated, usage });
     };
     try {
-      signal.throwIfAborted(); history.push({ role: 'user', content: redact(input, [this.config.apiKey]) });
-      await this.store.save(); await this.event({ type: 'user', text: input });
+      startRun(this.store.data, redact(input, [this.config.apiKey]), this.runBudget(), options);
+      runStarted = true;
+      this.observeApproval();
+      signal.throwIfAborted();
+      if (!options.resume) {
+        history.push({ role: 'user', content: redact(input, [this.config.apiKey]) });
+        await this.store.save(); await this.event({ type: 'user', text: input });
+      }
+      await this.progress({ checkpoint: options.resume ? 'explicit_continuation' : 'preprocessing' });
       await this.event({ type: 'harness_start' });
       const prepared = await preparePrompt(history, this.config, this.store, signal, this.semanticFactory);
-      const modelHistory = prepared.messages;
-      spent += prepared.stats.preprocessingTokens; estimated ||= prepared.stats.preprocessingEstimated;
-      await this.store.save();
-      await this.event({ type: 'harness_end', stats: prepared.stats });
-      if (spent) await this.event({ type: 'usage', tokens: spent, estimated });
+      const modelHistory = prepared.messages, context = new ContextManager(this.config, this.store);
+      budget.recordPreprocessing(prepared.stats.preprocessingTokens, prepared.stats.preprocessingEstimated, prepared.stats.preprocessingUsage);
+      await this.store.save(); await this.event({ type: 'harness_end', stats: prepared.stats });
+      if (budget.snapshot().tokens) await accounting();
       for (let turn = 1; turn <= this.config.maxModelTurns; turn++) {
         signal.throwIfAborted();
         const reminder = modelHistory.slice(modelHistory.findLastIndex(m => m.role === 'user') + 1).some(m => m.role === 'tool') ? reminderMessage(history) : undefined;
-        const request = reminder ? [...modelHistory, reminder] : modelHistory;
-        if (JSON.stringify(request).length > this.config.maxContextChars) return await finish('context_limit', false);
-        if (spent >= this.config.maxTokens) return await finish('token_budget', false);
+        const taskReminder = options.resume ? { role: 'user' as const, content: `[icy 任务续跑] 用户明确要求继续原任务，本次有新的运行预算。原始目标：\n${this.store.data.task!.goal}\n待办：${JSON.stringify(this.store.data.task!.remaining)}\n沿用已保存的结果，优先处理最近未完成的修改或失败检查；不必重读全部历史引用。未知写操作先读取目标文件核对现状，不能盲目重放。` } : reminder;
+        const definitions = this.tools.definitions();
+        // Sessions retain both normalized calls and protocol opaque data. Count
+        // the actual provider request, where only one representation is sent.
+        const measure = (messages: typeof modelHistory) => this.provider.estimateInputChars?.(messages, definitions) ?? JSON.stringify({ messages, tools: definitions }).length;
+        const built = await context.build(modelHistory, signal, taskReminder, measure), request = built.messages;
+        await this.event({ type: 'context', stats: built.stats });
+        if (built.stats.afterChars > this.config.maxContextChars) return await this.finish('context_limit', false, pending);
+        const stop = budget.stopReason();
+        if (stop) return await this.finish(stop, false, pending);
+        const inputChars = built.stats.afterChars;
+        const requestBudget = budget.requestOptions(inputChars);
+        if (!requestBudget) return await this.finish('token_budget', false, pending);
+        await this.progress({ turns: turn, checkpoint: `before_model:${turn}` });
         await this.event({ type: 'turn', turn, ...(reminder ? { reminderChars: reminder.content.length } : {}) });
-        const completion = await this.provider.complete(request, this.tools.definitions(), signal,
-          text => this.emit({ type: 'delta', text: redact(text, [this.config.apiKey]) }),
-          text => this.emit({ type: 'reasoning_delta', text: redact(text, [this.config.apiKey]) }));
+        unaccountedInput = inputChars; partialText = ''; partialReasoning = '';
+        const completion = await this.provider.complete(request, definitions, signal,
+          text => { partialText += text; this.emit({ type: 'delta', text: redact(text, [this.config.apiKey]) }); },
+          text => { partialReasoning += text; this.emit({ type: 'reasoning_delta', text: redact(text, [this.config.apiKey]) }); }, requestBudget);
+        budget.record(completion, inputChars); unaccountedInput = 0; await accounting();
         await this.event({ type: 'reasoning', text: completion.reasoning || '' });
-        spent += completion.tokens ?? Math.ceil((JSON.stringify(request).length + completion.text.length + JSON.stringify(completion.calls).length) / 2);
-        estimated ||= completion.tokens === undefined;
-        await this.event({ type: 'usage', tokens: spent, estimated });
         signal.throwIfAborted();
-        // A length-limited/failed response is not safe to execute.
-        if (completion.incomplete) return await finish(`incomplete: ${completion.incomplete}`, false);
-        const ids = completion.calls.map(c => c.id);
-        const previous = new Set(history.filter(m => m.role === 'assistant').flatMap(m => m.calls.map(c => c.id)));
-        if (new Set(ids).size !== ids.length || ids.some(id => !id || previous.has(id))) return await finish('invalid_call_ids', false);
+        if (completion.incomplete) return await this.finish(`incomplete: ${completion.incomplete}`, false, pending);
+        const ids = completion.calls.map(c => c.id), previous = new Set(history.filter(m => m.role === 'assistant').flatMap(m => m.calls.map(c => c.id)));
+        if (new Set(ids).size !== ids.length || ids.some(id => !id || previous.has(id))) return await this.finish('invalid_call_ids', false, pending);
         history.push({ role: 'assistant', content: completion.text, calls: completion.calls, opaque: completion.opaque, reasoning: completion.reasoning });
-        modelHistory.push(modelMessage(history.at(-1)!));
-        pending = [...completion.calls]; await this.store.save();
+        modelHistory.push(modelMessage(history.at(-1)!)); pending = [...completion.calls]; await this.store.save();
         if (completion.text) await this.event({ type: 'assistant', text: completion.text });
-        if (!pending.length) return await finish(completion.text ? 'completed' : 'empty_response', Boolean(completion.text), completion.text);
+        if (budget.stopReason() === 'budget_exceeded') return await this.finish('budget_exceeded', false, pending, completion.text);
+        if (!pending.length) return await this.finish(completion.text ? 'completed' : 'empty_response', Boolean(completion.text), pending, completion.text);
         while (pending.length) {
           signal.throwIfAborted();
-          if (count >= this.config.maxToolCalls) return await finish('max_tool_calls', false);
-          if (spent >= this.config.maxTokens) return await finish('token_budget', false);
-          const call = pending[0]; count++;
-          this.store.data.running = call.id; await this.store.save(); await this.event({ type: 'tool_start', call });
-          const result = await this.tools.execute(call, signal);
-          history.push({ role: 'tool', id: call.id, content: JSON.stringify(result) }); pending.shift();
-          modelHistory.push(modelMessage(history.at(-1)!));
-          this.store.data.running = undefined; await this.store.save(); await this.event({ type: 'tool_end', call, result });
+          if ((this.store.data.runs.at(-1)?.toolCalls ?? 0) >= this.config.maxToolCalls) return await this.finish('max_tool_calls', false, pending);
+          const stop = budget.stopReason(); if (stop) return await this.finish(stop, false, pending);
+          const call = pending[0], result = await this.executeTool(call, signal);
+          pending.shift(); modelHistory.push(modelMessage(history.at(-1)!));
           if (!result.ok) {
             const key = call.name + call.arguments + result.error + result.content;
             repeated = key === previousError ? repeated + 1 : 1; previousError = key;
-            if (repeated >= 3) return await finish('repeated_tool_failure', false);
+            if (repeated >= 3) return await this.finish('repeated_tool_failure', false, pending);
           } else { repeated = 0; previousError = ''; }
-          // Noninteractive callers cannot grant permission. Return an actionable exit code, not a misleading success.
-          if (!result.ok && result.content === 'approval_required') return await finish('approval_required', false);
+          if (!result.ok && result.content === 'approval_required') return await this.finish('approval_required', false, pending);
         }
       }
-      return await finish('max_model_turns', false);
-    } catch (e) {
-      return await finish(signal.aborted ? 'cancelled' : redact(errorText(e), [this.config.apiKey]), false);
-    } finally { this.busy = false; }
+      return await this.finish('max_model_turns', false, pending);
+    } catch (error) {
+      if (!runStarted) throw error;
+      if (error instanceof PreprocessingInterrupted) {
+        budget.recordPreprocessing(error.tokens, error.estimated, error.usage);
+        await accounting();
+      }
+      if (unaccountedInput) {
+        budget.record({ text: partialText, reasoning: partialReasoning, calls: [] }, unaccountedInput);
+        await accounting();
+      }
+      return await this.finish(signal.aborted ? 'cancelled' : redact(errorText(error), [this.config.apiKey]), false, pending);
+    } finally { this.tools.setApprovalListener(undefined); this.busy = false; }
   }
-  async clear() { if (this.busy) throw new Error('请先取消任务。'); this.store.data.messages = []; await this.store.save(); }
+  async continue(signal: AbortSignal): Promise<RunResult> {
+    const task = this.store.data.task;
+    if (!task) throw new Error('旧会话没有任务检查点。请先提交目标，或根据历史开始新任务。');
+    return this.run(task.goal, signal, { resume: true });
+  }
+  async verify(command: string, signal: AbortSignal): Promise<RunResult> {
+    if (this.busy) throw new Error('已有任务在运行。');
+    const task = this.store.data.task;
+    if (!task) throw new Error('请先执行一个任务，再指定验收命令。');
+    if (!command.trim()) throw new Error('请提供验收命令：/verify <命令>');
+    this.busy = true; this.startedCalls.clear(); this.endedCalls.clear();
+    const call: ToolCall = { id: randomUUID(), name: 'bash', arguments: JSON.stringify({ command, cwd: null, timeoutMs: null }) };
+    let pending: ToolCall[] = [];
+    let runStarted = false;
+    try {
+      startRun(this.store.data, task.goal, this.runBudget(), { resume: true });
+      runStarted = true;
+      const checkId = task.verificationChecks.find(check => check.command === command && check.cwd === this.config.cwd)?.id ?? registerVerification(this.store.data, { command, cwd: this.config.cwd });
+      this.observeApproval(); signal.throwIfAborted();
+      this.store.data.messages.push({ role: 'user', content: `用户指定验收命令：${command}` }, { role: 'assistant', content: '', calls: [call] }); pending = [call];
+      await this.store.save(); await this.event({ type: 'user', text: `用户指定验收命令：${command}` });
+      const result = await this.executeTool(call, signal, true); pending = [];
+      recordVerification(this.store.data, checkId, { ok: result.ok && !signal.aborted, output: result.content, mutationRevision: task.mutationRevision, toolCallId: call.id });
+      return await this.finish(signal.aborted ? 'cancelled' : result.ok ? 'verification_passed' : result.content === 'approval_required' ? 'approval_required' : 'verification_failed', result.ok && !signal.aborted, pending);
+    } catch (error) {
+      if (!runStarted) throw error;
+      return await this.finish(signal.aborted ? 'cancelled' : redact(errorText(error), [this.config.apiKey]), false, pending);
+    } finally { this.tools.setApprovalListener(undefined); this.busy = false; }
+  }
+  async addTodo(text: string) {
+    if (this.busy) throw new Error('请先结束当前任务。');
+    setRemaining(this.store.data, [...(this.store.data.task?.remaining ?? []), text]);
+    await this.store.save(); await this.event({ type: 'task', task: this.store.data.task, run: this.store.data.runs.at(-1) });
+  }
+  async completeTodo(index: number) {
+    if (this.busy) throw new Error('请先结束当前任务。');
+    completeRemaining(this.store.data, index);
+    await this.store.save(); await this.event({ type: 'task', task: this.store.data.task, run: this.store.data.runs.at(-1) });
+  }
+  async clear() {
+    if (this.busy) throw new Error('请先取消任务。');
+    this.store.data.messages = []; this.store.data.task = undefined; this.store.data.runs = []; this.store.data.running = undefined;
+    await this.store.save();
+  }
 }

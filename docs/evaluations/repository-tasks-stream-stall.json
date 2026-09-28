@@ -1,0 +1,27 @@
+{
+  "complete": false,
+  "sourceSnapshot": "4c7d4a98282caa95ea87d3ca4908cc342d96eff784e74db6c26ade33638ebe6a",
+  "kind": "real-repository-interruption-evaluation",
+  "model": "gpt-5.6-sol",
+  "provider": "responses",
+  "sourceCommit": "0ee6783d091c976a1b75fc278cb9b123581a859f",
+  "reasoningEffort": "low",
+  "goal": "在这个真实 icy-agent-cli 仓库副本中实现会话过滤功能，并补测试和用户文档。\n先读 README.md、src/sessions/list.ts、src/sessions/schema.ts、src/cli.tsx 和相关测试。\n给 listSessions(home, options?) 添加可选 cwd/status 过滤，两个条件要组合：cwd 按解析后的绝对路径相等；status 支持 running/awaiting_approval/cancelled/limited/failed/answered/verified/interrupted/legacy，未知值必须报错。未过滤时仍保留损坏条目的错误摘要；过滤时无法确定是否匹配的损坏条目不返回。不得修改、迁移或锁定被列举会话。\nCLI icy sessions --status answered --cwd <dir> --json 应同时过滤；--status 只能用于 sessions，在其他模式明确报错。未传过滤条件时保持兼容；其他模式 --cwd 的工作区含义保持兼容。\n只允许修改 src/sessions/list.ts、src/cli.tsx、README.md，并新增 tests/session-filters.test.ts；不能改变其他已有文件、已有测试、package.json、锁文件或验收脚本。新测试要覆盖组合过滤、legacy、未知状态、坏快照、无副作用以及 CLI，不可只检查实现字符串。\n你只能执行精确 shell 命令 npm run check、npm test、npm run build（不要拼接其他命令；这些命令会获批）。用 read 阅读文件，用 edit/write 修改。类型检查和完整测试必须实际通过才报告完成；失败后修复再验证。\n这项任务将有受控中断：续跑时先核对已保存结果；结果未知的写操作必须先 read 对应文件核对当前状态，禁止盲目重放。保留原始目标，不要开启新任务。",
+  "editable": [
+    "src/sessions/list.ts",
+    "src/cli.tsx",
+    "README.md",
+    "tests/session-filters.test.ts"
+  ],
+  "repetitions": 2,
+  "results": [
+    {
+      "trial": 1,
+      "ok": false,
+      "complete": false,
+      "phases": []
+    }
+  ],
+  "evaluationStopped": "Streaming model request exceeded the configured 60 second timeout after response headers. Stopped to add an absolute deadline; two HTTP regressions reproduced the missing body timeout.",
+  "stoppedAt": "2026-09-27T16:01:55.478759+00:00"
+}

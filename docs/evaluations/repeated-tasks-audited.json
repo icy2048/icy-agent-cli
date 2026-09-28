@@ -1,0 +1,2142 @@
+{
+  "kind": "live-synthetic-tasks",
+  "sourceCommit": "a477d8a46fe9a58d5b8fd9e2742b4542bbb07a43",
+  "criteriaVersion": 2,
+  "startedAt": "2026-09-27T17:10:41.937Z",
+  "updatedAt": "2026-09-27T17:27:49.101Z",
+  "complete": true,
+  "planned": 45,
+  "model": "gpt-5.6-sol",
+  "provider": "responses",
+  "reasoningEffort": "low",
+  "budget": {
+    "maxTokens": 100000,
+    "maxModelTurns": 20,
+    "maxToolCalls": 50,
+    "maxContextChars": 120000,
+    "requestTimeoutMs": 30000,
+    "runTimeoutMs": 90000
+  },
+  "repetitions": 3,
+  "concurrency": 1,
+  "note": "All attempts are retained; no automatic reruns. Checks cover required reads before changes, mutation scope, final verification, protected files and expected outputs. Final replies are retained for separate requirement review. Finite synthetic samples do not prove general task reliability.",
+  "results": [
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_8TJ13XqlsuSZCUeN7dP9Kqmv",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"README.md\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_0koYW3yk0gExBMnrSKKJ3bP3",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"input.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_jqwX8h7Suy6Pt0LrXDOeKQzZ",
+          "name": "edit",
+          "arguments": "{\"newText\":\"after\",\"oldText\":\"before\",\"path\":\"input.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_IDrRhM7rPW0oHgXav6pp4Zax",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 已读取 `README.md` 和 `input.txt`\n- 已将 `input.txt` 中的 `before` 精确替换为 `after`\n- 未修改 `verify.cjs` 和 `untouched.txt`\n- 已执行 `node verify.cjs`，验证通过（`fixture checks passed`）",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5514,
+        "estimated": false,
+        "inputTokens": 5259,
+        "outputTokens": 255,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 12087
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_R85Kf6cDDMyKdmrMMHkbusuw",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_X3DONeS7VwZma2SCswAgITn0",
+          "name": "edit",
+          "arguments": "{\"newText\":\"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\",\"oldText\":\"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\",\"path\":\"config.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_jWOf5cMGchcWwjeGcxO5iyH8",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取到 `cache` 为布尔值 `false`\n- 将 `config.json` 中的 `timeout` 从数值 `30` 改为数值 `45`\n- 保留了其他字段、`label` 的中文内容及所有值类型\n- 未修改 `verify.cjs`\n\n实际验证结果：\n\n```text\nfixture checks passed\n```\n\n`node verify.cjs` 退出码为 `0`，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 5506,
+        "estimated": false,
+        "inputTokens": 5168,
+        "outputTokens": 338,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 15503
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_bl1tdtn7xebc2wt0brwBIyIr",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"greeting.txt\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_miR34CaeeaWcuHwqQGaVS8m1",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"guide.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_upkAoQUKi1cOUs20hMpoyzou",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"keep.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_UgkTsnHWqytGXkEeFIXhvNtH",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "call_SzcKVf5Up3wHoclCuUMl2Wza",
+          "name": "edit",
+          "arguments": "{\"newText\":\"你好\\n\",\"oldText\":\"hello\\n\",\"path\":\"greeting.txt\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "call_pZ30zw628Hyii9AhDAwm7NZp",
+          "name": "edit",
+          "arguments": "{\"newText\":\"message: 你好\\n\",\"oldText\":\"message: hello\\n\",\"path\":\"guide.txt\"}",
+          "index": 5,
+          "ok": true
+        },
+        {
+          "id": "call_BHO4XQIHmF1svHd1nOzHLfRR",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 6,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成修改：\n\n- `greeting.txt`：将 `hello` 改为 `你好`\n- `guide.txt`：将 `message: hello` 改为 `message: 你好`\n- `keep.txt`：未修改，内容及原有换行均保留\n- `verify.cjs`：未修改\n\n测试结果：已使用 bash 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码为 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7361,
+        "estimated": false,
+        "inputTokens": 6853,
+        "outputTokens": 508,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 31660
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "off",
+      "ok": false,
+      "runReason": "model_request_timeout: 30000ms",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [
+        "run_completed"
+      ],
+      "toolTrace": [
+        {
+          "id": "call_C2UnPc897uXG8Jhj2FDbHT3T",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_PQtUYhhGf4TaSgMkzFmfLelV",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 7398,
+        "estimated": true
+      },
+      "durationMs": 41499
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "off",
+      "ok": false,
+      "runReason": "model_request_timeout: 30000ms",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [
+        {
+          "id": "call_IZM7drVRWA7KRRKjVaZg9F9x",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"settings.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_ndt1GsqMmPL3b4K0tbboELme",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"defaults.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_i7B1QCrpGnY57DV0wvfiz2YQ",
+          "name": "read",
+          "arguments": "{\"limit\":300,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_4a0hRQ0LAmGIGzZzqrpvALwe",
+          "name": "write",
+          "arguments": "{\"content\":\"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\",\"expectedHash\":\"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\",\"path\":\"settings.json\"}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 3,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 9506,
+        "estimated": true
+      },
+      "durationMs": 56107
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_DluiCMBx9UARorazUuGnhohA",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"README.md\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_geD4KfPq3cG8fzCmYWYX2z08",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"input.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_mVxN5lKqrGae0zPkC54xkYD7",
+          "name": "edit",
+          "arguments": "{\"newText\":\"after\",\"oldText\":\"before\",\"path\":\"input.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_TFrYev6AvO3o5jjj9z51UxdI",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成并验证通过：\n\n- 已读取 `README.md` 和 `input.txt`\n- 已将 `input.txt` 中的 `before` 精确替换为 `after`\n- 未修改 `verify.cjs` 和 `untouched.txt`\n- 已执行 `node verify.cjs`\n- 验证结果：`fixture checks passed`，退出码为 `0`",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5732,
+        "estimated": false,
+        "inputTokens": 5397,
+        "outputTokens": 335,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 46249
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_si7nZxvXQzaGcwdmWLp3yyjE",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_J8kjFQYufdBfgB13AceHkkNA",
+          "name": "edit",
+          "arguments": "{\"newText\":\"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\",\"oldText\":\"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\",\"path\":\"config.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_oSBAYy8D3EDG6ul1kWNJECIu",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取 `config.json`，确认 `cache` 为布尔值 `false`\n- 将 `timeout` 从数值 `30` 修改为 `45`\n- 保留其他字段、`label` 的中文内容及所有值类型\n- 未修改 `verify.cjs`\n- 已通过 bash 执行 `node verify.cjs`\n\n实际验证结果：\n\n```text\nfixture checks passed\nExit code: 0\n```",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 5521,
+        "estimated": false,
+        "inputTokens": 5169,
+        "outputTokens": 352,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 13612
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "local",
+      "ok": false,
+      "runReason": "model_request_timeout: 30000ms",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [
+        {
+          "id": "call_GmMXomt5wXAPiy8W2zjCfxN2",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"greeting.txt\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_IdXSqw5qpzC1albNdsRohCOz",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"guide.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_CUXaC5QEcyFKTf0GHpqalwq3",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"keep.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_AkSnNIEkzSH0nRhxGjKqEtl4",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "call_sLCOXTCdXVm8JCsbusYvxqyG",
+          "name": "edit",
+          "arguments": "{\"newText\":\"你好\\n\",\"oldText\":\"hello\\n\",\"path\":\"greeting.txt\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "call_04FEBnkiMNPehWY7aaIaAQRC",
+          "name": "edit",
+          "arguments": "{\"newText\":\"message: 你好\\n\",\"oldText\":\"message: hello\\n\",\"path\":\"guide.txt\"}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 3,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 9389,
+        "estimated": true
+      },
+      "durationMs": 67553
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_F5mICgxrrrYX2QyLpgK9Rwqv",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_XtYnZrCQHfzRxH2fflmqPrma",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已读取 `config.json`：\n\n- `cache` 实际为 `true`\n- 按要求保持整个文件字节不变，未修改 `timeout`\n- 未修改 `verify.cjs`\n\n已运行 `node verify.cjs`，结果：\n\n```text\nfixture checks passed\n```\n\n退出码：`0`",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3693,
+        "estimated": false,
+        "inputTokens": 3493,
+        "outputTokens": 200,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 58226
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_yxxqdLnxGcs265jHjBICn4Uw",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"settings.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_RZCBqsvJ45LKTX489amI3u0E",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"defaults.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_pKqzlgReTfRxd1QiKOsQhbl3",
+          "name": "read",
+          "arguments": "{\"limit\":300,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_WreNETqgQW9sEidSR9Dw0QfH",
+          "name": "write",
+          "arguments": "{\"content\":\"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\",\"expectedHash\":\"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\",\"path\":\"settings.json\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "call_1Y1gtAmoKbGNSpNZwk3oXbBn",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 4,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成迁移：\n\n- `schema`：`1` → `2`\n- `retries`：重命名为 `retryCount`，保留数值 `0`\n- `timeout`：原值为 `null`，已从 `defaults.json` 复制为 `45`\n- 保留了 `labels` 顺序、`enabled: false` 和 `empty: \"\"`\n- 未新增其他字段\n- 未修改 `defaults.json` 和 `verify.cjs`\n\n已运行 `node verify.cjs`，结果：`fixture checks passed`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 5,
+      "usage": {
+        "tokens": 7228,
+        "estimated": false,
+        "inputTokens": 6744,
+        "outputTokens": 484,
+        "cachedInputTokens": 1536
+      },
+      "durationMs": 51197
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 1,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_vCoKbjCM968elNY9JcePD9K5",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"README.md\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_d0v5ufQw9due4w5M7JsbyOYS",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"input.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_U1v81tlVrPz3UvRakYw1OejC",
+          "name": "edit",
+          "arguments": "{\"newText\":\"after\",\"oldText\":\"before\",\"path\":\"input.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_SdPFQ8XtRDuDNP4ejWnONwaE",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "任务已完成：\n\n- 已读取 `README.md` 和 `input.txt`\n- 已将 `input.txt` 中的 `before` 精确替换为 `after`\n- 未修改 `verify.cjs` 和 `untouched.txt`\n- 已执行 `node verify.cjs`\n- 验证通过：`fixture checks passed`（退出码 `0`）",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 6975,
+        "estimated": true
+      },
+      "durationMs": 31347
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 1,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_zCmDUVhuYa78xRuG7wnLrHXS",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_VA13aLLLpOMk2kTAGN9n93Rl",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_xFvIHtafqUZMu07yq6G88K5w",
+          "name": "edit",
+          "arguments": "{\"newText\":\"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\",\"oldText\":\"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\",\"path\":\"config.json\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_TypX6BivdoCv11CpMl7tWJcT",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取到 `config.json` 中 `cache` 为布尔值 `false`\n- 将 `timeout` 从数值 `30` 改为数值 `45`\n- 保留了其他字段、值类型及中文 `label: \"保持中文\"`\n- 未修改 `verify.cjs`\n- 已通过 Bash 执行 `node verify.cjs`\n\n实际验证结果：\n\n```text\nfixture checks passed\nExit code: 0\n```",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 7448,
+        "estimated": true
+      },
+      "durationMs": 38281
+    },
+    {
+      "id": "cross-file",
+      "repetition": 1,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_LcqGXP3CThHQPlELhyw51WBY",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"greeting.txt\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_RQQzH9Q3ILAjjAQnzWrjKg98",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"guide.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_9uMvWkj6xkspXPQpscfNf1ZL",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"keep.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_O3pscuidGqG4rwwz92kGHfNh",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "call_dZAKZLtv52LgLDVKS3re0NsQ",
+          "name": "edit",
+          "arguments": "{\"newText\":\"你好\\n\",\"oldText\":\"hello\\n\",\"path\":\"greeting.txt\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "call_KHjov6wGTcUprgIHpizIBApF",
+          "name": "edit",
+          "arguments": "{\"newText\":\"message: 你好\\n\",\"oldText\":\"message: hello\\n\",\"path\":\"guide.txt\"}",
+          "index": 5,
+          "ok": true
+        },
+        {
+          "id": "call_0Ep41j80ZSdt44X9WIXRC1ny",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 6,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成修改：\n\n- `greeting.txt`：将 `hello` 改为 `你好`\n- `guide.txt`：将 `message: hello` 改为 `message: 你好`\n- `keep.txt`：内容及原有换行均保留\n- `verify.cjs`：未修改\n\n已在两个文件都处理完成后使用 bash 执行 `node verify.cjs`，测试通过：\n\n```text\nfixture checks passed\nExit code: 0\n```",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 8868,
+        "estimated": false,
+        "inputTokens": 8100,
+        "outputTokens": 768,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 76473
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 1,
+      "mode": "model",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_KSqE8WJ9EzN5x6DSq6tFl2Zs",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_U67xNEXKK8m4yTy8mn6SmvGH",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取 `config.json`，确认 `cache` 为 `true`。\n- 按要求保持整个 `config.json` 文件字节不变，未修改 `timeout`。\n- 未修改 `verify.cjs`。\n- 已运行 `node verify.cjs`，结果：`fixture checks passed`，退出码为 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 4803,
+        "estimated": true
+      },
+      "durationMs": 39669
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 1,
+      "mode": "model",
+      "ok": false,
+      "runReason": "model_request_timeout: 30000ms",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [
+        {
+          "id": "call_di8iqN2nGCTBNpDlqDCH9GU0",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"settings.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_KyhqDAGTH5pCbMkMoZipQVNn",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"defaults.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_sNeoM4epGE5ENvc6ughUPYLv",
+          "name": "read",
+          "arguments": "{\"limit\":300,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_fJcliS0CprDa4nflJUhH5T7K",
+          "name": "edit",
+          "arguments": "{\"newText\":\"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\",\"oldText\":\"{\\\"schema\\\":1,\\\"retries\\\":0,\\\"timeout\\\":null,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\",\"path\":\"settings.json\"}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 3,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 11049,
+        "estimated": true
+      },
+      "durationMs": 82061
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_eBcndD3dH5vfvQXbIDei5fW0",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"README.md\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_H7kmSc3mHsmafgvwdFghXupn",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"input.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_YQr9Y0O7BVfpDUG6SgUenQiP",
+          "name": "edit",
+          "arguments": "{\"newText\":\"after\",\"oldText\":\"before\",\"path\":\"input.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_0kRLMjDgz4wJw9nq1bJIcR46",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 已读取 `README.md` 和 `input.txt`\n- 已将 `input.txt` 中的 `before` 精确替换为 `after`\n- 未修改 `verify.cjs` 和 `untouched.txt`\n- 已执行 `node verify.cjs`\n- 验证通过：`fixture checks passed`（退出码 0）",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5648,
+        "estimated": false,
+        "inputTokens": 5341,
+        "outputTokens": 307,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 36187
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_N32i2bP2Qi6g8p0CD2h0j48b",
+          "name": "read",
+          "arguments": "{\"limit\":400,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_540Hc381khNy155uTo3EpnVE",
+          "name": "edit",
+          "arguments": "{\"newText\":\"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\",\"oldText\":\"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\",\"path\":\"config.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_B9FE9CwI0EdvvbNBehb786xz",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取 `config.json`，确认 `cache` 为 `false`\n- 将 `timeout` 从数值 `30` 修改为数值 `45`\n- 保留其他字段、`label` 的中文内容及所有值类型\n- 未修改 `verify.cjs`\n- 已执行 `node verify.cjs`\n\n实际验证结果：\n\n```text\nfixture checks passed\n```\n\n退出码：`0`，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 5573,
+        "estimated": false,
+        "inputTokens": 5203,
+        "outputTokens": 370,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 15076
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_Kou7fyxcYNFdwhi6axGSxwmH",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"greeting.txt\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_qLywECInrf54RXvbdgRvNDEm",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"guide.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_dfGeTLqh3ZcUicxEwoqDKmDz",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"keep.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_ibrGHcAN5k2GOt2xLnbgUgbd",
+          "name": "edit",
+          "arguments": "{\"newText\":\"你好\",\"oldText\":\"hello\",\"path\":\"greeting.txt\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "call_LUTokeQ3UYO6TVwixRme29PC",
+          "name": "edit",
+          "arguments": "{\"newText\":\"你好\",\"oldText\":\"hello\",\"path\":\"guide.txt\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "call_woeiJ9CQbc04KFNEMlDtW47D",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 5,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成修改：\n\n- `greeting.txt`：将 `hello` 改为 `你好`\n- `guide.txt`：将 `hello` 改为 `你好`\n- `keep.txt`：内容及原有换行保持不变\n- `verify.cjs`：未修改\n\n测试结果：已使用 bash 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码为 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 6,
+      "usage": {
+        "tokens": 6600,
+        "estimated": false,
+        "inputTokens": 6088,
+        "outputTokens": 512,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 59978
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "off",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_PDxtQh4oyFJ53duQjifb318F",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_cMaQLU2C1CKDmYRATFoDCMMV",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已读取 `config.json`，实际分支为 **`cache === true`**。\n\n- 保持 `config.json` 整个文件字节不变，未修改 `timeout`\n- 未修改 `verify.cjs`\n- 已运行 `node verify.cjs`\n- 结果：`fixture checks passed`\n- 退出码：`0`",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3792,
+        "estimated": false,
+        "inputTokens": 3537,
+        "outputTokens": 255,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 39582
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "off",
+      "ok": false,
+      "runReason": "model_request_timeout: 30000ms",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [
+        {
+          "id": "call_Aaw91MBLYBZUJhuYQx8zAptE",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"settings.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_LORxDJEEpq1iUSBKPIHUCamq",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"defaults.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_Wd475eklenViImg3uOM3LLne",
+          "name": "read",
+          "arguments": "{\"limit\":300,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_avBCzoZtTOnCwacoOCzSxyur",
+          "name": "write",
+          "arguments": "{\"content\":\"{\\\"schema\\\":2,\\\"retryCount\\\":0,\\\"timeout\\\":45,\\\"labels\\\":[\\\"中文\\\",\\\"🙂\\\"],\\\"enabled\\\":false,\\\"empty\\\":\\\"\\\"}\\n\",\"expectedHash\":\"23a0b58ecb83c49bdb373de15ce068f15842d7de4f1354825f5744e84eea6678\",\"path\":\"settings.json\"}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 3,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 9462,
+        "estimated": true
+      },
+      "durationMs": 50453
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_WMP51AyVOEoxbyEjwQ0r34Di",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"README.md\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_NpbifXhBBCZpGU5Vxyuzm7Qh",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"input.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_cm3bivl4GBzRlmYJijiFJzjj",
+          "name": "edit",
+          "arguments": "{\"newText\":\"after\\n\",\"oldText\":\"before\\n\",\"path\":\"input.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_J35CRISAxv4zEMHAgBKfr13H",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 3,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 已读取 `README.md` 和 `input.txt`\n- 已将 `input.txt` 中的 `before` 精确替换为 `after`\n- 未修改 `verify.cjs` 或 `untouched.txt`\n- 已执行 `node verify.cjs`\n- 验证通过：`fixture checks passed`",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 4,
+      "usage": {
+        "tokens": 5735,
+        "estimated": false,
+        "inputTokens": 5406,
+        "outputTokens": 329,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 73330
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_k6AQr2QG5BLD1UXgzhqsgNth",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_180Hc2CiWP6UYCKI3kR6tqHB",
+          "name": "edit",
+          "arguments": "{\"newText\":\"{\\\"cache\\\":false,\\\"timeout\\\":45,\\\"label\\\":\\\"保持中文\\\"}\",\"oldText\":\"{\\\"cache\\\":false,\\\"timeout\\\":30,\\\"label\\\":\\\"保持中文\\\"}\",\"path\":\"config.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_iIvjDtps6IVWmcWrxm6hGx5V",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- 读取 `config.json`\n- 确认 `cache` 为布尔值 `false`\n- 将 `timeout` 从数值 `30` 改为 `45`\n- 保留了其他字段、`label` 的中文内容及所有值类型\n- 未修改 `verify.cjs`\n\n实际验证结果：\n\n```text\nfixture checks passed\n```\n\n`node verify.cjs` 退出码为 `0`，验证通过。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 5470,
+        "estimated": false,
+        "inputTokens": 5124,
+        "outputTokens": 346,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 18058
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_NVZVai2WjiHHxrf7XKObZObE",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"greeting.txt\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_Az1vdUSnOE1nF1ixgFnWjsqI",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"guide.txt\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_5hdgurgS61TZkyGfTeG6scOF",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"keep.txt\"}",
+          "index": 2,
+          "ok": true
+        },
+        {
+          "id": "call_SoKLzgqnQz1aU3pnrBICLR4G",
+          "name": "read",
+          "arguments": "{\"limit\":10000,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 3,
+          "ok": true
+        },
+        {
+          "id": "call_YYOa2W80o25XVY09JMGlY7FB",
+          "name": "edit",
+          "arguments": "{\"newText\":\"你好\\n\",\"oldText\":\"hello\\n\",\"path\":\"greeting.txt\"}",
+          "index": 4,
+          "ok": true
+        },
+        {
+          "id": "call_iVZKg9yWRYNwthbyTskGmwFX",
+          "name": "edit",
+          "arguments": "{\"newText\":\"message: 你好\\n\",\"oldText\":\"message: hello\\n\",\"path\":\"guide.txt\"}",
+          "index": 5,
+          "ok": true
+        },
+        {
+          "id": "call_i2Mxx59C3I3SkIF6D7KBSiy4",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 6,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成修改：\n\n- `greeting.txt`：将 `hello` 改为 `你好`\n- `guide.txt`：将 `message: hello` 改为 `message: 你好`\n- `keep.txt`：未修改，内容及原有换行均保留\n- `verify.cjs`：未修改\n\n测试结果：已使用 bash 执行 `node verify.cjs`，输出 `fixture checks passed`，退出码为 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 4,
+      "toolCalls": 7,
+      "usage": {
+        "tokens": 7372,
+        "estimated": false,
+        "inputTokens": 6858,
+        "outputTokens": 514,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 23396
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "local",
+      "ok": true,
+      "runReason": "completed",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": true,
+      "executionOrderPassed": true,
+      "unmetRequirements": [],
+      "toolTrace": [
+        {
+          "id": "call_yMWlqgBvR61Jeryv4bZJ8CLj",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"config.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_lobFamNxKreBl2534C9sCm1f",
+          "name": "bash",
+          "arguments": "{\"command\":\"node verify.cjs\",\"cwd\":null,\"timeoutMs\":60000}",
+          "index": 1,
+          "ok": true
+        }
+      ],
+      "finalText": "已完成：\n\n- `config.json` 中 `cache` 的实际值为 `true`。\n- 按要求保持整个文件字节不变，未修改 `timeout`。\n- 未修改 `verify.cjs`。\n- 实际执行分支：`cache === true`，保持文件不变。\n- 执行 `node verify.cjs` 的结果：`fixture checks passed`，退出码为 `0`。",
+      "approvedChecks": 1,
+      "deniedRequests": 0,
+      "approvals": [
+        {
+          "command": "node verify.cjs",
+          "granted": true
+        }
+      ],
+      "turns": 3,
+      "toolCalls": 2,
+      "usage": {
+        "tokens": 3804,
+        "estimated": false,
+        "inputTokens": 3535,
+        "outputTokens": 269,
+        "cachedInputTokens": 0
+      },
+      "durationMs": 21707
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "local",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [
+        {
+          "id": "call_JqZ4X30hBOO7yZmoDql78Cog",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"settings.json\"}",
+          "index": 0,
+          "ok": true
+        },
+        {
+          "id": "call_JP017K4cL4U6gQO5u10I6qvC",
+          "name": "read",
+          "arguments": "{\"limit\":200,\"offset\":1,\"path\":\"defaults.json\"}",
+          "index": 1,
+          "ok": true
+        },
+        {
+          "id": "call_e8FjJrkCPgRuzYxY9PpNh3qY",
+          "name": "read",
+          "arguments": "{\"limit\":300,\"offset\":1,\"path\":\"verify.cjs\"}",
+          "index": 2,
+          "ok": true
+        }
+      ],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 2,
+      "toolCalls": 3,
+      "usage": {
+        "tokens": 6033,
+        "estimated": true
+      },
+      "durationMs": 8296
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 2,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3686,
+        "estimated": true
+      },
+      "durationMs": 2244
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 2,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3676,
+        "estimated": true
+      },
+      "durationMs": 1734
+    },
+    {
+      "id": "cross-file",
+      "repetition": 2,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3676,
+        "estimated": true
+      },
+      "durationMs": 1830
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 2,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3657,
+        "estimated": true
+      },
+      "durationMs": 1192
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 2,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3886,
+        "estimated": true
+      },
+      "durationMs": 1143
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "off",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2847,
+        "estimated": true
+      },
+      "durationMs": 496
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "off",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2845,
+        "estimated": true
+      },
+      "durationMs": 714
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "off",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2844,
+        "estimated": true
+      },
+      "durationMs": 513
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "off",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2839,
+        "estimated": true
+      },
+      "durationMs": 536
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "off",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2911,
+        "estimated": true
+      },
+      "durationMs": 464
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "local",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2847,
+        "estimated": true
+      },
+      "durationMs": 431
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "local",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2845,
+        "estimated": true
+      },
+      "durationMs": 674
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "local",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2844,
+        "estimated": true
+      },
+      "durationMs": 468
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "local",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2839,
+        "estimated": true
+      },
+      "durationMs": 549
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "local",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 2911,
+        "estimated": true
+      },
+      "durationMs": 568
+    },
+    {
+      "id": "ordered-edit",
+      "repetition": 3,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:README.md",
+        "read_before_changes:input.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3686,
+        "estimated": true
+      },
+      "durationMs": 1167
+    },
+    {
+      "id": "conditional-exception",
+      "repetition": 3,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3676,
+        "estimated": true
+      },
+      "durationMs": 1256
+    },
+    {
+      "id": "cross-file",
+      "repetition": 3,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:greeting.txt",
+        "read_before_changes:guide.txt",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3676,
+        "estimated": true
+      },
+      "durationMs": 1075
+    },
+    {
+      "id": "conditional-no-change",
+      "repetition": 3,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": true,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:config.json",
+        "successful_verification_after_changes",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3657,
+        "estimated": true
+      },
+      "durationMs": 1086
+    },
+    {
+      "id": "structured-migration",
+      "repetition": 3,
+      "mode": "model",
+      "ok": false,
+      "runReason": "403 insufficient balance",
+      "outputCorrect": false,
+      "verifierPreserved": true,
+      "protectedFilesPreserved": true,
+      "checked": false,
+      "executionOrderPassed": false,
+      "unmetRequirements": [
+        "read_before_changes:settings.json",
+        "read_before_changes:defaults.json",
+        "successful_verification_after_changes",
+        "expected_output",
+        "run_completed"
+      ],
+      "toolTrace": [],
+      "finalText": "",
+      "approvedChecks": 0,
+      "deniedRequests": 0,
+      "approvals": [],
+      "turns": 1,
+      "toolCalls": 0,
+      "usage": {
+        "tokens": 3886,
+        "estimated": true
+      },
+      "durationMs": 1119
+    }
+  ]
+}
