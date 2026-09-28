@@ -1,10 +1,10 @@
-# icy
+# icy-agent-cli
 
-一个在终端运行的 AI agent：输入目标，模型自主调用工具、观察结果并继续执行。采用 B · Workbench，左侧对话与工具结果，右侧任务状态、预算和会话变更；终端小于 120 列时自动切成单栏。
+一个在终端运行的 AI coding agent：输入目标，模型调用工具、读取结果并继续执行。界面采用 B · Workbench：左侧是对话与工具结果，右侧是当前任务、预算和会话变更；终端小于 120 列时自动切为单栏。
 
-## 开始使用
+## 安装与快速开始
 
-要求 Node.js 22+。本轮已在 macOS 本机验收；Linux 使用相同 POSIX 实现，跨平台自动化结果请查看对应提交的 [CI](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)。Linux 人工交互验收仍需另行执行。Windows 暂不支持 shell 工具。
+需要 Node.js 22+。当前实现面向 macOS / Linux 的 POSIX 环境；Windows 暂不支持 shell 工具。
 
 ```sh
 npm ci
@@ -13,39 +13,43 @@ npm link
 icy
 ```
 
-完成构建和 `npm link` 后，可以直接输入 `icy`。
+常用命令：
 
 ```sh
 icy "检查这个项目的启动入口"
 icy run "读取 README.md 并总结项目" --read-only
 icy run "读取 README.md 并检查启动说明" --read-only --json
-icy sessions [--status <状态>[,<状态>...]] [--cwd <目录>]   # 列出会话，可按任务状态与工作区过滤
-icy --resume <session-id>      # 恢复界面，不自动执行原任务
-icy run --resume <session-id> --json   # 仅查看任务状态
-icy run --resume <session-id> --continue  # 显式以新预算继续原任务
-icy run --resume <session-id> --verify "npm test"  # 非交互验收仍需 shell 授权
-icy --demo                     # 无需模型的离线只读演示
+icy sessions [--status <状态>[,<状态>...]] [--cwd <目录>]
+icy --resume <session-id>
+icy run --resume <session-id> --json
+icy run --resume <session-id> --continue
+icy run --resume <session-id> --verify "npm test"
+icy config init
+icy --demo
 icy --version
 ```
 
-`--cwd <目录>` 指定工作区，默认是启动目录。`run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。执行成功的退出码为 0；遇到未批准的 shell 为 2，取消为 130，其他运行失败为 1。非交互模式没有授权弹窗，因此通常应进入 Workbench 后用 `/verify npm test` 审批并验收；`--verify` 不绕过 shell 权限。
+| 参数 | 作用 |
+| --- | --- |
+| `--provider chat-completions\|responses` | 选择接口协议 |
+| `--base-url <地址>` / `--model <模型>` | 覆盖服务地址或模型 |
+| `--cwd <目录>` | 指定工作区；普通运行默认是启动目录，`sessions` 中是过滤条件 |
+| `--resume <ID>` | 恢复会话；不自动重放中断的工具 |
+| `--continue` / `--verify <命令>` | 在 `run --resume` 下以新预算继续，或执行用户指定验收 |
+| `--read-only` | 只向模型提供 `read` |
+| `--plain` / `--json` | 使用非交互输出；`--json` 输出 NDJSON |
+| `--status <状态>[,<状态>...]` | 仅用于 `icy sessions`，可重复或逗号分隔 |
+| `--demo` / `--help` / `--version` | 离线只读演示、帮助、版本 |
 
-`icy sessions --json` 输出逐行会话摘要。`--status` 过滤任务状态，可重复或逗号分隔，接受 running、awaiting_approval、cancelled、limited、failed、answered、verified、interrupted、legacy 九种值；`--cwd` 在该子命令中作为工作区过滤条件，相对路径按启动目录解析，目录不必存在；有过滤条件时不列出无法读取的会话。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
+`run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。成功退出码为 `0`；未批准的 shell 为 `2`，取消为 `130`，其他运行失败为 `1`。状态过滤、`--status` 用错位置和缺少非交互目标等部分用法错误使用 `2`。非交互模式没有授权弹窗；通常应进入 Workbench 用 `/verify npm test` 审批并验收，`--verify` 不绕过 shell 权限。
+
+`icy sessions --json` 逐行输出会话摘要。`--status` 支持 `running`、`awaiting_approval`、`cancelled`、`limited`、`failed`、`answered`、`verified`、`interrupted`、`legacy`；`--cwd` 相对启动目录解析，目录可以不存在。指定过滤条件时，不返回无法读取的会话；无过滤条件时仍显示其错误摘要。只传 `--resume` 的非交互命令只展示任务状态，不请求模型或执行工具，但仍会校验会话、迁移旧格式并记录中断。`--continue`、`--verify` 都要求 `--resume`，且不能和新目标或彼此混用。
 
 ## 模型配置
 
-支持 `responses` 和 `chat-completions`。服务地址需包含服务要求的路径前缀，不自动追加 `/v1`。
+支持 `responses` 和 `chat-completions`。`baseUrl` 必须包含服务要求的路径前缀，icy 不会自动追加 `/v1`。
 
-历史本机接入示例使用 CC Switch 中 Happy Code / Codex 的配置：
-
-- 地址：`https://happycodeai.com`
-- 协议：`responses`
-- 模型：`gpt-5.6-sol`
-- reasoning effort：`xhigh`
-
-该历史配置在 `~/.icy/config.json`，密钥单独存于本机 `~/.icy/credentials/happy-code.key`，文件权限 `0600`，没有写入项目。导入的是独立副本；CC Switch 后续修改不会自动同步。新安装可通过下面的配置或 `/model` 设置自己的服务。
-
-其他机器可以运行 `icy config init`，再编辑新建配置；该命令不会覆盖已有配置。
+用户配置位于 `~/.icy/config.json`，也可用 `ICY_HOME` 改变用户配置、会话和输出目录。`icy config init` 创建配置但不覆盖已有文件。
 
 ```json
 {
@@ -54,156 +58,159 @@ icy --version
   "model": "your-tool-capable-model",
   "apiKeyEnv": "ICY_API_KEY",
   "permissions": "workspace-edit",
+  "promptCompaction": "local",
   "maxModelTurns": 20,
   "maxToolCalls": 50
 }
 ```
 
-密钥由本机环境变量 `ICY_API_KEY` 提供；也可以配置 `apiKeyFile`，路径相对于 `~/.icy`，建议权限 `0600`。环境变量优先于密钥文件。`ICY_HOME` 可改变用户配置与会话目录。
+| 配置键 | 说明 |
+| --- | --- |
+| `provider` | `chat-completions` 或 `responses`；默认前者 |
+| `baseUrl` | 服务完整地址；远程服务必须 HTTPS |
+| `allowPrivateHttp` | 仅用户配置可设为 `true`，允许 RFC1918 私有 IPv4 的 HTTP |
+| `model` | 主模型名 |
+| `apiKeyEnv` / `apiKeyFile` | 密钥环境变量名（默认 `ICY_API_KEY`）/ 相对 `ICY_HOME` 的密钥文件 |
+| `reasoningEffort` | `low`、`medium`、`high` 或 `xhigh` |
+| `reasoningSummary` | Responses 是否请求可见 reasoning summary；设为 `false` 可关闭 |
+| `thinkingExpanded` | 思考内容的显示默认值；`ui.json` 中的同名设置优先 |
+| `promptCompaction` | `local`、`model` 或 `off`；默认 `local` |
+| `compactionModel` | `model` 模式使用的小模型；默认 `gpt-5.6-luna` |
+| `compactionMinChars` | `model` 模式阈值，默认 200 个 UTF-16 code unit；设为 0 表示每条新输入都请求 |
+| `permissions` | `workspace-edit` 或 `read-only`；默认 `workspace-edit` |
+| `maxModelTurns` / `maxToolCalls` | 每次运行最多模型请求数 / 工具调用数；默认 20 / 50 |
+| `maxTokens` / `maxContextChars` | 每次运行软 token 预算 / 模型消息字符上限；默认 100,000 / 120,000 |
+| `requestTimeoutMs` | 每次完整模型调用截止时间；默认 120,000 ms |
 
-局域网 vLLM 可使用 `chat-completions` 协议和服务实际模型名。如果使用 `promptCompaction: "model"`，还需将 `compactionModel` 设为该服务提供的模型名（可以与主模型相同），避免默认提炼模型不在服务列表中。若地址为私有 IPv4 的 HTTP（例如 `http://192.168.1.10:8000/v1`），需在本机 `~/.icy/config.json` 中显式设置 `"allowPrivateHttp": true`。只允许 10/8、172.16/12、192.168/16；公网地址仍需 HTTPS，项目配置不能启用此选项。HTTP 在局域网内明文传输请求及凭据；仅为自己信任的服务启用。
+密钥优先使用 `config.apiKeyEnv` 指定的本机环境变量（默认是 `ICY_API_KEY`），其次读取 `apiKeyFile`；密钥文件建议权限 `0600`，且必须位于 `ICY_HOME` 内。模型向导写入用户配置并把密钥单独保存为 `0600` 凭据文件，不写入项目、会话或日志。模型设置的有效优先级是命令行参数 > `ICY_PROVIDER` / `ICY_BASE_URL` / `ICY_MODEL` > 项目允许字段 > 用户配置和默认值；命令行的 `--provider`、`--base-url`、`--model` 覆盖环境和配置。项目级 `.icy/config.json` 只允许设置模型名和降低 `maxModelTurns`、`maxToolCalls`、`maxTokens`、`maxContextChars`，不能改变密钥来源、服务地址、`allowPrivateHttp` 或扩大权限。
 
+远程地址必须使用 HTTPS。本机 `localhost`、`127.0.0.1` 和 `[::1]` 可用 HTTP；私有 IPv4 只有在用户配置显式设置 `allowPrivateHttp: true` 时允许，范围是 `10/8`、`172.16/12`、`192.168/16`，公网 HTTP 仍被拒绝。局域网 vLLM 使用 `chat-completions` 和服务实际模型名；若启用 `promptCompaction: "model"`，还应把 `compactionModel` 设为服务提供的模型名，可以与主模型相同。HTTP 会在局域网明文传输请求和凭据，只为自己信任的服务启用。
 
-`ICY_PROVIDER`、`ICY_BASE_URL`、`ICY_MODEL` 以及对应命令行参数覆盖模型设置。项目级 `.icy/config.json` 只允许设置模型名、降低运行上限，不能修改密钥来源、服务地址或扩大权限。`/model` 打开配置向导，测试通过后保存并立即生效。下次启动时，命令行参数、环境变量和项目模型设置仍按上述优先级覆盖用户配置。
-
-### 在终端配置模型
+### `/model` 向导
 
 运行 `icy` 后输入 `/model`：
 
-1. 选择当前服务、本机 CC Switch 中的 Codex 服务，或手动配置兼容服务。CC Switch 导入使用本机 `sqlite3` 只读读取数据库，不修改 CC Switch。
-2. 自动请求该服务的 `/models` 列表，输入名称筛选并选择。服务未提供列表时，可以使用导入的模型名或手动输入。
-3. 手动配置依次填写完整 API 地址、API key、接口协议和模型名。密钥输入会遮蔽，绝不沿用其他服务的密钥。
-4. 按 Enter 发送一次文本请求和一次工具调用探针；探针只使用诊断专用的 `icy_probe`，不会执行主机工具。通过后保存配置并立即启用；失败时会区分认证失败、无法连接、模型不存在、协议不兼容、文本响应失败、工具调用不支持/不正确和工具结果续接失败，或按 Esc 取消，原配置保持有效。
+1. 选择当前服务、本机 CC Switch 的 Codex 服务，或手动填写兼容服务。CC Switch 通过本机 `sqlite3` 只读读取数据库，不修改它；导入后是独立副本，后续不会自动同步。
+2. 向导请求服务的 `/models` 列表并支持名称筛选。服务没有标准列表时，可使用已导入的模型名或手动输入。
+3. 手动配置完整 API 地址、API key、协议和模型名。key 输入会遮蔽，且不会沿用其他服务的 key。
+4. 按 Enter 先测试文本响应，再用诊断专用的 `icy_probe` 测试工具调用和工具结果续接。探针从不执行主机工具；失败区分 `auth`、`connect`、`protocol`、`model`、`text`、`tool_call`、`tool_result`，也会指出工具不支持或调用不正确。Esc 取消时原配置保持有效。
 
-配置写入 `~/.icy/config.json`，密钥单独保存在权限为 `0600` 的凭据文件。切换后开始新会话，原会话保留，避免把旧服务的专用推理状态传给新服务。恢复旧会话时仍需指定匹配的模型、服务和协议。连接测试验证文本响应与工具调用，只使用诊断探针，不执行主机工具。离线演示模式不配置在线服务。
+测试通过后才保存并立即启用；切换服务后开始新会话，旧会话保留，不把旧服务的专用推理状态传给新服务。恢复旧会话仍要求匹配原来的模型、provider、服务地址、协议和工作区。离线演示不配置在线服务。
 
 ## 终端操作
 
-| 操作 | 按键或命令 |
+### 命令
+
+| 命令 | 作用 |
 | --- | --- |
-| 提交 | Enter |
-| 开启新对话，保留原会话 | `/new`；沿用当前模型、工作区及配置，重置对话上下文和工具授权 |
-| 查看任务、待办、检查点和验收记录 | `/task` |
-| 继续原任务 | `/continue`；显式开启并记录新的运行预算 |
-| 指定并执行验收 | `/verify <命令>`；例如 `/verify npm test`，沿用 shell 审批 |
-| 添加 / 完成待办 | `/todo <事项>` / `/done <编号>`；编号从 1 开始 |
-| 列出 / 恢复会话 | `/sessions`（可加 `status=<状态,...>`、`cwd=<目录>` 过滤）/ `/resume <会话 ID>`；恢复后不自动执行 |
-| 命令菜单 | 输入 `/`；↑↓ 选择、Enter 执行、Tab 补全、Esc 关闭；继续输入可筛选 |
-| 多行内容 | 粘贴多行；支持的终端也可 Alt/Shift+Enter，显示为 `↵` |
+| `/help` | 查看命令与快捷键 |
+| `/model` | 配置服务、选择模型并测试连接 |
+| `/new` | 开启新对话，保留旧会话；沿用当前模型、工作区和配置，重置上下文与工具授权 |
+| `/thinking` | 切换思考展开 / 收起；也可用 `/thinking expanded` 或 `/thinking collapsed` |
+| `/clear` / `/exit` | 清空当前会话上下文 / 退出 icy |
+| `/task` | 查看任务、待办、预算、检查点和验收记录 |
+| `/continue` | 用新预算继续原任务；已执行工具不会自动重放 |
+| `/verify <命令>` | 执行并登记用户指定验收，沿用 bash 审批 |
+| `/todo <事项>` / `/done <编号>` | 添加 / 完成待办；编号从 1 开始 |
+| `/sessions [status=<状态,...>] [cwd=<目录>]` | 列出会话并按任务状态、工作区过滤；恢复不会自动执行 |
+| `/resume <会话 ID>` | 恢复指定会话 |
+
+`/sessions` 的状态值与命令行相同；`cwd` 可为相对路径，按启动目录解析。过滤使用 `status=failed,answered` 这样的无空格逗号列表。命令菜单由 `/` 打开：继续输入可筛选，↑↓ 选择，Enter 执行，Tab 补全，Esc 关闭。
+
+### 快捷键
+
+| 操作 | 按键 |
+| --- | --- |
+| 提交 / 多行输入 | Enter / 粘贴多行；支持的终端可用 Alt+Enter 或 Shift+Enter，换行显示为 `↵` |
 | 输入历史 | ↑ / ↓ |
-| 编辑光标 | ← / →、Home / End、Ctrl+A / Ctrl+E |
-| 清除光标前/后内容 | Ctrl+U / Ctrl+K |
+| 移动与编辑 | ← / →、Home / End、Ctrl+A / Ctrl+E |
+| 删除光标前 / 后 | Ctrl+U / Ctrl+K |
 | 展开工具参数、结果和 diff | Ctrl+O |
-| 展开 / 收起思考内容 | Ctrl+T 或 `/thinking`；`/thinking expanded` 展开，`/thinking collapsed` 收起 |
+| 展开 / 收起思考 | Ctrl+T 或 `/thinking` |
 | 输出翻页 | PgUp / PgDn |
-| 取消本轮 | Esc / Ctrl+C；空闲时 Ctrl+C 退出 |
-| shell 批准 | Y 一次；A 本次进程会话允许相同完整命令、cwd 和超时；N 拒绝 |
-| 长命令 | PgUp/PgDn 查看完整命令，翻到最后一页后可批准 |
-| 帮助 / 模型 / 清空上下文 / 退出 | `/help` / `/model` / `/clear` / `/exit` |
+| 取消本轮 / 退出 | Esc / Ctrl+C；空闲时 Ctrl+C 退出 |
+| shell 审批 | 最后一页按 Y 允许一次、A 允许本次进程会话中的相同完整命令/cwd/超时、N 拒绝 |
+| 长命令审批 | PgUp / PgDn 查看完整命令；必须翻到最后一页后才能 Y/A |
 
-输入框采用单行视窗展示长文本，保留实际多行输入；按 Unicode grapheme（字素簇）编辑中文与 emoji。上限为 20,000 个 grapheme，中文单字、带组合重音的字符、组合 emoji 各计 1 个。键入或粘贴超限时整次拒绝，保留此前草稿和光标，显示提示，不截断内容；修改草稿前 Enter 不会提交。密钥输入的超限提示不会显示输入内容。`NO_COLOR=1 icy` 禁用颜色。
+输入框是单行视窗，但保留真实多行内容；按 Unicode grapheme（字素簇）编辑中文和 emoji。上限是 20,000 个 grapheme，中文单字、组合重音字符和组合 emoji 各计 1 个；键入或粘贴超限时整次拒绝，保留草稿和光标，不截断，Enter 也不会提交，并显示提示。密钥输入的超限提示不显示密钥内容。`NO_COLOR=1 icy` 可禁用颜色。
 
-用户消息使用蓝色侧边色块，icy 回复使用青色侧边色块，正文沿用终端前景色和背景色，适配浅色和深色主题。去掉对话外框与整行深色背景，不再用 `you / icy` 前缀区分消息。思考以弱化的单行提示显示，默认收起；没有内容的已完成思考默认隐藏，展开后会说明接口未返回内容。每次模型请求的思考独立显示，可与回答一起翻页查看。
+用户消息使用蓝色侧边色块，icy 回复使用青色侧边色块，正文沿用终端前景色和背景色以适配浅色与深色主题；不使用对话外框、整行深色背景或 `you / icy` 前缀。思考默认收起并以弱化的单行提示显示；没有内容的已完成思考默认隐藏，展开后说明接口未返回内容。每次模型请求的思考独立显示，可与回答一起翻页查看。显示偏好保存到 `~/.icy/ui.json`（或 `ICY_HOME/ui.json`），重启后继续；它只影响显示，不改变模型推理强度。Responses 默认请求 `reasoning.summary: auto`，只显示服务提供的摘要，不解码加密推理；不支持该参数的服务可设置 `reasoningSummary: false`。Chat Completions 服务可通过 `reasoning_content` 或 `reasoning` 返回可见思考内容。
 
-`Ctrl+T` 和 `/thinking` 会将显示偏好保存到 `~/.icy/ui.json`（或 `ICY_HOME/ui.json`），重启后继续使用；该文件的 `thinkingExpanded` 优先于用户配置中的同名默认值。此设置只影响显示，不改变模型推理强度。Responses 默认请求 `reasoning.summary: auto`，显示服务提供的摘要，不解码加密推理；不支持该参数的兼容服务可在 `config.json` 设置 `"reasoningSummary": false`。Chat Completions 兼容服务可通过 `reasoning_content` 或 `reasoning` 字符串返回可见思考内容。实现依据 [OpenAI Docs：Reasoning summaries](https://developers.openai.com/api/docs/guides/reasoning#reasoning-summaries)。
+## 工具与权限
+
+默认只向模型提供 `read`、`write`、`edit`、`bash` 四个工具；旧工具名称不再注册，也没有隐藏别名；同一响应中的调用按返回顺序串行执行。默认权限是 `workspace-edit`，文件读写在工作区内进行，`bash` 需明确批准；`--read-only` 和离线演示只提供免审批的 `read`。拒绝或执行错误会回传模型；相同工具、参数和错误连续失败 3 次会停止。
+
+| 工具 | 行为与边界 |
+| --- | --- |
+| `read` | 读取 UTF-8 文本并返回行号和 SHA256；也可免审批列目录（`path` 为目录）或搜索内容（`pattern`）。目录 `depth` 为 1–5（默认 1，1 只列直接子项），最多 500 项；搜索是区分大小写的固定字符串，或 `regex=true` 的 JavaScript 正则（模式最多 200 字符），最多扫描 2,000 个文件、每文件 1 MB、最多 200 条匹配，搜索最多运行 10 秒，正则每文件最多 1 秒。普通文件最多 1 MB。 |
+| `write` | 创建或整体覆盖 UTF-8 文件。覆盖现有文件必须传入此前 `read` 的 SHA256；新文件必须传 `expectedHash: null`。内容最多 1 MB，返回 diff；`icy-output:` 引用不可写。 |
+| `edit` | 按 `path`、`oldText`、`newText` 做精确替换；`oldText` 非空且必须只匹配一次，空格和换行也必须匹配；不是正则或 unified diff，缺失/多次匹配会拒绝。写入前后保留哈希校验；文本参数最多 1 MB。 |
+| `bash` | 使用 `/bin/bash --noprofile --norc -c`，仅用于测试、构建和 `read` 无法完成的命令；每条命令（包括只读命令）都要批准。无交互 stdin，单次最多 60 秒，命令参数最多 20,000 字符；批准等待结束后会重新校验 cwd，超时或取消会终止 POSIX 进程组。 |
+
+文件工具拒绝越出工作区、NUL、符号链接路径和敏感路径。敏感名称包括 `.git`、`.icy`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`credentials`、`id_rsa`、`id_ed25519`、非示例的 `.env*`，以及 `.pem`、`.key`、`.p12`、`.pfx`、`.token` 结尾的文件；`.env.example`、`.env.sample`、`.env.template` 例外。`bash` 的搜索范围和忽略规则由实际命令决定，例如 `rg` 与 `find` 不同；bash 不是文件工具的越界保护替代品。
+
+工具结果超过 32 KiB 时保存为 `icy-output:<id>.txt` 并返回有界预览；失败命令还可能返回常见错误行的字面诊断片段，不能保证覆盖所有失败。bash 输出超过 256 KiB 会终止命令。`read` 读取普通文件时 `offset` / `limit` 按行计数；读取输出引用时按 Unicode 字符计数，每页最多 6,000 字符，结果带下一页 offset。输出引用不能用 `write` / `edit` 修改；无需额外工具即可读取，也能读取很长的单行输出。
 
 ## 任务、会话与验收
 
-一个会话保存对话、工具轨迹和多次运行，当前任务保存原始目标、待办、已完成项及验收记录。每次运行的 `RunState` 单独记录模型与工具调用次数、usage、预算、检查点和停止原因。状态区分执行中、等待批准、已取消、达到限制、失败、已中断、已回答和已验证完成；模型结束回答并不自动表示目标已经验收。
+- **会话**保存对话、工具轨迹和多次运行；**任务**保存原始目标、待办、完成项和验收记录；**运行（RunState）**是一次独立的模型/工具执行，保存调用数、usage、预算、检查点和停止原因。一个会话同时只有一个活动任务。状态包括执行中、等待批准、已取消、达到限制、失败、已中断、已回答和已验证完成。
+- 新消息创建新任务。`/continue` 延续原目标和待办，创建新的运行记录与预算并关联上次运行；不重放历史工具。遇到 `interrupted_unknown`，先核对实际状态。
+- `/todo` 和 `/done` 是用户操作；模型不能自行把待办标为完成。`/task` 显示最近检查点、停止原因、预算和最近验收结果。模型结束回答不等于目标已验收。
+- `/verify <命令>` 不请求模型，在当前工作区通过 `bash` 执行并记录；使用 shell 审批、超时和输出限制，每次验收有独立运行记录。普通工具循环中的测试不会自动成为用户指定验收。
+- “已验证完成”要求待办为空、至少有一项用户登记的验收，且每个登记命令的最近成功记录都对应当前 Agent 修改版本 `mutationRevision`。新的普通 `write`、`edit` 或 `bash` 会使旧证据过期，并在界面标出；该状态只证明登记的检查通过，不是对任意自然语言目标的语义证明。
+- 验收命令可能修改文件。执行前后会在本机比较工作区指纹（路径、内容、权限和链接目标）；不跟随符号链接，只排除当前会话存储目录，最多检查 10,000 个条目和 64 MiB 内容。检测到变化、取消、读取失败或无法确认时，旧证据过期。对会写入产物的检查或较大工作区，建议一开始登记一条包含全部检查的验收命令，避免分次执行时旧证据持续过期。外部编辑器或其他进程的修改不会自动更新 Agent 修改版本，需要重新验收。
 
-- 新消息开始新任务；`/continue` 延续当前目标和待办，创建一条新的运行记录及预算，关联上次运行。它不会自动重放历史工具调用；遇到 `interrupted_unknown` 应先核对实际状态。
-- `/todo <事项>` 添加待办，`/done <编号>` 将对应事项标为已完成。`/task` 展示这些记录、最近检查点、停止原因、预算和最近验收结果。待办完成记录来自用户操作，不由模型自行证明。
-- `/verify <命令>` 登记用户明确指定的验收命令，在当前工作区通过 `bash` 执行并记录结果，不请求模型；每次验收有独立运行记录。它沿用授权、超时和输出限制。
-- “已验证完成”要求待办为空、至少登记一项验收，且所有已登记命令的最近记录都在当前 Agent 修改版本 `mutationRevision` 上成功。普通工具调用中的测试不会自动变成用户指定验收。新的普通 `write`、`edit` 或 `bash` 调用会使旧证据过期；界面明确标记过期记录。
-- 验收命令也可能修改文件，因此执行前后会在本机比较工作区指纹（路径、内容、权限及链接目标）。检测到变化、取消或无法确认时，先使旧证据过期，再记录本次结果。比较不跟随符号链接，只排除当前会话的存储目录；最多检查 10,000 个条目和 64 MiB 内容，超限或读取失败按无法确认处理。对于会写入产物的检查或较大工作区，建议一开始就登记一条包含全部检查的验收命令，避免分次执行时旧证据持续过期。
-- 这个状态只证明所登记检查在该修改版本上通过，不是对任意目标的自动语义证明。外部编辑器或其他进程修改文件不会自动更新 Agent 的修改版本，需要重新验收；验收命令本身的覆盖范围也由用户选择。
+会话保存在 `~/.icy/sessions/<id>/`（或 `ICY_HOME/sessions/<id>/`），包含 v2 快照、事件日志和长输出。恢复前会校验消息结构、工具调用配对和调用 ID；损坏快照保留原件并报告位置，恢复失败会释放本次锁。合法但未完成的调用补齐为 `interrupted_unknown` 或 `not_executed`，活动运行标为中断，不重放副作用；结果未知的 `write`、`edit`、`bash` 也会使旧验收证据过期。
 
-会话位于 `~/.icy/sessions/<id>/`，包含 v2 快照、事件和长输出。恢复前验证消息结构和调用配对；坏快照保留原件并报告位置，恢复失败释放本次取得的锁。合法但未完成的调用补齐为 `interrupted_unknown` 或 `not_executed`，活动运行标记中断，不重放副作用。若中断时正在执行 `write`、`edit` 或 `bash` 且结果未知，也会使旧验收证据过期。
+v1 会话恢复时迁移到 v2，保留原消息、工具结果和 Responses 专用状态；旧格式没有的任务状态和验收证据保持未知，不补写成功。旧会话必须先提交目标才能 `/continue`。旧历史中的工具名称不代表当前可调用工具，旧调用不会重放。在线执行和恢复使用同一轨迹投影，可展开工具参数、结果和 diff，并保留未知状态和会话变更列表。恢复要求匹配原模型、协议、服务地址和工作区；失败时保留当前会话。
 
-v1 会话在恢复时迁移到 v2，保留原消息、工具结果和 Responses 专用状态；旧格式没有的任务状态与验收证据保持未知，不补写成成功。旧会话需先提交目标才能使用 `/continue`。恢复界面与在线执行使用同一轨迹投影，可展开工具参数、结果和 diff，保留未知状态与会话变更列表。恢复要求匹配原来的模型、协议、服务地址和工作区；失败保留当前会话。
+## 上下文、预算与需求预处理
 
-## 提示词预处理与循环内上下文
+- 每次提交先由 harness 做一次需求预处理；主模型循环中每次请求前再由 `ContextManager` 组装上下文并检查大小。
+- 每次运行默认最多 20 次模型请求、50 次工具调用和 100,000 tokens；模型消息上下文上限为 120,000 字符。预算按运行计算，不是整个会话共用；显式 `/continue` 开启新预算并保留之前的 usage。
+- 这是软预算：字符到 token 的换算不是 tokenizer，provider usage 可能缺失，重试、断流和供应商计费可能不可完整观测；可用时记录 provider 报告的输入、输出和缓存 usage，缺 usage 时显示带 `~` 的估算。请求前会估算输入、预留响应空间并下发输出上限；响应超额时标记 `budget_exceeded`，不继续请求模型或执行该响应中的工具；预算耗尽或无法预留响应空间时以 `token_budget` 停止。
+- 每次完整模型调用（含流读取和 SDK 重试）默认截止 120 秒；SDK 最多重试 2 次，重试不延长本次截止。响应头到达后流仍未结束也会以 `model_request_timeout` 停止；中断/超时的未收齐工具调用不执行，已发送消耗按可观测信息估算记账。
+- `promptCompaction` 为三种模式：`local`（默认）只做受限空白清理和历史结果外置，不调用小模型，代码及明确要求原样保留的输入不清理；`model` 在达到 `compactionMinChars` 后调用当前服务的小模型提炼，模型没有工具权限，也不进入主工具循环，失败自动回退；`off` 关闭需求提炼和工具结果外置，但仍检查预算和上下文上限。提炼请求最多 15 秒、最多输出 2,048 tokens、不自动重试；`compactionModel` 未设置时使用 `gpt-5.6-luna`，小模型产生的 usage 计入本次运行预算。结构化 envelope、完整原文和额外请求会增加 token 与延迟，`model` 模式不保证降低费用，字符变化也不是精确 token 节省。
+- 原始用户输入始终保存在会话并在界面原样显示。`model` 模式的 `icy.user-request.v2` 内容包含 `task`、`keywords`、`constraints`、需要时的 `original_ref` 和完整 `original`；`original` 是权威要求，完整原文可用 `read` 通过 `original_ref` 回读。Responses 和 Chat Completions 使用标准消息字段，不添加请求顶层扩展，也不改变四工具 schema。提炼只要求删除赘述和重复，不补事实；代码块、行内代码、引号、路径、数字和明确约束会做占位符/字面校验。提炼失败、不完整、约束缺失、无效 JSON、工具调用或超时均不采用结果；这些检查不能证明动作、条件、例外和顺序都完整，提炼结果只是辅助提示。`keywords` 只是原文词项索引，`constraints` 不把引号和代码中的指令提升为用户要求。
+- 循环内每次主模型请求前，按 provider 实际序列化的消息、指令和工具定义计算字符量。达到上限 80% 后，先外置较旧且超过 4,000 字符的工具结果，并复用相同内容的引用；仍不够时处理较小旧结果、把连续的完整 assistant＋工具交换归档为可回读 JSON，最后才为最近的大结果保留首尾预览和完整引用。源会话、归档、调用 ID、工具配对和 Responses opaque 保留；外置只改变发送给模型的视图，旧 opaque 随完整交换外置，不保证每次请求携带全部历史 opaque；写引用失败会回退，仍无法容纳时以 `context_limit` 停止。用户输入预处理不压缩工具历史。
+- 活动视图还保留所有用户消息、最近四项观察所在的完整调用批次（最新批次即使超过四项也全部保留）、最新 assistant 响应、最近三条不同 shell 命令的最新结果和最近一个未解决的失败命令。旧交换的机械索引只保留未知结果、每个文件最后修改、最后失败命令和最近三项操作的原始字段，不生成语义摘要；只有相同命令与相同 `cwd` 的成功结果会解除对应失败。此规则不推断任务完成，也不把工具测试升级成验收证据。
+- 普通工具循环有约束或关键词时会临时附加 `[icy 提醒]`；显式续跑使用 `[icy 任务续跑]`，含原始目标、待办和核对已保存结果的要求；这些提醒不写入会话。NDJSON 与事件日志包含 `harness_start`、`harness_end` 和每轮 `context` 事件。相关字段包括 `beforeChars`、`afterChars`、`savedChars`、`compactedToolResults`、`fallback`、`semantic`、`preprocessingTokens`、`preprocessingEstimated`、`recentToolPreviews`、`archivedExchanges`；UI 会显示压缩前后大小或失败提示。离线演示强制使用 `local`。
 
-每次运行进入主模型循环前，harness 执行需求预处理；循环内每次请求前，`ContextManager` 再组装上下文并检查大小。默认模式为 `local`，保留原始需求，不调用小模型。显式选择 `model` 才会使用当前服务地址、协议和密钥，单独调用小模型提炼达到阈值的新需求；小模型没有工具权限，也不进入工具循环。
-
-在 `~/.icy/config.json` 中可配置：
-
-```json
-{
-  "promptCompaction": "local",
-  "compactionModel": "gpt-5.6-luna",
-  "compactionMinChars": 200
-}
-```
-
-- `local`（默认）：不做语义提炼，仅进行受限的空白清理和历史结果外置；会话始终保留用户原文，代码及明确要求原样保留的输入不做空白清理。`model`：达到阈值的新输入先由小模型提炼，再做本地处理。`off`：关闭需求提炼和工具结果外置，仍执行预算与上下文上限检查。已有显式 `model` 或 `off` 配置保持有效。
-- 在 `model` 模式中，输入短于 `compactionMinChars`（默认 200 个 UTF-16 code unit）时跳过小模型，`task` 保留原文，使用空的关键字索引且不带 `original_ref`；设为 0 可对每条新输入提炼。小模型单次请求超时 15 秒、最多输出 2,048 tokens、禁用自动重试。其他兼容服务需要填写其支持的小模型名称；不可用时自动回退。
-- 提炼提示要求只删除赘述和重复表达。代码块、行内代码和引号内容先替换成占位符，之后逐字还原；检查占位符顺序、路径、数字和部分明确约束。无效 JSON、检测到的约束缺失、工具调用、不完整输出、超时或服务错误均不采用结果。这些检查不能证明动作、条件、例外和顺序保持完整，因此提炼文本只作为辅助提示。
-- 原始输入保存在会话中、在界面原样显示；提炼结果单独保存，恢复和继续运行复用已保存结果，不反复请求小模型。组装模型消息时，若提炼后的 `task` 与原文不同，JSON envelope **同时包含完整 `original`，并以 `original` 为权威要求**；没有 `original` 时，`task` 本身就是原文。原始输出引用也可通过 `read` 回读。
-- `task`、`keywords`、`constraints`、`original_ref` 及需要时的 `original` 都序列化在用户消息的 `content` 内。Responses 和 Chat Completions 使用标准消息字段，不添加请求顶层扩展字段，不改变四工具 schema。
-- `keywords` 仅索引原文中不再逐字出现在提炼后 `task` 的词项，因此任务原样时索引为空。每个历史用户消息都保留自己的索引，因此整个循环和后续对话仍能看到这些词。
-- `constraints` 保留原文约束，并剔除仅来自引号和代码块内部的指令，避免把材料里的指令升级为用户要求。关键字索引只表示词项，不代表新增指令。索引能保护已提取词项的字面值，但不能代替语义校验，必要时仍应读取原文。
-- 普通工具循环中出现工具结果后，若存在约束或关键词，每次请求会临时附加有长度上限的 `[icy 提醒]`，重复当前任务的约束与索引。显式续跑使用 `[icy 任务续跑]` 提醒，包含原始目标、待办和核对已保存结果的要求。这些提醒不写入会话。
-- 结构化消息、完整原文和小模型请求会增加字符数、token 与延迟。`model` 模式不保证降低总费用；字符变化也不是精确 token 节省。提炼失败仍保留原文，小模型已产生的 usage 计入本次运行预算。
-- 每次主模型请求前按 provider 实际序列化的消息、指令和工具定义计算字符量，避免会话同时存储规范化调用与 Responses opaque 时重复计数。达到 `maxContextChars` 的 80% 时，先外置较旧且超过 4,000 字符的工具结果；每轮外置到目标大小就停止，保留其他已读结果；同一循环复用相同内容的引用。
-- 若仍超过硬上限，依次外置较旧的中等结果、把连续的较早完整“assistant 响应＋全部工具结果”合并归档为可回读 JSON（不跨越用户消息），最后才将最近的大结果替换为首尾预览与完整引用。归档原文保留全部调用 ID 与结果；活动索引只列出所有未知结果、每个文件的最后修改、最后失败命令和最近三项操作的原始字段，不生成语义摘要；所有用户消息、最近四项观察所在的完整调用批次和最新 assistant 响应留在活动视图；最新批次即使超过四个结果也全部作为最近观察。最近观察在必要时显示有界预览。用户输入预处理不再压缩工具历史，避免与每轮 ContextManager 重复外置。
-- 外置只改变发送给模型的视图。源会话和归档保留完整参数、输出及 Responses opaque；活动视图中保留的调用与结果仍一一配对，opaque 原样且按原顺序发送。旧 opaque 随整个历史交换外置，不承诺每次请求都携带全部历史 opaque。写引用失败则回退；仍无法容纳时保存状态并以 `context_limit` 停止。
-- 后续读取日志时，活动视图还保留最近三条不同 shell 命令的最新结果，以及最近一次尚未解决的失败命令。相同命令与相同 `cwd` 的成功结果会替换旧失败；其他命令成功不能证明该失败已解决。这里只按原始参数和结果跟踪，不推断任务已经完成。硬上限要求缩短这些结果时，保留字面诊断片段与完整引用。
-- NDJSON 和事件日志包含 `harness_start` / `harness_end` 与每轮 `context` 事件，记录需求处理、前后字符数、结果外置与回退情况；UI 显示压缩前后大小或失败提示。离线演示强制使用 `local`。
-
-## 运行核心
-
-用户输入 / 显式继续 → 记录任务与运行预算 → harness 预处理 → 每轮组装上下文并检查预算 → 主模型响应 → 完整收集工具调用 → 参数验证 → 权限检查 → 执行与检查点落盘 → 回传结果 → 下一轮。
-
-- ToolRegistry 负责工具契约、参数校验与输出处理；PermissionPolicy 管理会话内精确授权；ToolExecutor 执行文件和进程操作，并在审批后重新检查 bash 工作目录。
-- 默认只向 LLM 提供 `read`、`write`、`edit`、`bash` 四个工具，同一响应中的调用串行执行。旧工具名称不再注册，也没有隐藏别名。
-- `read`：按行读取文件并返回 SHA256；也可免授权列出目录或在工作区内搜索内容；目录 `depth: 1` 仅列直接子项，逐级增加，最多返回 500 项；搜索最多返回 200 条匹配，正则执行超时的文件会跳过；还负责读取被截断的工具输出。
-- `write`：创建或整体覆盖文件。覆盖现有文件时 `expectedHash` 必须匹配 `read` 返回的哈希；创建新文件时传 `null`。
-- `edit`：通过 `path`、`oldText`、`newText` 精确替换文件内容。旧文本必须非空且只匹配一次，空格和换行也必须匹配；新文本可为空。不存在或存在多个匹配时拒绝修改；内部保留写入前版本校验。不是 unified diff。
-- `bash`：实际使用 `/bin/bash --noprofile --norc -c`。测试和其他命令走该工具。
-- 默认允许工作区普通文件修改，`bash` 先确认。`--read-only` 仅提供 `read`；目录列举和内容搜索由 `read` 免授权执行。
-- 错误或拒绝回传模型；同一调用连续失败 3 次停止。默认上限为 20 次模型请求、50 次工具调用。
-- 整次模型调用（含流读取和 SDK 重试）的截止时间默认 120 秒；SDK 最多重试 2 次，但不会延长本次截止时间。响应头到达后流仍不结束时，也会以 `model_request_timeout` 停止。流中断或超时后，未收齐的工具调用不会执行，已发送请求的消耗按可观测信息估算记账。
-- shell 最多 60 秒，超时/取消终止 POSIX 进程组，必要时升级为 SIGKILL。
-- 默认每次运行预算为 100,000 tokens，模型消息上下文上限为 120,000 字符；不是整个会话共用的一次预算。显式续跑开启新预算并保留之前的使用记录。
-- provider usage 可用时记录其实际报告值，包括所提供的输入、输出、缓存用量；缺失则显示带 `~` 的估算。请求前估算输入并预留响应空间，向两种协议下发输出 token 上限；收到超额响应后标记 `budget_exceeded`，不继续发模型请求或执行其工具调用。预算耗尽或无法预留响应空间时为 `token_budget`。
-- 这是**软预算**。输入估算不是精确 tokenizer，服务重试、断流和供应商计费也可能产生不可完整观测的消耗。已经发出的模型请求发生异常或取消时，按已知输入和已收到的部分输出估算记账；预处理消耗同样计入。不能把该预算理解为精确费用封顶。
-
-文件工具拒绝路径越界、符号链接及常见敏感路径，包括 `.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`.docker` 目录和以 `.token` 结尾的文件。`bash` 的搜索范围与忽略规则由实际命令决定，例如 `rg` 的行为不同于 `find`。
-
-长输出使用 `icy-output:<id>.txt` 引用，由 `read` 读取，不能被 `write` / `edit` 修改。普通文件的 `offset` / `limit` 按行计数；输出引用按 Unicode 字符计数，最多每页 6,000 字符，结果中提供下一页 offset。它不需要额外工具，也能读取很长的单行输出。旧会话可以恢复，但其中历史工具名称不代表当前可调用工具；旧调用不会重放。
+完整的上下文归档、opaque 保留、需求提炼校验、回退和历史诊断见 [docs/design.md](docs/design.md) 与 [docs/gap-closure.md](docs/gap-closure.md)。运行编排和 `ToolRegistry` / `PermissionPolicy` / `ToolExecutor` 的职责说明也见 [docs/design.md](docs/design.md)。
 
 ## 当前边界
 
-shell 在当前用户的主机上运行，**不是操作系统沙箱**；批准的命令可以访问工作区之外的资源。文件路径与哈希检查不能完全消除外部进程并发修改的竞态。
-
-暂不支持后台命令、交互式 shell stdin、Windows 进程树取消、自动上下文摘要、MCP、多 Agent。文件工具最多读取 1 MB 文本；bash 输出超过 256 KiB 会终止命令。单条结果超过 32 KiB 会显示有界首尾预览，失败命令还会按常见错误行匹配展示一段字面诊断片段；预览不能保证覆盖全部失败，完整输出仍由 `read` 引用回读。
-
-事件和工具输出进行已知 key、常见密钥模式脱敏，清理终端控制字符；不是完整的敏感数据识别系统。模型会接收到任务需要的文件和工具结果。
+shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持后台命令、交互式 shell stdin、Windows 进程树取消、自动上下文摘要、MCP、多 Agent。
 
 ## 开发与验证
 
-```sh
-npm run dev
-npm run check          # 源码、测试与 TypeScript 脚本的类型检查
-npm test               # 确定性行为测试与 CLI 子进程测试
-npm run build
-npm run test:package   # 构建后：临时打包安装、空 ICY_HOME、离线 CLI smoke test
-npm run eval:prompts   # 默认离线：比较 off/local/model 的需求原文保留与预处理开销
-```
+| 脚本 | 用途 |
+| --- | --- |
+| `npm run dev` | 直接运行 `src/cli.tsx` |
+| `npm run check` | 源码、测试和 TypeScript 脚本类型检查 |
+| `npm test` | 确定性行为测试与 CLI 子进程测试 |
+| `npm run build` | 清理、编译并生成可执行入口 |
+| `npm run test:package` | 构建后临时打包安装、空 `ICY_HOME`，并检查安装产物的 `--help`、`--version`、离线 `--demo` |
+| `npm run test:pty` | 构建后的本地 POSIX PTY smoke test；不需要模型凭据 |
+| `npm run eval:prompts` | 默认离线比较 `off` / `local` / `model` 的原文保留和预处理开销；`--live` 才请求配置的小模型服务 |
+| `npm run eval:tasks -- --live` | 默认在临时工作区用已配置主模型各运行一次五类合成编码任务，可用 `--repetitions` / `--concurrency`；检查文件结果、验证脚本保留、实际验收输出和保护文件；会产生模型请求、临时修改和指定验收授权 |
+| `npm run eval:repository -- --live` | 在仓库临时副本运行真实仓库任务的中断、恢复和独立验收评测 |
 
-自动化测试覆盖四工具循环、两种模型协议请求中的工具列表、旧工具拒绝、精确替换歧义、长输出读取、Bash 语法、协议分片、中断与异常记账、文件冲突、路径边界、授权、预算、循环内结果外置、会话校验和 v1/v2 恢复、任务检查点、验收证据过期、进程取消、中文/emoji 输入完整性、工具轨迹恢复和任务命令，以及目录列举与搜索边界、模型探针分类和会话过滤。CLI 子进程测试检查退出码、信号取消和 NDJSON 分流；包测试在临时目录安装产物并验证 `--help`、`--version` 和离线 `--demo`。
+测试覆盖四工具循环、两种协议的工具列表和请求分片、旧工具拒绝、参数/精确替换歧义、Bash 语法、文件冲突、路径与敏感路径边界、授权/取消/进程终止、长输出、预算/超时/异常记账、上下文外置、会话校验与 v1/v2 恢复、任务命令和检查点、工具轨迹恢复、验收证据过期、目录列举与搜索、模型探针、会话过滤、中文/emoji 输入以及 CLI/PTY/包安装行为。
 
-提示词评测夹具包含顺序、条件、例外、否定、验收和引用材料。`npm run eval:prompts` 使用确定性假模型，报告原文是否保留、字面要求遗漏、输入字符数、预处理 token 和耗时；它不测自主任务完成率，也不证明提炼语义等价。需要测试已配置的小模型服务时可运行 `npm run eval:prompts -- --live`，会发送合成夹具并产生模型请求，不发送工作区文件、不执行主机工具。
+`eval:prompts` 的离线夹具包含顺序、条件、例外、否定、验收和引用材料；默认使用确定性假模型，不发送工作区文件或执行主机工具；`--live` 只发送合成夹具到配置的小模型服务。它只报告原文是否保留、字面要求遗漏、字符数、预处理 token 和耗时，不测自主任务完成率，也不证明语义等价。`eval:tasks -- --live` 默认每个样例只执行一次；即使输出正确，也不能据此给出稳定成功率、费用排名或压缩收益。真实模型结果、历史失败、重复批次和上下文诊断保存在 [docs/evaluations/](docs/evaluations/)；限制与审计见 [docs/gap-closure.md](docs/gap-closure.md)。
 
-`npm run eval:tasks -- --live` 使用已配置的主模型，在临时工作区对三个合成编码任务分别运行 `off/local/model`，检查文件结果、验证脚本保留情况和实际测试输出，记录 usage 与耗时。它会调用模型、修改临时文件并授权指定验证命令；每个样例只执行一次，是小规模 smoke 基线，不能据此给出稳定成功率或费用排名。第四轮的 45 次比较批次（只读探索对齐前后的基线、批次 A 与批次 B）保存在 `docs/evaluations/repeated-tasks-iter4-*.json`：拒绝从 7 次降到 1 次发生在工具描述与系统提示同时调整之后，输入 token 与耗时高于基线，小样本不证明可靠性或费用收益。
+仓库的 Node 22 macOS/Linux [GitHub Actions 门禁](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)包含锁文件安装、类型检查、测试、构建和包测试；工作流文件的存在不表示对应提交已经通过，发布前应确认远程结果。Linux PTY 有自动门禁，但不替代真人人工交互验收。历史真实 Happy Code 验收曾在独立临时目录完成 `write`、`read`、`edit` 并批准 bash 检查，四个工具成功且检查退出码为 0；这不是当前在线回归承诺。
 
-仓库配置了 Node 22、macOS/Linux 的 GitHub Actions 门禁：锁文件安装、类型检查、测试、构建及包测试。发布前应确认对应提交的远程结果；工作流文件的存在不表示运行已通过，自动化测试也不能替代 Linux 人工交互验收。本轮另行完成的 9 个真实模型合成编码场景、参数、usage 和耗时见[实施记录](docs/implementation-report.md)；它们不能替代跨平台验收或大样本效果评估。
+代码入口是 `src/cli.tsx`；运行循环在 `src/core/`，模型协议在 `src/providers/`，工具与权限在 `src/tools/`，会话在 `src/sessions/`，Workbench 在 `src/ui/`。
 
-历史真实 Happy Code 验收记录（此前版本，不代表本轮功能已完成在线回归）：在独立临时目录通过 `write` 创建内容为 `before` 的 `note.txt`，用 `read` 读取、`edit` 替换为 `after`，再批准 `bash` 检查文件内容。四个工具全部成功，检查退出码为 0，模型正常完成任务。
+## 文档索引
 
-代码入口：`src/cli.tsx`；运行循环 `src/core/`；模型协议 `src/providers/`；工具与权限 `src/tools/`；会话 `src/sessions/`；Workbench `src/ui/`。
+- [架构与迭代计划](docs/iteration-plan.md)：架构评估、交付顺序和后续队列。
+- [原始设计](docs/design.md)：设计提案、工具/权限契约和实现分层；浏览器原型使用模拟数据，真实执行在终端完成。
+- [缺口验收清单](docs/gap-closure.md)：上下文、任务恢复、模型诊断、只读探索及历史评测限制。
+- [逐项验收核对](docs/acceptance-audit.md)：实现要求与自动化/PTY/真实任务证据的逐项对应。
+- [实施记录](docs/implementation-report.md)：实施范围、脚本验证、历史边界和真实模型场景记录。
+- [评测资料](docs/evaluations/)：提示词、任务、PTY、仓库任务和重复批次的原始记录与审查。
 
-[架构与迭代计划](docs/iteration-plan.md)记录迭代方向；[原始设计](docs/design.md)与[浏览器选型原型](design/index.html)保留作参考。原型使用模拟数据，真实执行在终端完成。实际功能以本 README 和源码为准。
-
-协议参考：[OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)、[流式响应](https://developers.openai.com/api/docs/guides/streaming-responses)、[Ink](https://github.com/vadimdemedes/ink)。
+协议参考：[OpenAI function calling](https://developers.openai.com/api/docs/guides/function-calling)、[流式响应](https://developers.openai.com/api/docs/guides/streaming-responses)、[Reasoning summaries](https://developers.openai.com/api/docs/guides/reasoning#reasoning-summaries)。
