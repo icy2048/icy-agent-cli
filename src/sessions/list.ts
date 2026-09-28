@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseSessionData, sessionIdSchema } from './schema.js';
 import { errorText, redact } from '../core/text.js';
+import { canonicalPath } from '../tools/paths.js';
 
 export interface SessionSummary {
   id: string; cwd?: string; model?: string; provider?: string; updatedAt?: string;
@@ -30,12 +31,14 @@ export function invalidStatusText(error: unknown): string | undefined {
 }
 
 /** Read-only discovery: listing never acquires locks, migrates, or recovers a session. */
-export async function listSessions(home: string, filter?: SessionFilter): Promise<SessionSummary[]> {
+export async function listSessions(home: string, filter?: SessionFilter, platform = process.platform): Promise<SessionSummary[]> {
   // Validate before touching the filesystem: a bad status must not read (or depend on) any directory.
   const statuses = filter?.status ?? [];
   for (const status of statuses) if (!knownStatus(status)) invalidStatus(status);
   // A filter cwd may name a removed workspace; it is only resolved, never realpathed, stated or created.
-  const workspace = filter?.cwd === undefined ? undefined : path.resolve(process.cwd(), filter.cwd);
+  const resolvePath = platform === 'win32' ? path.win32 : path;
+  const separator = platform === 'win32' ? '\\' : path.sep;
+  const workspace = filter?.cwd === undefined ? undefined : canonicalPath(resolvePath.resolve(process.cwd(), filter.cwd), platform);
   const filtering = statuses.length > 0 || workspace !== undefined;
   let entries;
   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
@@ -45,7 +48,7 @@ export async function listSessions(home: string, filter?: SessionFilter): Promis
       const data = parseSessionData(JSON.parse(await readFile(path.join(home, 'sessions', entry.name, 'session.json'), 'utf8')), entry.name);
       const task = 'task' in data ? data.task as { goal?: string; status?: string } | undefined : undefined;
       const first = data.messages.find(m => m.role === 'user');
-      return { id: data.id, cwd: data.cwd, model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
+      return { id: data.id, cwd: canonicalPath(data.cwd, platform), model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
     } catch (error) { return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
   }));
   const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries, (_key, value) => typeof value === 'string' ? redact(value) : value));
@@ -54,5 +57,8 @@ export async function listSessions(home: string, filter?: SessionFilter): Promis
   if (!filtering) return listed;
   return listed.filter(summary => !summary.error
     && (statuses.length === 0 || (summary.status !== undefined && statuses.includes(summary.status)))
-    && (workspace === undefined || (summary.cwd !== undefined && (summary.cwd === workspace || summary.cwd.startsWith(workspace + path.sep)))));
+    && (workspace === undefined || (summary.cwd !== undefined && (() => {
+      const summaryCwd = canonicalPath(summary.cwd, platform);
+      return summaryCwd === workspace || summaryCwd.startsWith(workspace + separator);
+    })())));
 }

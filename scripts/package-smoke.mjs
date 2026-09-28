@@ -34,15 +34,18 @@ try {
     npm_config_update_notifier: 'false',
   };
   const npmPath = process.env.npm_execpath;
-  const npm = args => exec(npmPath ? process.execPath : 'npm', npmPath ? [npmPath, ...args] : args, { cwd: root, env, timeout: 180000, maxBuffer: 4 * 1024 * 1024 });
+  const npm = args => exec(npmPath ? process.execPath : (process.platform === 'win32' ? 'npm.cmd' : 'npm'), npmPath ? [npmPath, ...args] : args, { cwd: root, env, timeout: 180000, maxBuffer: 4 * 1024 * 1024, shell: process.platform === 'win32' && !npmPath });
   const packed = await npm(['pack', '--json', '--ignore-scripts', '--pack-destination', temporary]);
   const metadata = JSON.parse(packed.stdout);
   assert.equal(metadata.length, 1);
   const tarball = path.join(temporary, metadata[0].filename);
   await npm(['install', '--prefix', install, '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', tarball]);
   const binary = path.join(install, 'node_modules', '.bin', 'icy');
-  assert.ok((await stat(binary)).mode & 0o111, 'installed CLI must be executable');
-  const run = args => exec(binary, args, { cwd: workspace, env, timeout: 15000, maxBuffer: 1024 * 1024 });
+  if (process.platform !== 'win32') assert.ok((await stat(binary)).mode & 0o111, 'installed CLI must be executable');
+  const installedEntry = path.join(install, 'node_modules', pkg.name, 'dist', 'cli.js');
+  const run = args => process.platform === 'win32'
+    ? exec(process.execPath, [installedEntry, ...args], { cwd: workspace, env, timeout: 15000, maxBuffer: 1024 * 1024 })
+    : exec(binary, args, { cwd: workspace, env, timeout: 15000, maxBuffer: 1024 * 1024 });
   const help = await run(['--help']);
   assert.match(help.stdout, /icy — AI agent CLI/); assert.equal(help.stderr, '');
   const version = await run(['--version']);

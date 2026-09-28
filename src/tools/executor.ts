@@ -16,11 +16,30 @@ const page = (content: string, offset: number | null, limit: number | null) => {
   const lines = content.split('\n'), start = (offset ?? 1) - 1;
   return lines.slice(start, start + (limit ?? 200)).map((line, i) => `${start + i + 1}: ${line}`).join('\n') + `\n[lines ${Math.min(start + 1, lines.length)}–${Math.min(start + (limit ?? 200), lines.length)} of ${lines.length}]`;
 };
+export interface ToolExecutorOptions {
+  platform?: NodeJS.Platform;
+  pathModule?: Pick<typeof path, 'dirname' | 'join'>;
+  link?: typeof link;
+  stat?: typeof stat;
+  rename?: typeof rename;
+}
+
 export class ToolExecutor {
-  constructor(private config: Pick<Config, 'cwd'>, private store: SessionStore) {}
+  private readonly platform: NodeJS.Platform;
+  private readonly pathModule: Pick<typeof path, 'dirname' | 'join'>;
+  private readonly link: typeof link;
+  private readonly stat: typeof stat;
+  private readonly rename: typeof rename;
+  constructor(private config: Pick<Config, 'cwd'>, private store: SessionStore, options: ToolExecutorOptions = {}) {
+    this.platform = options.platform ?? process.platform;
+    this.pathModule = options.pathModule ?? path;
+    this.link = options.link ?? link;
+    this.stat = options.stat ?? stat;
+    this.rename = options.rename ?? rename;
+  }
   private async readFileContent(file: string) {
     const resolved = await workspacePath(this.config.cwd, file);
-    const info = await stat(resolved);
+    const info = await this.stat(resolved);
     if (!info.isFile() || info.size > 1_000_000) throw new Error('not_text_file_or_too_large');
     const content = await readFile(resolved, 'utf8');
     if (content.includes('\0')) throw new Error('binary_file');
@@ -33,17 +52,40 @@ export class ToolExecutor {
     try { before = await this.readFileContent(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') exists = false; else throw e; }
     if (exists ? expectedHash !== sha256(before) : expectedHash !== null) throw new Error('file_changed_or_hash_required');
     signal.throwIfAborted();
-    await mkdir(path.dirname(target), { recursive: true });
+    await mkdir(this.pathModule.dirname(target), { recursive: true });
     await workspacePath(this.config.cwd, file);
-    const temp = path.join(path.dirname(target), `.icy-${randomUUID()}.tmp`);
+    const temp = this.pathModule.join(this.pathModule.dirname(target), `.icy-${randomUUID()}.tmp`);
     try {
-      await writeFile(temp, content, { flag: 'wx', mode: exists ? (await stat(target)).mode : 0o644 });
+      await writeFile(temp, content, { flag: 'wx', mode: exists ? (await this.stat(target)).mode : 0o644 });
       signal.throwIfAborted();
       await workspacePath(this.config.cwd, file);
       if (exists) {
         if (sha256(await this.readFileContent(file)) !== expectedHash) throw new Error('file_changed');
-        await rename(temp, target);
-      } else { await link(temp, target); await unlink(temp); } // no overwrite if another process creates the target
+        await this.rename(temp, target);
+      } else {
+        const fallback = async () => {
+          // rename() can replace a target on some platforms, so check again immediately before it.
+          try { await this.stat(target); throw new Error('file_changed'); }
+          catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+              if (error instanceof Error && error.message === 'file_changed') throw error;
+              throw new Error('file_changed');
+            }
+          }
+          await this.rename(temp, target);
+        };
+        if (this.platform === 'win32') await fallback();
+        else {
+          let linked = false;
+          try { await this.link(temp, target); linked = true; }
+          catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            if (!['EPERM', 'EXDEV', 'ENOSYS'].includes(code ?? '')) throw error;
+            await fallback();
+          }
+          if (linked) await unlink(temp);
+        }
+      } // no overwrite if another process creates the target
     } finally { await unlink(temp).catch(() => {}); }
     return { ok: true, content: `Updated ${file}\nSHA256: ${sha256(content)}`, changedFile: file, diff: createTwoFilesPatch(file, file, before, content) };
   }
