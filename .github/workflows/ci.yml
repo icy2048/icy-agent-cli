@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -26,4 +26,10 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run test:pty
+        if: runner.os != 'Windows'
+      - name: Windows offline smoke
+        if: runner.os == 'Windows'
+        run: |
+          node dist/cli.js --demo --plain
+          node dist/cli.js --version
       - run: npm run test:package

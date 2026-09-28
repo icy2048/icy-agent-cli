@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, symlink, rename } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { PermissionPolicy } from '../src/tools/permissions.js';
@@ -8,6 +8,7 @@ import { ToolRegistry } from '../src/tools/registry.js';
 import { SessionStore } from '../src/sessions/store.js';
 import type { Config } from '../src/config/load.js';
 import type { ApprovalDecision, Approve } from '../src/core/types.js';
+import { makeSymlink } from './helpers/fs.js';
 
 test('exact grants distinguish cwd/timeout/command and never leak into another session', async () => {
   const cwd = await mkdtemp(path.join(tmpdir(), 'icy-policy-'));
@@ -49,7 +50,7 @@ test('a bash directory changed to a symlink while approval is pending cannot exe
   try {
     const tools = new ToolRegistry(config, store, async () => {
       await rename(path.join(cwd, 'sub'), path.join(cwd, 'original'));
-      await symlink(outside, path.join(cwd, 'sub'));
+      await makeSymlink(outside, path.join(cwd, 'sub'), 'dir');
       return 'once';
     });
     const result = await tools.execute({ id: 'swap', name: 'bash', arguments: JSON.stringify({ command: 'touch escaped', cwd: 'sub', timeoutMs: null }) }, new AbortController().signal);

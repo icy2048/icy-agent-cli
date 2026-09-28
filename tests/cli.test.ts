@@ -121,7 +121,7 @@ test('CLI approval exits 2 without executing the requested shell command', async
 });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-  test(`CLI ${signal} cancels an in-flight HTTP request, exits 130 and persists cancellation`, async () => {
+  test(`CLI ${signal} cancels an in-flight HTTP request, exits 130 and persists cancellation`, { skip: process.platform === 'win32' && 'Windows has no SIGINT delivery to child processes' }, async () => {
     let notifyRequest!: () => void;
     const requested = new Promise<void>(resolve => { notifyRequest = resolve; });
     const s = await fixture(response => {

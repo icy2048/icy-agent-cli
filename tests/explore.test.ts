@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { Config } from '../src/config/load.js';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
+import { makeSymlink } from './helpers/fs.js';
 
 type Fixture = { root: string; cwd: string; tools: ToolRegistry; store: SessionStore; config: Config };
 const makeFixture = async (permissions: Config['permissions'] = 'workspace-edit'): Promise<Fixture> => {
@@ -40,7 +41,7 @@ test('directory listing is sorted, bounded, and skips protected entries while ma
     await writeFile(path.join(f.cwd, 'visible.ts'), '1234');
     for (const name of ['.git', 'node_modules', 'dist', '.icy']) await mkdir(path.join(f.cwd, name));
     await writeFile(path.join(f.cwd, '.env'), 'hidden');
-    await symlink(path.join(f.root, 'outside'), path.join(f.cwd, 'z-link'));
+    await makeSymlink(path.join(f.root, 'outside'), path.join(f.cwd, 'z-link'), 'dir');
     const shallow = await runRead(f.tools, '.', { depth: 1 });
     assert.equal(shallow.ok, true);
     assert.equal(shallow.content, 'sub/\nvisible.ts  4\nz-link@\n[3 entries]');
@@ -74,7 +75,7 @@ test('fixed and regex searches skip binary, sensitive, and symlinked files', asy
     await writeFile(path.join(f.cwd, 'src', 'secret.pem'), 'needle');
     await writeFile(path.join(f.cwd, 'src', '.npmrc'), 'needle');
     await mkdir(path.join(f.root, 'outside')); await writeFile(path.join(f.root, 'outside', 'escaped.ts'), 'needle');
-    await symlink(path.join(f.root, 'outside'), path.join(f.cwd, 'src', 'linked'));
+    await makeSymlink(path.join(f.root, 'outside'), path.join(f.cwd, 'src', 'linked'), 'dir');
     const fixed = await runRead(f.tools, 'src', { pattern: 'needle' });
     assert.equal(fixed.ok, true);
     assert.match(fixed.content, /src\/a\.ts:1: needle here/);

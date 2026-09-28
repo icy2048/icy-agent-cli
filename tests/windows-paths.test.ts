@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { BigIntStats } from 'node:fs';
@@ -10,6 +10,7 @@ import { SessionStore } from '../src/sessions/store.js';
 import { ToolExecutor } from '../src/tools/executor.js';
 import type { ToolInput } from '../src/tools/definitions.js';
 import { canonicalPath, workspacePath } from '../src/tools/paths.js';
+import { makeSymlink } from './helpers/fs.js';
 
 const writeCall = (file: string, content: string): ToolInput => ({
   name: 'write', args: { path: file, content, expectedHash: null },
@@ -23,13 +24,13 @@ const errorWithCode = (code: string) => Object.assign(new Error(code), { code })
   assert.equal(canonicalPath(posix, 'darwin'), posix);
 });
 
-test('workspacePath rejects symlinks; Windows junctions are covered by lstat too', { skip: process.platform === 'win32' }, async () => {
+test('workspacePath rejects symlinks and Windows junctions', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'icy-link-'));
   try {
     const cwd = path.join(root, 'workspace');
     await mkdir(cwd);
     await mkdir(path.join(root, 'outside'));
-    await symlink(path.join(root, 'outside'), path.join(cwd, 'link'));
+    await makeSymlink(path.join(root, 'outside'), path.join(cwd, 'link'), 'dir');
     await assert.rejects(workspacePath(cwd, 'link'), { message: 'symlink_not_allowed' });
   } finally { await rm(root, { recursive: true, force: true }); }
 });

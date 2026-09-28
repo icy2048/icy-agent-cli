@@ -35,7 +35,7 @@ test('model discovery uses the configured prefix and refuses redirects', async (
   } finally { server.close(); }
 });
 
-test('model configuration saves a private credential file and preserves unrelated settings', async () => {
+test('model configuration saves a private credential file and preserves unrelated settings', { skip: process.platform === 'win32' && 'Windows does not preserve POSIX 0o600 permissions' }, async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-model-save-'));
   try {
     await writeFile(path.join(home, 'config.json'), JSON.stringify({ permissions: 'read-only', maxToolCalls: 9, thinkingExpanded: true }));

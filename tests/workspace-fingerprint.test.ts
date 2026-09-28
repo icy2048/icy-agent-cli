@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { fingerprintWorkspace } from '../src/core/workspace-fingerprint.js';
+import { makeSymlink } from './helpers/fs.js';
 
 async function fixture() {
   const root = await fs.mkdtemp(path.join(tmpdir(), 'icy-fingerprint-')), cwd = path.join(root, 'workspace');
@@ -31,16 +32,16 @@ test('directory traversal is independent of file creation order', async () => {
   const f = await fixture(), second = path.join(f.root, 'other');
   try {
     await fs.mkdir(second);
-    for (const name of ['b.txt', 'a.txt']) await fs.writeFile(path.join(f.cwd, name), name, { mode: 0o600 });
-    for (const name of ['a.txt', 'b.txt']) await fs.writeFile(path.join(second, name), name, { mode: 0o600 });
+    for (const name of ['b.txt', 'a.txt']) await fs.writeFile(path.join(f.cwd, name), name);
+    for (const name of ['a.txt', 'b.txt']) await fs.writeFile(path.join(second, name), name);
     assert.equal(await fingerprintWorkspace(f.cwd), await fingerprintWorkspace(second));
   } finally { await f.clean(); }
 });
 
-test('file permissions, renames and empty directory changes alter the fingerprint', async () => {
+test('file permissions, renames and empty directory changes alter the fingerprint', { skip: process.platform === 'win32' && 'Windows does not preserve POSIX file mode changes' }, async () => {
   const f = await fixture(), file = path.join(f.cwd, 'original.txt');
   try {
-    await fs.writeFile(file, 'same', { mode: 0o600 });
+    await fs.writeFile(file, 'same');
     const original = await fingerprintWorkspace(f.cwd);
     await fs.chmod(file, 0o700);
     const mode = await fingerprintWorkspace(f.cwd); assert.notEqual(mode, original);
@@ -55,12 +56,12 @@ test('symlink target text is hashed without reading or traversing its target', a
   const f = await fixture(), external = path.join(f.root, 'external.txt'), link = path.join(f.cwd, 'link');
   try {
     await fs.writeFile(external, 'outside');
-    await fs.symlink('../external.txt', link);
-    await fs.symlink('.', path.join(f.cwd, 'directory-loop'));
+    await makeSymlink('../external.txt', link, 'file');
+    await makeSymlink('.', path.join(f.cwd, 'directory-loop'), 'dir');
     const before = await fingerprintWorkspace(f.cwd); assert.match(before!, /^[a-f0-9]{64}$/);
     await fs.writeFile(external, 'outside changed');
     assert.equal(await fingerprintWorkspace(f.cwd), before);
-    await fs.unlink(link); await fs.symlink('../missing-target.txt', link);
+    await fs.unlink(link); await makeSymlink('../missing-target.txt', link, 'file');
     const changed = await fingerprintWorkspace(f.cwd);
     assert.match(changed!, /^[a-f0-9]{64}$/); assert.notEqual(changed, before);
     assert.equal(await fingerprintWorkspace(path.join(f.cwd, 'directory-loop')), undefined);

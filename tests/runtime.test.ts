@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm, symlink, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Config } from '../src/config/load.js';
@@ -10,6 +10,7 @@ import { Agent } from '../src/core/agent.js';
 import type { Approve, Completion, Provider, Message, AgentEvent } from '../src/core/types.js';
 import { runBash } from '../src/tools/bash.js';
 import { reminderMessage } from '../src/core/harness.js';
+import { makeSymlink } from './helpers/fs.js';
 
 async function setup(approve?: Approve, options: Partial<Config> = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-test-'));
@@ -106,7 +107,7 @@ test('write conflicts, traversal, symlinks, secrets, and read-only writes are bl
     await writeFile(path.join(s.cwd, 'a.txt'), 'original');
     assert.equal((await s.call('write', { path: 'a.txt', content: 'oops', expectedHash: sha256('old') })).ok, false);
     assert.equal(await readFile(path.join(s.cwd, 'a.txt'), 'utf8'), 'original');
-    await writeFile(path.join(s.dir, 'outside'), 'private'); await symlink(s.dir, path.join(s.cwd, 'link'));
+    await writeFile(path.join(s.dir, 'outside'), 'private'); await makeSymlink(s.dir, path.join(s.cwd, 'link'), 'dir');
     for (const file of ['../outside', 'link/outside', '.env', '.ssh/id_rsa']) {
       assert.equal((await s.call('read', { path: file, offset: null, limit: null })).ok, false, file);
       assert.equal((await s.call('write', { path: file, content: 'oops', expectedHash: null })).ok, false, file);
