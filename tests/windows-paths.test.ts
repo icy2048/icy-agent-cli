@@ -9,7 +9,7 @@ import { unchanged } from '../src/core/workspace-fingerprint.js';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolExecutor } from '../src/tools/executor.js';
 import type { ToolInput } from '../src/tools/definitions.js';
-import { canonicalPath, workspacePath } from '../src/tools/paths.js';
+import { canonicalPath, resolveWorkspacePath, workspacePath } from '../src/tools/paths.js';
 import { makeSymlink } from './helpers/fs.js';
 
 const writeCall = (file: string, content: string): ToolInput => ({
@@ -22,6 +22,10 @@ const errorWithCode = (code: string) => Object.assign(new Error(code), { code })
   assert.equal(canonicalPath('C:\\Users\\x', 'win32'), 'C:\\Users\\x');
   const posix = 'c:/Users/x';
   assert.equal(canonicalPath(posix, 'darwin'), posix);
+});
+
+test('resolveWorkspacePath uses Windows separators and falls back for a missing Windows path', async () => {
+  assert.equal(await resolveWorkspacePath('c:/Users/Runner/ws/nested', 'win32'), 'C:\\Users\\Runner\\ws\\nested');
 });
 
 test('workspacePath rejects symlinks and Windows junctions', async () => {

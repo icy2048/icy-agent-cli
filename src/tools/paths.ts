@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { realpath as nativeRealpathCallback } from 'node:fs';
 import { lstat, realpath } from 'node:fs/promises';
 
 export interface PathModule {
@@ -15,6 +16,24 @@ export function canonicalPath(p: string, platform = process.platform): string {
   return p.replace(/[\\/]/g, '\\').replace(/^([a-z]):/, (_, drive: string) => `${drive.toUpperCase()}:`);
 }
 
+function nativeRealpath(p: string): Promise<string> {
+  return new Promise((resolve, reject) => nativeRealpathCallback.native(p, (error, resolved) => error ? reject(error) : resolve(resolved)));
+}
+
+/** Resolve a workspace path, expanding native Windows path aliases when available. */
+export async function resolveWorkspacePath(p: string, platform = process.platform): Promise<string> {
+  const pathModule = platform === 'win32' ? path.win32 : path;
+  const resolved = pathModule.resolve(p);
+  let target = resolved;
+  try {
+    target = platform === 'win32' ? await nativeRealpath(resolved) : await realpath(resolved);
+  } catch {
+    try { target = await realpath(resolved); }
+    catch { /* A removed workspace is still a valid filter. */ }
+  }
+  return canonicalPath(target, platform);
+}
+
 export function sensitive(file: string): boolean {
   return file.split(/[\\/]/).some(part => /^(?:\.git|\.icy|\.ssh|\.aws|\.gnupg|\.kube|\.docker|\.npmrc|\.netrc|\.pypirc|\.git-credentials|\.htpasswd|credentials|id_rsa|id_ed25519)$/i.test(part)
     || /^\.env(?:\.|$)/i.test(part) && !/^\.env\.(?:example|sample|template)$/i.test(part)
@@ -29,7 +48,7 @@ export async function workspacePath(cwd: string, input: string, options: Workspa
   if (input.includes('\0')) throw new Error('invalid_path');
   const platform = options.platform ?? process.platform;
   const pathModule = options.pathModule ?? path;
-  const root = canonicalPath(await realpath(cwd), platform);
+  const root = await resolveWorkspacePath(cwd, platform);
   const target = canonicalPath(pathModule.resolve(root, input), platform);
   const relative = pathModule.relative(root, target);
   if (relative === '..' || relative.startsWith(`..${pathModule.sep}`) || pathModule.isAbsolute(relative)) throw new Error('path_outside_workspace');

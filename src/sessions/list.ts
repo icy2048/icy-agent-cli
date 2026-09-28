@@ -1,8 +1,8 @@
-import { readFile, readdir, realpath } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseSessionData, sessionIdSchema } from './schema.js';
 import { errorText, redact } from '../core/text.js';
-import { canonicalPath } from '../tools/paths.js';
+import { resolveWorkspacePath } from '../tools/paths.js';
 
 export interface SessionSummary {
   id: string; cwd?: string; model?: string; provider?: string; updatedAt?: string;
@@ -35,15 +35,12 @@ export async function listSessions(home: string, filter?: SessionFilter, platfor
   // Validate before touching the filesystem: a bad status must not read (or depend on) any directory.
   const statuses = filter?.status ?? [];
   for (const status of statuses) if (!knownStatus(status)) invalidStatus(status);
-  // A filter cwd may name a removed workspace; realpath is read-only and falls back without creating or locking it.
+  // A filter cwd may name a removed workspace; path resolution is read-only and falls back without creating or locking it.
   const separator = platform === 'win32' ? '\\' : path.sep;
   let workspace: string | undefined;
-  if (filter?.cwd !== undefined) {
-    const resolved = path.resolve(process.cwd(), filter.cwd);
-    let target = resolved;
-    try { target = await realpath(resolved); } catch { /* removed workspace: keep the resolved filter */ }
-    workspace = canonicalPath(target, platform);
-  }
+  if (filter?.cwd !== undefined) workspace = await resolveWorkspacePath(filter.cwd, platform);
+  const comparable = (value: string) => platform === 'win32' ? value.toLowerCase() : value;
+  const comparableWorkspace = workspace === undefined ? undefined : comparable(workspace);
   const filtering = statuses.length > 0 || workspace !== undefined;
   let entries;
   try { entries = await readdir(path.join(home, 'sessions'), { withFileTypes: true }); }
@@ -53,7 +50,7 @@ export async function listSessions(home: string, filter?: SessionFilter, platfor
       const data = parseSessionData(JSON.parse(await readFile(path.join(home, 'sessions', entry.name, 'session.json'), 'utf8')), entry.name);
       const task = 'task' in data ? data.task as { goal?: string; status?: string } | undefined : undefined;
       const first = data.messages.find(m => m.role === 'user');
-      return { id: data.id, cwd: canonicalPath(data.cwd, platform), model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
+      return { id: data.id, cwd: await resolveWorkspacePath(data.cwd, platform), model: data.model, provider: data.provider, updatedAt: data.updatedAt, goal: redact(task?.goal ?? first?.content ?? '').replace(/\s+/g, ' ').slice(0, 120), status: task?.status ?? 'legacy' };
     } catch (error) { return { id: entry.name, error: redact(errorText(error)).slice(0, 240) }; }
   }));
   const safe: SessionSummary[] = JSON.parse(JSON.stringify(summaries, (_key, value) => typeof value === 'string' ? redact(value) : value));
@@ -62,8 +59,8 @@ export async function listSessions(home: string, filter?: SessionFilter, platfor
   if (!filtering) return listed;
   return listed.filter(summary => !summary.error
     && (statuses.length === 0 || (summary.status !== undefined && statuses.includes(summary.status)))
-    && (workspace === undefined || (summary.cwd !== undefined && (() => {
-      const summaryCwd = canonicalPath(summary.cwd, platform);
-      return summaryCwd === workspace || summaryCwd.startsWith(workspace + separator);
+    && (comparableWorkspace === undefined || (summary.cwd !== undefined && (() => {
+      const summaryCwd = comparable(summary.cwd);
+      return summaryCwd === comparableWorkspace || summaryCwd.startsWith(comparableWorkspace + separator);
     })())));
 }

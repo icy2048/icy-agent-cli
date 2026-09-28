@@ -81,6 +81,17 @@ test('cwd filters resolve against process.cwd(), match nested workspaces and com
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
+test('Windows cwd filters compare case-insensitively without confusing another drive', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'icy-cwd-win32-'));
+  try {
+    // The leading slash keeps the fixture valid on macOS; win32 resolution turns this into a C: path.
+    await fixtureSession(home, 'nested-workspace', { status: 'failed', cwd: '/C:/Users/Runner/ws/nested' });
+    await fixtureSession(home, 'other-drive', { status: 'failed', cwd: '/D:/other' });
+    const listed = await listSessions(home, { cwd: '/c:/users/runner/ws/nested' }, 'win32');
+    assert.deepEqual(listed.map(summary => summary.id), ['nested-workspace']);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
 test('cwd filters realpath through a symlink and tolerate a removed workspace', async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'icy-cwd-link-home-'));
   const root = await mkdtemp(path.join(tmpdir(), 'icy-cwd-link-root-'));

@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { readFile, realpath } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import process from 'node:process';
-import path from 'node:path';
 import React from 'react';
 import { render } from 'ink';
 import { loadConfig, initConfig, type Config } from './config/load.js';
@@ -13,7 +12,7 @@ import { ModelProvider, DemoProvider } from './providers/model.js';
 import { Agent } from './core/agent.js';
 import { App, type ApprovalBridge } from './ui/App.js';
 import { errorText, redact } from './core/text.js';
-import { canonicalPath } from './tools/paths.js';
+import { resolveWorkspacePath } from './tools/paths.js';
 import type { AgentEvent } from './core/types.js';
 
 const help = `icy — AI agent CLI
@@ -56,11 +55,9 @@ export async function main(argv = process.argv.slice(2)) {
   let config: Config, sessionWorkspace: string | undefined;
   if (positionals[0] === 'sessions' && values.cwd !== undefined) {
     // For sessions --cwd doubles as the filter and may name a removed workspace; project config then just reads nothing.
-    let workspace = canonicalPath(path.resolve(values.cwd));
-    try { workspace = canonicalPath(await realpath(values.cwd)); } catch { /* removed workspace: still a valid filter */ }
-    sessionWorkspace = workspace;
-    config = await loadConfig(workspace, overrides);
-  } else config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
+    sessionWorkspace = await resolveWorkspacePath(values.cwd);
+    config = await loadConfig(sessionWorkspace, overrides);
+  } else config = await loadConfig(await resolveWorkspacePath(values.cwd || process.cwd()), overrides);
   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
   if (positionals[0] === 'sessions') {
     const filter: SessionFilter = {};
@@ -89,12 +86,18 @@ export async function main(argv = process.argv.slice(2)) {
   if (values.resume) {
     const restored = await SessionStore.resume(config.home, values.resume, [config.apiKey]); store = restored.store; recovery = restored.recovered;
     try {
-      const resumedConfig = await loadConfig(canonicalPath(await realpath(store.data.cwd)), overrides);
+      const resumedConfig = await loadConfig(await resolveWorkspacePath(store.data.cwd), overrides);
       config = values.demo ? { ...resumedConfig, provider: 'chat-completions', model: 'offline-demo', permissions: 'read-only', promptCompaction: 'local' } : resumedConfig;
     } catch (error) { await store.close(); throw error; }
     if (store.data.provider !== config.provider || store.data.model !== config.model || store.data.baseUrl !== config.baseUrl) { await store.close(); throw new Error('恢复会话需要相同的 provider、model 和 baseUrl；请恢复原设置或开始新会话。'); }
-    if (values.cwd && canonicalPath(await realpath(values.cwd)) !== canonicalPath(store.data.cwd)) { await store.close(); throw new Error('恢复时不能改变工作区。'); }
-    config = { ...config, cwd: canonicalPath(await realpath(store.data.cwd)) };
+    if (values.cwd) {
+      const requestedWorkspace = await resolveWorkspacePath(values.cwd), storedWorkspace = await resolveWorkspacePath(store.data.cwd);
+      const sameWorkspace = process.platform === 'win32'
+        ? requestedWorkspace.toLowerCase() === storedWorkspace.toLowerCase()
+        : requestedWorkspace === storedWorkspace;
+      if (!sameWorkspace) { await store.close(); throw new Error('恢复时不能改变工作区。'); }
+    }
+    config = { ...config, cwd: await resolveWorkspacePath(store.data.cwd) };
   } else store = await SessionStore.create(config.home, { cwd: config.cwd, provider: config.provider, model: config.model, baseUrl: config.baseUrl }, [config.apiKey]);
   const bridge: ApprovalBridge = {};
   const tools = new ToolRegistry(config, store, interactive ? (request, signal) => bridge.current!(request, signal) : undefined);
