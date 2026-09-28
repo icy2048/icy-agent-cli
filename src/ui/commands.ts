@@ -11,7 +11,7 @@ export const commands: Command[] = [
   { command: '/verify', description: '指定并执行验收命令，沿用 shell 审批', takesArgument: true },
   { command: '/todo', description: '添加待办事项', takesArgument: true },
   { command: '/done', description: '完成待办，编号从 1 开始', takesArgument: true },
-  { command: '/sessions', description: '列出已保存会话' },
+  { command: '/sessions', description: '列出已保存会话；可用 status=<状态,...> 与 cwd=<目录> 过滤', takesArgument: true },
   { command: '/resume', description: '恢复指定会话 ID', takesArgument: true },
 ];
 export function matchCommands(input: string): Command[] {

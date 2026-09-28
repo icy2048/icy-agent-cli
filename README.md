@@ -19,7 +19,7 @@ icy
 icy "检查这个项目的启动入口"
 icy run "读取 README.md 并总结项目" --read-only
 icy run "读取 README.md 并检查启动说明" --read-only --json
-icy sessions                  # 列出会话 ID、目标、模型与状态
+icy sessions [--status <状态>[,<状态>...]] [--cwd <目录>]   # 列出会话，可按任务状态与工作区过滤
 icy --resume <session-id>      # 恢复界面，不自动执行原任务
 icy run --resume <session-id> --json   # 仅查看任务状态
 icy run --resume <session-id> --continue  # 显式以新预算继续原任务
@@ -30,7 +30,7 @@ icy --version
 
 `--cwd <目录>` 指定工作区，默认是启动目录。`run`、`--plain`、`--json` 或非 TTY 环境使用非交互模式。执行成功的退出码为 0；遇到未批准的 shell 为 2，取消为 130，其他运行失败为 1。非交互模式没有授权弹窗，因此通常应进入 Workbench 后用 `/verify npm test` 审批并验收；`--verify` 不绕过 shell 权限。
 
-`icy sessions --json` 输出逐行会话摘要。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
+`icy sessions --json` 输出逐行会话摘要。`--status` 过滤任务状态，可重复或逗号分隔，接受 running、awaiting_approval、cancelled、limited、failed、answered、verified、interrupted、legacy 九种值；`--cwd` 在该子命令中作为工作区过滤条件，相对路径按启动目录解析，目录不必存在；有过滤条件时不列出无法读取的会话。非交互模式只传 `--resume` 时展示任务状态，不请求模型或执行工具；恢复过程仍会校验会话、迁移旧格式并记录中断状态。`--continue`、`--verify` 都要求 `--resume`，不能与新目标或彼此混用。
 
 ## 模型配置
 
@@ -87,7 +87,7 @@ icy --version
 | 继续原任务 | `/continue`；显式开启并记录新的运行预算 |
 | 指定并执行验收 | `/verify <命令>`；例如 `/verify npm test`，沿用 shell 审批 |
 | 添加 / 完成待办 | `/todo <事项>` / `/done <编号>`；编号从 1 开始 |
-| 列出 / 恢复会话 | `/sessions` / `/resume <会话 ID>`；恢复后不自动执行 |
+| 列出 / 恢复会话 | `/sessions`（可加 `status=<状态,...>`、`cwd=<目录>` 过滤）/ `/resume <会话 ID>`；恢复后不自动执行 |
 | 命令菜单 | 输入 `/`；↑↓ 选择、Enter 执行、Tab 补全、Esc 关闭；继续输入可筛选 |
 | 多行内容 | 粘贴多行；支持的终端也可 Alt/Shift+Enter，显示为 `↵` |
 | 输入历史 | ↑ / ↓ |

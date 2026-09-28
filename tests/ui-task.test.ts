@@ -160,3 +160,24 @@ test('/sessions lists saved IDs, goals, models and timestamps without running th
     assert.match(f.ui.lastFrame()!, /不会自动执行任务/);
   } finally { f.close(); await rm(home, { recursive: true, force: true }); }
 });
+
+test('/sessions status= renders only matching sessions and invalid values show the Chinese error', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'icy-ui-filter-'));
+  const f = fixture(); f.agent.config.home = home;
+  try {
+    for (const [id, status] of [['ui-failed', 'failed'], ['ui-answered', 'answered']] as const) {
+      await mkdir(path.join(home, 'sessions', id), { recursive: true });
+      await writeFile(path.join(home, 'sessions', id, 'session.json'), JSON.stringify({
+        version: 2, id, cwd: '/fixture', provider: 'responses', model: 'saved-model', baseUrl: 'http://localhost',
+        messages: [{ role: 'user', content: `${id} 的目标` }], updatedAt: timestamp,
+        task: { id: `task-${id}`, goal: `${id} 的目标`, status, remaining: [], completed: [], mutationRevision: 0, verificationChecks: [], verificationRecords: [] },
+        runs: [],
+      }));
+    }
+    await tick(); await command(f.ui, '/sessions status=failed', /ui-failed/); await tick();
+    assert.match(f.ui.lastFrame()!, /ui-failed/);
+    assert.doesNotMatch(f.ui.lastFrame()!, /ui-answered/);
+    await command(f.ui, '/sessions status=bogus', /无效的状态：bogus；可用：running, awaiting_approval/); await tick();
+    assert.match(f.ui.lastFrame()!, /无效的状态：bogus；可用：running, awaiting_approval/);
+  } finally { f.close(); await rm(home, { recursive: true, force: true }); }
+});

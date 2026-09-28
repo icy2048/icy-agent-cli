@@ -5,9 +5,9 @@ import process from 'node:process';
 import path from 'node:path';
 import React from 'react';
 import { render } from 'ink';
-import { loadConfig, initConfig } from './config/load.js';
+import { loadConfig, initConfig, type Config } from './config/load.js';
 import { SessionStore } from './sessions/store.js';
-import { listSessions } from './sessions/list.js';
+import { invalidStatusText, listSessions, parseStatusFilter, type SessionFilter } from './sessions/list.js';
 import { ToolRegistry } from './tools/registry.js';
 import { ModelProvider, DemoProvider } from './providers/model.js';
 import { Agent } from './core/agent.js';
@@ -23,6 +23,8 @@ const help = `icy — AI agent CLI
   icy run "目标" --json       输出 NDJSON 事件
   icy --resume <会话ID>        恢复会话，不重放中断的工具
   icy sessions [--json]       查看已有会话、目标与状态
+  icy sessions --status failed,interrupted --cwd <目录>
+                              按任务状态与工作区过滤会话；--cwd 在此子命令中是过滤条件，目录可以不存在
   icy run --resume <ID> --continue  用新的运行预算继续原任务
   icy run --resume <ID> --verify "命令"  执行用户指定验收（沿用 bash 审批）
   icy --demo                  离线只读演示，不调用模型
@@ -31,6 +33,7 @@ const help = `icy — AI agent CLI
 选项:
   --provider chat-completions|responses
   --base-url <地址>  --model <模型>  --cwd <目录>
+  --status <状态>[,<状态>...]  仅 icy sessions；可重复或逗号分隔；可用：running, awaiting_approval, cancelled, limited, failed, answered, verified, interrupted, legacy
   --read-only  --plain  --json  --help  --version
 
 环境变量: ICY_BASE_URL, ICY_MODEL, ICY_PROVIDER, ICY_API_KEY, ICY_HOME
@@ -43,14 +46,31 @@ export async function main(argv = process.argv.slice(2)) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
     help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' }, plain: { type: 'boolean' }, demo: { type: 'boolean' }, 'read-only': { type: 'boolean' },
     model: { type: 'string' }, provider: { type: 'string' }, 'base-url': { type: 'string' }, cwd: { type: 'string' }, resume: { type: 'string' }, continue: { type: 'boolean' }, verify: { type: 'string' },
+    status: { type: 'string', multiple: true },
   } });
   if (values.help) { process.stdout.write(help); return; }
   if (values.version) { const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')); process.stdout.write(pkg.version + '\n'); return; }
+  if (values.status !== undefined && positionals[0] !== 'sessions') { process.stderr.write('--status 仅用于 icy sessions 子命令。\n'); process.exitCode = 2; return; }
   const overrides = Object.fromEntries(Object.entries({ model: values.model, provider: values.provider, baseUrl: values['base-url'], permissions: values['read-only'] || values.demo ? 'read-only' : undefined }).filter(([, value]) => value !== undefined));
-  let config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
+  let config: Config;
+  if (positionals[0] === 'sessions' && values.cwd) {
+    // For sessions --cwd doubles as the filter and may name a removed workspace; project config then just reads nothing.
+    let workspace = path.resolve(values.cwd);
+    try { workspace = await realpath(values.cwd); } catch { /* removed workspace: still a valid filter */ }
+    config = await loadConfig(workspace, overrides);
+  } else config = await loadConfig(await realpath(values.cwd || process.cwd()), overrides);
   if (positionals[0] === 'config' && positionals[1] === 'init') { process.stdout.write(`配置已创建：${await initConfig(config.home)}\n`); return; }
   if (positionals[0] === 'sessions') {
-    const sessions = await listSessions(config.home);
+    const filter: SessionFilter = {};
+    try {
+      if (values.status?.length) filter.status = values.status.flatMap(value => parseStatusFilter(value));
+      if (values.cwd !== undefined) filter.cwd = values.cwd;
+    } catch (error) {
+      const message = invalidStatusText(error);
+      if (message === undefined) throw error;
+      process.stderr.write(message + '\n'); process.exitCode = 2; return;
+    }
+    const sessions = await listSessions(config.home, Object.keys(filter).length ? filter : undefined);
     if (values.json) for (const session of sessions) process.stdout.write(JSON.stringify({ type: 'session_summary', ...session }) + '\n');
     else process.stdout.write(sessions.length ? sessions.map(s => s.error ? `${s.id} · 无法读取：${s.error}` : `${s.id} · ${s.status} · ${s.updatedAt}\n  ${s.model} · ${s.cwd}\n  ${s.goal || '空会话'}`).join('\n') + '\n' : '暂无会话。\n');
     return;
