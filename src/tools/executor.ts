@@ -63,15 +63,15 @@ export class ToolExecutor {
       case 'read': {
         const a = input.args;
         if (a.path.startsWith('icy-output:')) {
-          if (a.pattern !== null) throw new Error('pattern_not_supported_for_output');
+          if (a.depth !== null || a.pattern !== null || a.regex !== null) throw new Error('arguments_not_supported_for_output');
           return this.readOutput(a.path, a.offset, a.limit);
         }
         if (a.pattern !== null) {
-          return { ok: true, content: await searchWorkspace(this.config.cwd, a.path, a.pattern, a.regex ?? false, a.offset, a.limit, signal) };
+          return { ok: true, content: await searchWorkspace(this.config.cwd, a.path, a.pattern, a.regex ?? false, a.offset, a.limit, a.depth, signal) };
         }
         const resolved = await workspacePath(this.config.cwd, a.path);
         const info = await stat(resolved);
-        if (info.isDirectory()) return { ok: true, content: await listDirectory(this.config.cwd, a.path, a.offset, a.limit, a.depth) };
+        if (info.isDirectory()) return { ok: true, content: await listDirectory(this.config.cwd, a.path, a.offset, a.limit, a.depth, signal) };
         const content = await this.readFileContent(a.path);
         return { ok: true, content: `SHA256: ${sha256(content)}\n${page(content, a.offset, a.limit)}` };
       }

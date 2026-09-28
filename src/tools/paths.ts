@@ -2,9 +2,9 @@ import path from 'node:path';
 import { lstat, realpath } from 'node:fs/promises';
 
 export function sensitive(file: string): boolean {
-  return file.split(/[\\/]/).some(part => /^(?:\.git|\.icy|\.ssh|\.aws|\.gnupg|\.kube|credentials|id_rsa|id_ed25519)$/i.test(part)
+  return file.split(/[\\/]/).some(part => /^(?:\.git|\.icy|\.ssh|\.aws|\.gnupg|\.kube|\.docker|\.npmrc|\.netrc|\.pypirc|\.git-credentials|\.htpasswd|credentials|id_rsa|id_ed25519)$/i.test(part)
     || /^\.env(?:\.|$)/i.test(part) && !/^\.env\.(?:example|sample|template)$/i.test(part)
-    || /\.(?:pem|key|p12|pfx)$/i.test(part));
+    || /\.(?:pem|key|p12|pfx|token)$/i.test(part));
 }
 export async function workspacePath(cwd: string, input: string): Promise<string> {
   if (input.includes('\0')) throw new Error('invalid_path');

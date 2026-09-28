@@ -40,7 +40,7 @@ const help = `icy — AI agent CLI
 配置: ~/.icy/config.json。交互: /help /model /new /thinking /task /continue /verify /todo /done /sessions /resume /clear /exit
 输入 / 选择命令；/model 配置服务并立即启用；Ctrl+T 展开或收起思考，显示设置自动保存。
 默认向模型提供 read / write / edit / bash；--read-only 仅提供 read。
-bash 需批准（包括列目录和搜索）。非交互模式不执行未批准的 bash。
+read 免授权列目录和搜索；bash 需批准（测试、构建和 read 无法完成的其他命令）。非交互模式不执行未批准的 bash。
 `;
 export async function main(argv = process.argv.slice(2)) {
   const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: {
