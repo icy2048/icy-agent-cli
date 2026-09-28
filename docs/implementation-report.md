@@ -30,9 +30,9 @@ Workbench 支持 `/task`、`/continue`、`/verify <命令>`、`/todo <事项>`�
 
 ## 验证记录
 
-首轮交付时在隔离的干净源码副本中执行了锁文件安装 `npm ci`、`npm run check`、`npm test`、`npm run build` 和 `npm run test:package`，全部通过：**227 项测试，0 失败、0 跳过**。包测试确认临时安装后的 `--help`、`--version` 与离线 `--demo` 正常；当前工作区也已重新构建。交付前又复验了类型检查、227 项测试、构建与包测试。以上是本地 macOS 结果；远程 Node 22 macOS/Linux 门禁请检查对应提交的 [GitHub Actions](https://github.com/icy88/icy-agent-cli/actions/workflows/ci.yml)，后续补充的 Linux 实际 PTY 交互记录见[缺口验收清单](gap-closure.md)。
+首轮交付时在隔离的干净源码副本中执行了锁文件安装 `npm ci`、`npm run check`、`npm test`、`npm run build` 和 `npm run test:package`，全部通过：**227 项测试，0 失败、0 跳过**。包测试确认临时安装后的 `--help`、`--version` 与离线 `--demo` 正常；当前工作区也已重新构建。交付前又复验了类型检查、227 项测试、构建与包测试。以上是本地 macOS 结果；远程 Node 22 macOS/Linux 门禁请检查对应提交的 [GitHub Actions](https://github.com/icy2048/icy-agent-cli/actions/workflows/ci.yml)，后续补充的 Linux 实际 PTY 交互记录见[缺口验收清单](gap-closure.md)。
 
-交付已提交至 [PR #1](https://github.com/icy88/icy-agent-cli/pull/1)。首个交付提交 `c0ee96b` 的 [PR CI](https://github.com/icy88/icy-agent-cli/actions/runs/36326263880) 已在 macOS 和 Ubuntu 上通过全部门禁。该次运行提示旧版 Actions 的 Node 20 运行时已弃用，因此工作流另行更新到官方 Node 24 Actions 并固定提交 SHA；项目测试版本仍为 Node 22，后续提交以 PR 最新检查为准。
+交付已提交至 [PR #1](https://github.com/icy2048/icy-agent-cli/pull/1)。首个交付提交 `c0ee96b` 的 [PR CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36326263880) 已在 macOS 和 Ubuntu 上通过全部门禁。该次运行提示旧版 Actions 的 Node 20 运行时已弃用，因此工作流另行更新到官方 Node 24 Actions 并固定提交 SHA；项目测试版本仍为 Node 22，后续提交以 PR 最新检查为准。
 
 真实模型使用合成的临时项目，工具限定当前工作区，shell 仅批准精确的 `node verify.cjs`。验证器由评测端独立检查，不能仅凭模型文字或它修改后的测试判断成功。[实际结果](evaluations/live-tasks.json)使用 Responses、`gpt-5.6-sol`、`reasoningEffort=low`，每次运行沿用 100,000 token / 20 模型轮次 / 50 工具调用预算：
 
@@ -52,7 +52,7 @@ Workbench 支持 `/task`、`/continue`、`/verify <命令>`、`/todo <事项>`�
 - “已验证完成”只表示用户登记的检查在当前 Agent 修改版本通过且待办为空；检查覆盖范围由用户指定，不能自动证明所有自然语言目标。外部编辑不更新 Agent 的修改版本，需要重新验收。
 - 验收前后在本机比较工作区指纹；内容、路径、权限或链接目标变化，以及取消、读取异常或超过 10,000 条目 / 64 MiB 上限时，都使旧证据过期。只排除当前会话存储，不跟随链接；这不是原子文件系统快照。对于会产生文件的检查或超限工作区，适合一开始就登记一条包含全部检查的完整验收命令。
 - v1 没有的任务状态保持未知；旧历史仍可阅读，先提交一个目标后再使用检查点续跑。
-- 自动语义摘要、后台进程、受限只读探索、模型能力诊断、MCP 和多 Agent 仍在后续队列；权限默认值与四工具集合保留。
+- 自动语义摘要、后台进程、长命令、MCP 和多 Agent 仍在后续队列；受限只读探索与模型能力诊断已由第四轮交付（见[缺口验收清单](gap-closure.md)），权限默认值与四工具集合保留。
 - 后续已提取 PermissionPolicy 与 ToolExecutor，保留四工具和精确审批语义，增加审批等待期间目录被换为符号链接的回归。
 - 发布前须确认对应提交的远程 macOS/Linux CI；Linux 实际 PTY 已由 Codex 操作并加入可复现门禁，不能称为真人可用性研究。
 
