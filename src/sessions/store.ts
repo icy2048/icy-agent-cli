@@ -27,6 +27,7 @@ export interface SessionStoreOptions {
   processIdentity?: ProcessManagerOptions['captureIdentity'];
   processAlive?: ProcessManagerOptions['isAlive'];
   processOutputLimit?: number;
+  processAppendFile?: ProcessManagerOptions['processAppendFile'];
 }
 export class SessionStore {
   readonly dir: string;
@@ -42,7 +43,7 @@ export class SessionStore {
     this.platform = options.platform ?? process.platform;
     this.kill = options.kill ?? process.kill.bind(process);
     this.processOptions = { platform: options.processPlatform ?? this.platform, spawn: options.processSpawn, kill: options.processKill, env: options.processEnv, shellPath: options.shellPath,
-      captureIdentity: options.processIdentity, isAlive: options.processAlive, outputLimit: options.processOutputLimit };
+      captureIdentity: options.processIdentity, isAlive: options.processAlive, outputLimit: options.processOutputLimit, processAppendFile: options.processAppendFile };
     this.snapshot = this.normalize(data);
     this.dir = path.join(home, 'sessions', data.id);
   }

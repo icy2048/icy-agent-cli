@@ -28,6 +28,8 @@ interface ActiveProcess {
   logWrites: Promise<void>;
   outputDone: Promise<void>;
   resolveOutputDone: () => void;
+  drained: Promise<void>;
+  resolveDrained: () => void;
   escalation?: Promise<void>;
   resolveEscalation?: () => void;
   rejectEscalation?: (error: unknown) => void;
@@ -43,6 +45,7 @@ export interface ProcessManagerOptions extends BashOptions {
   isPidAlive?: LivenessCheck;
   liveness?: LivenessCheck;
   processAlive?: LivenessCheck;
+  processAppendFile?: (path: string, data: Uint8Array) => Promise<void>;
 }
 
 const clone = (record: ProcessRecord): ProcessRecord => structuredClone(record);
@@ -60,6 +63,7 @@ export class ProcessManager {
   private readonly processKill?: BashOptions['kill'];
   private readonly captureIdentityOption?: IdentityCapture;
   private readonly livenessCheck?: LivenessCheck;
+  private readonly processAppendFile: NonNullable<ProcessManagerOptions['processAppendFile']>;
   private readonly outputLimit: number;
   private onChange?: ProcessChange;
   private active = new Map<string, ActiveProcess>();
@@ -79,6 +83,7 @@ export class ProcessManager {
     this.processKill = options.kill;
     this.captureIdentityOption = options.captureIdentity ?? options.identityCapture ?? options.identity;
     this.livenessCheck = options.isAlive ?? options.isPidAlive ?? options.liveness ?? options.processAlive;
+    this.processAppendFile = options.processAppendFile ?? appendFile;
     this.outputLimit = options.outputLimit ?? OUTPUT_LIMIT;
     this.onChange = options.onChange;
   }
@@ -114,7 +119,7 @@ export class ProcessManager {
     const available = Math.max(0, this.outputLimit - active.record.bytes);
     const written = output.subarray(0, available);
     active.record.bytes += written.length;
-    if (written.length) active.logWrites = active.logWrites.catch(() => {}).then(() => appendFile(active.log, written));
+    if (written.length) active.logWrites = active.logWrites.catch(() => {}).then(() => this.processAppendFile(active.log, written));
     if (output.length > available) {
       active.record.truncated = true;
       void this.terminate(active, 'output_limit', false).catch(() => {});
@@ -166,7 +171,10 @@ export class ProcessManager {
     void softError;
   }
   private async finish(active: ActiveProcess, code: number | null, signal?: NodeJS.Signals, error?: string) {
-    if (active.settled) return;
+    if (active.settled) {
+      await active.drained;
+      return;
+    }
     active.settled = true;
     if (active.timeout) clearTimeout(active.timeout);
     if (active.killTimer) clearTimeout(active.killTimer);
@@ -179,18 +187,22 @@ export class ProcessManager {
     if (signal) record.signal = signal;
     record.pidAlive = false;
     if (error) record.reason = error;
-    this.active.delete(record.id);
     // A reader must never wait for a failed snapshot write. The terminal state
-    // is visible in memory before the snapshot is awaited; drain output first
-    // so a terminal read cannot miss data already accepted from the pipe.
-    await active.outputDone;
-    let stableWrites = 0;
-    while (stableWrites < 2) {
-      const writes = active.logWrites;
-      await writes.catch(() => {});
-      await new Promise<void>(resolve => setImmediate(resolve));
-      if (writes === active.logWrites) stableWrites++;
-      else stableWrites = 0;
+    // is visible in memory before the snapshot is awaited; keep the active
+    // entry until the accepted output has drained so readers can await it.
+    try {
+      await active.outputDone;
+      let stableWrites = 0;
+      while (stableWrites < 2) {
+        const writes = active.logWrites;
+        await writes.catch(() => {});
+        await new Promise<void>(resolve => setImmediate(resolve));
+        if (writes === active.logWrites) stableWrites++;
+        else stableWrites = 0;
+      }
+    } finally {
+      active.resolveDrained();
+      this.active.delete(record.id);
     }
     this.resolveWaiters(record.id, record);
     try { await this.persist(record); }
@@ -318,7 +330,9 @@ export class ProcessManager {
     }
     let resolveOutputDone!: () => void;
     const outputDone = new Promise<void>(resolve => { resolveOutputDone = resolve; });
-    const active: ActiveProcess = { record, child, log, settled: false, logWrites: Promise.resolve(), outputDone, resolveOutputDone };
+    let resolveDrained!: () => void;
+    const drained = new Promise<void>(resolve => { resolveDrained = resolve; });
+    const active: ActiveProcess = { record, child, log, settled: false, logWrites: Promise.resolve(), outputDone, resolveOutputDone, drained, resolveDrained };
     this.active.set(record.id, active);
     const outputStreams = [child.stdout, child.stderr].filter((stream): stream is NonNullable<ChildProcess['stdout']> => stream !== null);
     let outputRemaining = outputStreams.length;
@@ -375,6 +389,10 @@ export class ProcessManager {
     return record;
   }
 
+  private async waitForDrain(id: string) {
+    const active = this.active.get(id);
+    if (active && terminal(active.record.status)) await active.drained;
+  }
   private resolveWaiters(id: string, record: ProcessRecord) {
     const waiters = this.waiters.get(id);
     if (!waiters) return;
@@ -387,16 +405,23 @@ export class ProcessManager {
   async status(id: string, options: { waitMs?: number; signal?: AbortSignal } = {}): Promise<ProcessRecord> {
     const record = this.find(id);
     if (!record) throw new Error('process_not_found');
-    if (terminal(record.status)) return clone(record);
+    if (terminal(record.status)) {
+      await this.waitForDrain(id);
+      return clone(record);
+    }
     const waitMs = Math.max(0, Math.min(options.waitMs ?? 0, MAX_WAIT));
     if (!waitMs) return clone(record);
     if (options.signal?.aborted) return clone(record);
     return new Promise(resolve => {
       const waiter: Waiter = { resolve, timer: setTimeout(() => {
-        this.removeWaiter(id, waiter); resolve(clone(record));
+        this.removeWaiter(id, waiter);
+        void this.waitForDrain(id).then(() => resolve(clone(record)));
       }, waitMs), signal: options.signal };
       if (options.signal) {
-        waiter.abort = () => { this.removeWaiter(id, waiter); resolve(clone(record)); };
+        waiter.abort = () => {
+          this.removeWaiter(id, waiter);
+          void this.waitForDrain(id).then(() => resolve(clone(record)));
+        };
         options.signal.addEventListener('abort', waiter.abort, { once: true });
       }
       const list = this.waiters.get(id) ?? []; list.push(waiter); this.waiters.set(id, list);
@@ -410,7 +435,9 @@ export class ProcessManager {
   }
 
   async readOutput(id: string, offset: number | null = null, limit: number | null = null) {
-    if (!this.find(id)) throw new Error('process_not_found');
+    const record = this.find(id);
+    if (!record) throw new Error('process_not_found');
+    await this.waitForDrain(id);
     const chars = Array.from(await readFile(this.logPath(id), 'utf8'));
     const start = (offset ?? 1) - 1, size = Math.min(limit ?? 6000, 6000);
     if (start < 0 || start > chars.length) throw new Error('offset_out_of_range');

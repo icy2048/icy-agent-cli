@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtemp, mkdir, readFile, rm, unlink } from 'node:fs/promises';
+import { appendFile, mkdtemp, mkdir, readFile, rm, unlink } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
 import type { ChildProcess, spawn } from 'node:child_process';
 import path from 'node:path';
@@ -23,6 +23,7 @@ async function fixture(options: {
   platform?: NodeJS.Platform; shellPath?: string; processSpawn?: ProcessManagerOptions['spawn'];
   processKill?: ProcessManagerOptions['kill']; processIdentity?: ProcessManagerOptions['captureIdentity'];
   processAlive?: ProcessManagerOptions['isAlive']; processOutputLimit?: number;
+  processAppendFile?: ProcessManagerOptions['processAppendFile'];
 } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'icy-process-')), cwd = path.join(root, 'workspace'), home = path.join(root, 'home');
   await mkdir(cwd);
@@ -30,6 +31,7 @@ async function fixture(options: {
   const store = await SessionStore.create(home, config, [], {
     platform: options.platform === 'win32' ? undefined : options.platform, processPlatform: options.platform, shellPath: options.shellPath, processSpawn: options.processSpawn, processKill: options.processKill,
     processIdentity: options.processIdentity, processAlive: options.processAlive, processOutputLimit: options.processOutputLimit,
+    processAppendFile: options.processAppendFile,
   });
   const approvals: unknown[] = [], tools = new ToolRegistry(config, store, async request => { approvals.push(request); return 'once'; });
   const call = (id: string, name: string, args: unknown, signal = new AbortController().signal) => tools.execute({ id, name, arguments: JSON.stringify(args) }, signal);
@@ -103,6 +105,42 @@ test('detached output is capped at the configured limit and the process is termi
     const record = await f.store.getProcessManager().status(id, { waitMs: 10_000 });
     assert.equal(record.status, 'output_limit'); assert.equal(record.truncated, true); assert.equal(record.bytes, outputLimit);
     const log = await readFile(path.join(f.store.dir, 'processes', `${id}.log`)); assert.equal(log.byteLength, outputLimit);
+  } finally { await f.cleanup(); }
+});
+
+test('terminal status waits for a delayed process log drain', { skip: !posix && skipWindows }, async () => {
+  const outputLimit = 256 * 1024;
+  let appendCalls = 0, resolveSecondAppend!: () => void;
+  const secondAppendStarted = new Promise<void>(resolve => { resolveSecondAppend = resolve; });
+  const f = await fixture({
+    processOutputLimit: outputLimit,
+    processAppendFile: async (file, data) => {
+      appendCalls++;
+      if (appendCalls === 2) {
+        resolveSecondAppend();
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      return appendFile(file, data);
+    },
+  });
+  try {
+    const result = await f.call('cap-drain-race', 'bash', bashArgs(nodeCommand('process.stdout.write("a".repeat(300 * 1024));'), { detach: true }));
+    const id = result.content.match(/icy-process:([0-9a-f-]+)/)![1];
+    await secondAppendStarted;
+    const record = f.store.data.processes[0];
+    while (record.status === 'running') await new Promise<void>(resolve => setImmediate(resolve));
+    const terminal = await f.store.getProcessManager().status(id);
+    assert.equal(terminal.status, 'output_limit'); assert.equal(terminal.bytes, outputLimit); assert.ok(appendCalls >= 2);
+    const expected = 'a'.repeat(outputLimit);
+    const log = await readFile(path.join(f.store.dir, 'processes', `${id}.log`)); assert.equal(log.toString(), expected);
+    let offset = 1, output = '';
+    while (true) {
+      const page = await f.store.getProcessManager().readOutput(id, offset, 6000);
+      output += page.text;
+      if (!page.truncated) break;
+      offset = page.end + 1;
+    }
+    assert.equal(output, expected);
   } finally { await f.cleanup(); }
 });
 
