@@ -24,6 +24,7 @@ export interface ToolExecutorOptions {
   link?: typeof link;
   open?: typeof open;
   stat?: typeof stat;
+  lstat?: typeof lstat;
   rename?: typeof rename;
 }
 
@@ -33,6 +34,7 @@ export class ToolExecutor {
   private readonly link: typeof link;
   private readonly open: typeof open;
   private readonly stat: typeof stat;
+  private readonly lstat: typeof lstat;
   private readonly rename: typeof rename;
   constructor(private config: Pick<Config, 'cwd'>, private store: SessionStore, options: ToolExecutorOptions = {}) {
     this.platform = options.platform ?? process.platform;
@@ -40,20 +42,32 @@ export class ToolExecutor {
     this.link = options.link ?? link;
     this.open = options.open ?? open;
     this.stat = options.stat ?? stat;
+    this.lstat = options.lstat ?? lstat;
     this.rename = options.rename ?? rename;
   }
   private async readFileContent(file: string) {
     const resolved = await workspacePath(this.config.cwd, file, { mustExist: true });
     const noFollow = (constants as { O_NOFOLLOW?: number }).O_NOFOLLOW ?? 0;
-    const handle = await this.open(resolved, constants.O_RDONLY | noFollow);
+    let handle;
+    try { handle = await this.open(resolved, constants.O_RDONLY | noFollow); }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'ELOOP') throw new Error('file_changed_during_read');
+      if (code === 'EISDIR') throw new Error('is_directory');
+      throw error;
+    }
     try {
       const info = await handle.stat();
+      if (info.isDirectory()) throw new Error('is_directory');
       if (!info.isFile() || info.size > 1_000_000) throw new Error('not_text_file_or_too_large');
       const content = await handle.readFile({ encoding: 'utf8' });
       try {
         const checked = await workspacePath(this.config.cwd, file, { mustExist: true });
-        const pathInfo = await lstat(checked);
-        if (!pathInfo.isFile() || pathInfo.dev !== info.dev || pathInfo.ino !== info.ino) throw new Error('file_changed_during_read');
+        const pathInfo = await this.lstat(checked);
+        const sameMetadata = info.ino === 0
+          ? pathInfo.dev === info.dev && pathInfo.size === info.size && pathInfo.mtimeMs === info.mtimeMs && pathInfo.birthtimeMs === info.birthtimeMs
+          : pathInfo.dev === info.dev && pathInfo.ino === info.ino;
+        if (!pathInfo.isFile() || !sameMetadata) throw new Error('file_changed_during_read');
       } catch (error) {
         if (error instanceof Error && error.message === 'file_changed_during_read') throw error;
         throw new Error('file_changed_during_read');
@@ -148,7 +162,7 @@ export class ToolExecutor {
           return { ok: true, content: await searchWorkspace(this.config.cwd, a.path, a.pattern, a.regex ?? false, a.offset, a.limit, a.depth, signal) };
         }
         const resolved = await workspacePath(this.config.cwd, a.path, { mustExist: true });
-        const info = await stat(resolved);
+        const info = await this.stat(resolved);
         if (info.isDirectory()) return { ok: true, content: await listDirectory(this.config.cwd, a.path, a.offset, a.limit, a.depth, signal) };
         const content = await this.readFileContent(a.path);
         return { ok: true, content: `SHA256: ${sha256(content)}\n${page(content, a.offset, a.limit)}` };

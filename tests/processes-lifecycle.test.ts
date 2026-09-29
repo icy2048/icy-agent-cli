@@ -65,6 +65,22 @@ test('approval grants distinguish foreground and detached variants', { skip: !po
   } finally { await f.cleanup(); }
 });
 
+test('first detached snapshot failure stops the live child and reports a saved-session error', { skip: !posix && skipWindows }, async () => {
+  let fail = false;
+  const injectedWriteFile = ((...args: Parameters<typeof writeFile>) => {
+    if (fail) { fail = false; return Promise.reject(new Error('injected_first_snapshot')); }
+    return writeFile(...args);
+  }) as typeof writeFile;
+  const f = await fixture({ fsWriteFile: injectedWriteFile });
+  try {
+    fail = true;
+    await assert.rejects(f.store.getProcessManager().start({ toolCallId: 'persist-first', command: 'sleep 30', cwd: f.cwd, timeoutMs: 10_000 }), /session could not be saved.*process was stopped/);
+    const record = f.store.data.processes[0];
+    assert.equal(record.status, 'killed'); assert.match(record.reason ?? '', /^persist_failed:injected_first_snapshot/); assert.equal(record.pidAlive, false);
+    assert.ok(record.pid); assert.throws(() => process.kill(record.pid!, 0), { code: 'ESRCH' });
+  } finally { await f.cleanup(); }
+});
+
 test('detached timeout kills the process tree', { skip: !posix && skipWindows }, async () => {
   const f = await fixture();
   try {

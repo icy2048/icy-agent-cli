@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { StringDecoder } from 'node:string_decoder';
 import path from 'node:path';
 import { clean } from '../core/text.js';
+import { utf8PrefixLength } from './output.js';
 import type { ToolResult } from '../core/types.js';
 
 export interface BashOptions {
@@ -122,6 +123,7 @@ export function runBash(
     }
     let output = '', bytes = 0, reason = '', settled = false;
     const decoders = { stdout: new StringDecoder('utf8'), stderr: new StringDecoder('utf8') };
+    const incomplete: Record<'stdout' | 'stderr', Uint8Array> = { stdout: new Uint8Array(0), stderr: new Uint8Array(0) };
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const killGroup = (sig: NodeJS.Signals) => {
       if (!child.pid) return;
@@ -137,10 +139,14 @@ export function runBash(
     signal.addEventListener('abort', onAbort, { once: true });
     if (signal.aborted) onAbort();
     const collect = (source: 'stdout' | 'stderr') => (chunk: Buffer | string) => {
-      const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      const available = Math.max(0, 256 * 1024 - bytes);
+      const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk), before = bytes;
+      const prefix = incomplete[source].length ? Buffer.concat([incomplete[source], value]) : value;
+      const available = Math.max(0, 256 * 1024 - before);
       bytes += value.length;
-      if (available > 0) output += (source === 'stderr' ? '[stderr] ' : '') + decoders[source].write(value.subarray(0, available));
+      const length = utf8PrefixLength(prefix, incomplete[source].length + available);
+      if (bytes <= 256 * 1024) incomplete[source] = prefix.subarray(length);
+      else incomplete[source] = Buffer.alloc(0);
+      if (available > 0) output += (source === 'stderr' ? '[stderr] ' : '') + decoders[source].write(prefix.subarray(0, length));
       if (bytes > 256 * 1024) terminate('output_limit');
     };
     child.stdout!.on('data', collect('stdout')); child.stderr!.on('data', collect('stderr'));

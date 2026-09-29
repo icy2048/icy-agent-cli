@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, open as openFile, writeFile, readFile, rename, rm, mkdir, unlink } from 'node:fs/promises';
+import { mkdtemp, open as openFile, writeFile, readFile, rename, rm, mkdir, unlink, lstat as lstatFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Config } from '../src/config/load.js';
@@ -53,6 +53,40 @@ test('read rejects a missing intermediate and both directory-swap races without 
       return handle;
     }});
     await assert.rejects(swapBackAfterOpen.execute(directRead('inner/data.txt'), new AbortController().signal), { message: 'file_changed_during_read' });
+  } finally { await s.cleanup(); }
+});
+
+test('read fails closed on a final symlink replacement and compares zero-inode metadata', async () => {
+  const s = await setup();
+  try {
+    const file = path.join(s.cwd, 'target.txt'), moved = path.join(s.cwd, 'target-real.txt'), outside = path.join(s.dir, 'outside.txt');
+    await writeFile(file, 'inside'); await writeFile(outside, 'outside');
+    const swapped = new ToolExecutor({ cwd: s.cwd }, s.store, { open: async (name, flags, mode) => {
+      await rename(file, moved); await makeSymlink(outside, file, 'file');
+      try { return await openFile(name, flags, mode); }
+      finally { await rm(file, { force: true }); await rename(moved, file); }
+    }});
+    await assert.rejects(swapped.execute(directRead('target.txt'), new AbortController().signal), { message: 'file_changed_during_read' });
+
+    const withZeroIno = (size: number) => new ToolExecutor({ cwd: s.cwd }, s.store, {
+      open: async (name, flags, mode) => {
+        const handle = await openFile(name, flags, mode), originalStat = handle.stat.bind(handle);
+        handle.stat = (async () => Object.assign(await originalStat(), { ino: 0 })) as typeof handle.stat;
+        return handle;
+      },
+      lstat: (async name => Object.assign(await lstatFile(name), { ino: 0, size })) as typeof lstatFile,
+    });
+    await assert.rejects(withZeroIno(999).execute(directRead('target.txt'), new AbortController().signal), { message: 'file_changed_during_read' });
+    assert.equal((await withZeroIno(6).execute(directRead('target.txt'), new AbortController().signal)).ok, true);
+  } finally { await s.cleanup(); }
+});
+
+test('write and edit report directories as is_directory', async () => {
+  const s = await setup();
+  try {
+    await mkdir(path.join(s.cwd, 'folder'));
+    assert.equal((await s.call('write', { path: 'folder', content: 'nope', expectedHash: null })).error, 'is_directory');
+    assert.equal((await s.call('edit', { path: 'folder', oldText: 'x', newText: 'y' })).error, 'is_directory');
   } finally { await s.cleanup(); }
 });
 

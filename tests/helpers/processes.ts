@@ -13,7 +13,7 @@ export const nodeCommand = (script: string) => `${process.execPath} -e '${script
 export const bashArgs = (command: string, extra: Record<string, unknown> = {}) => ({ command, cwd: null, timeoutMs: null, detach: false, kill: null, ...extra });
 export const testProcessTiming = { escalationMs: 25, killConfirmMs: 50, identityTimeoutMs: 200, watchdogRetryMs: 35, firstOutputWaitMs: 20 };
 
-export async function fixture(options: Pick<SessionStoreOptions, 'platform' | 'processPlatform' | 'shellPath' | 'processSpawn' | 'processKill' | 'processIdentity' | 'processExecFile' | 'processAlive' | 'processOutputLimit' | 'processLogWriterFactory' | 'processLogReader' | 'processTiming'> & { secrets?: string[] } = {}) {
+export async function fixture(options: Pick<SessionStoreOptions, 'platform' | 'processPlatform' | 'shellPath' | 'processSpawn' | 'processKill' | 'processIdentity' | 'processExecFile' | 'processAlive' | 'processOutputLimit' | 'processLogWriterFactory' | 'processLogReader' | 'processTiming' | 'fsWriteFile'> & { secrets?: string[] } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'icy-process-')), cwd = path.join(root, 'workspace'), home = path.join(root, 'home');
   await mkdir(cwd);
   const config: Config = { home, cwd, provider: 'responses', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: '', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000 };
@@ -21,7 +21,7 @@ export async function fixture(options: Pick<SessionStoreOptions, 'platform' | 'p
     platform: options.platform === 'win32' ? undefined : options.platform, processPlatform: options.processPlatform ?? options.platform, shellPath: options.shellPath, processSpawn: options.processSpawn, processKill: options.processKill,
     processIdentity: options.processIdentity, processExecFile: options.processExecFile, processAlive: options.processAlive, processOutputLimit: options.processOutputLimit,
     processLogWriterFactory: options.processLogWriterFactory, processLogReader: options.processLogReader,
-    processTiming: { ...testProcessTiming, ...options.processTiming },
+    processTiming: { ...testProcessTiming, ...options.processTiming }, fsWriteFile: options.fsWriteFile,
   });
   const approvals: unknown[] = [], tools = new ToolRegistry(config, store, async request => { approvals.push(request); return 'once'; });
   const call = (id: string, name: string, args: unknown, signal = new AbortController().signal) => tools.execute({ id, name, arguments: JSON.stringify(args) }, signal);

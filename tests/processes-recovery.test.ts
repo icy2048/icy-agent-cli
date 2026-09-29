@@ -203,11 +203,13 @@ await store.getProcessManager().start({ toolCallId: 'crash-window', command: 'sl
     pid = crash.pid;
     const snapshot = JSON.parse(await readFile(path.join(home, 'sessions', crash.sessionId, 'session.json'), 'utf8')) as { processes: ProcessRecord[] };
     assert.equal(snapshot.processes.length, 1); assert.equal(snapshot.processes[0].status, 'running'); assert.equal(snapshot.processes[0].pid, pid);
-    const restored = await SessionStore.resume(home, crash.sessionId); resumed = restored.store;
+    let killCalls = 0;
+    const restored = await SessionStore.resume(home, crash.sessionId, [], { processKill: (value, _tree, signal) => { killCalls++; process.kill(value, signal); } }); resumed = restored.store;
     const record = resumed.data.processes[0];
-    assert.equal(record.status, 'unknown'); assert.equal(record.pidAlive, true);
-    const killed = await resumed.getProcessManager().kill(record.id, 'user_kill');
-    assert.equal(killed.status, 'killed'); assert.throws(() => process.kill(pid!, 0), { code: 'ESRCH' });
+    assert.equal(record.status, 'unknown'); assert.equal(record.reason, 'identity_unconfirmed'); assert.equal(record.pidAlive, true);
+    const refused = await resumed.getProcessManager().kill(record.id, 'user_kill');
+    assert.equal(refused.status, 'unknown'); assert.equal(refused.reason, 'identity_unconfirmed'); assert.equal(killCalls, 0);
+    assert.doesNotThrow(() => process.kill(pid!, 0));
   } finally {
     if (pid) { try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ } }
     await resumed?.close(); await rm(root, { recursive: true, force: true });
@@ -249,13 +251,13 @@ test('legacy inherited identity records still permit a matching recovered kill',
   } finally { alive = false; await f.cleanup(); }
 });
 
-test('a missing identity an hour from the recorded start stays unconfirmed and is never killed', async () => {
+test('a missing identity stays unconfirmed even when the captured start time is within five seconds', async () => {
   let killCalls = 0, alive = true;
   const answer = identityToken(new Date());
   const f = await fixture({ processIdentity: () => answer, processAlive: () => alive, processKill: () => { killCalls++; alive = false; } });
   try {
     const id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
-    f.store.data.processes.push({ id, toolCallId: id, command: 'sleep 30', cwd: f.cwd, pid: 4242, startedAt: new Date(Date.now() - 3_600_000).toISOString(), timeoutMs: 60_000, status: 'running', bytes: 0 });
+    f.store.data.processes.push({ id, toolCallId: id, command: 'sleep 30', cwd: f.cwd, pid: 4242, startedAt: new Date().toISOString(), timeoutMs: 60_000, status: 'running', bytes: 0 });
     await f.store.getProcessManager().recover();
     const record = f.store.data.processes[0];
     assert.equal(record.status, 'unknown'); assert.equal(record.pidAlive, true); assert.equal(record.reason, 'identity_unconfirmed');

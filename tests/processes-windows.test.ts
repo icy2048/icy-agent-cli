@@ -86,7 +86,7 @@ test('Windows forced taskkill failure surfaces while a live child remains runnin
   } finally { await f.cleanup(); }
 });
 
-test('Windows identity runner uses UTC ISO and matches or rejects start-time fallback', async () => {
+test('Windows records without identity fail closed instead of using start-time fallback', async () => {
   const calls: Array<{ file: string; args: string[]; options: unknown }> = [], now = new Date(), f = await fixture({ platform: 'win32', processAlive: () => true, processExecFile: (file, args, options) => {
     calls.push({ file, args, options }); return { stdout: now.toISOString() };
   } });
@@ -94,8 +94,8 @@ test('Windows identity runner uses UTC ISO and matches or rejects start-time fal
     const within = { id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', toolCallId: 'win-within', command: 'sleep 30', cwd: f.cwd, pid: 4242, startedAt: now.toISOString(), timeoutMs: 60_000, status: 'running' as const, bytes: 0 };
     const off = { id: '11111111-1111-4111-8111-111111111111', toolCallId: 'win-off', command: 'sleep 30', cwd: f.cwd, pid: 4243, startedAt: new Date(now.getTime() - 3_600_000).toISOString(), timeoutMs: 60_000, status: 'running' as const, bytes: 0 };
     f.store.data.processes.push(within, off); await f.store.getProcessManager().recover();
-    assert.equal(f.store.data.processes[0].reason, 'icy_restarted'); assert.equal(f.store.data.processes[1].reason, 'identity_unconfirmed');
-    assert.ok(calls.length >= 2); assert.equal(calls[0].file, 'powershell.exe'); assert.match(calls[0].args[2], /ToUniversalTime\(\)\.ToString\('o'\)/);
+    assert.equal(f.store.data.processes[0].reason, 'identity_unconfirmed'); assert.equal(f.store.data.processes[1].reason, 'identity_unconfirmed');
+    assert.equal(calls.length, 0);
   } finally { for (const record of f.store.data.processes) record.status = 'exited'; await f.cleanup(); }
 });
 

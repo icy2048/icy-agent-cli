@@ -8,6 +8,7 @@ import type { SessionStore } from '../sessions/store.js';
 import type { ProcessRecord } from '../core/types.js';
 export type { ProcessRecord } from '../core/types.js';
 import { redact } from '../core/text.js';
+import { utf8PrefixLength } from './output.js';
 import { BASH_UNAVAILABLE, killBashTree, resolveBashShell, spawnBash, type BashOptions } from './bash.js';
 
 const execFileAsync = promisify(execFile);
@@ -82,18 +83,6 @@ const clone = (record: ProcessRecord): ProcessRecord => structuredClone(record);
 const terminal = (status: ProcessRecord['status']) => status !== 'running';
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 const isGone = (error: unknown) => (error as NodeJS.ErrnoException)?.code === 'ESRCH';
-const posixIdentity = /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/;
-const identityMonths = new Map(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, index) => [month, index]));
-const parsePosixIdentity = (value: string) => {
-  const match = posixIdentity.exec(value.trim());
-  if (!match) return undefined;
-  const month = identityMonths.get(match[1]), day = Number(match[2]), hour = Number(match[3]), minute = Number(match[4]), second = Number(match[5]), year = Number(match[6]);
-  if (month === undefined || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return undefined;
-  const instant = Date.UTC(year, month, day, hour, minute, second);
-  const date = new Date(instant);
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day && date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second ? instant : undefined;
-};
-const parseIdentityInstant = (value: string, platform: NodeJS.Platform) => platform === 'win32' ? (Number.isNaN(Date.parse(value)) ? undefined : Date.parse(value)) : parsePosixIdentity(value);
 const defaultLogWriter: ProcessLogWriterFactory = file => {
   const stream = createWriteStream(file, { flags: 'a', mode: 0o600 });
   let streamError: unknown;
@@ -232,6 +221,7 @@ export class ProcessManager {
         await write;
         this.indexBytes(active.index, data);
       } catch (error) {
+        active.record.bytes = Math.max(0, active.record.bytes - data.length);
         this.logError(active, error);
       }
       const pending = this.takePendingLog(active);
@@ -242,19 +232,10 @@ export class ProcessManager {
       }
     })();
   }
-  private utf8PrefixLength(output: Uint8Array, limit: number) {
-    if (limit >= output.length) return output.length;
-    let end = Math.max(0, limit);
-    if (!end) return 0;
-    let start = end - 1;
-    while (start > 0 && (output[start] & 0xc0) === 0x80) start--;
-    const first = output[start], width = first < 0x80 ? 1 : first >= 0xf0 ? 4 : first >= 0xe0 ? 3 : first >= 0xc0 ? 2 : 1;
-    return start + width <= end ? end : start;
-  }
   private enqueueLog(active: ActiveProcess, value: string, alreadyRedacted = false) {
     const output = Buffer.from(alreadyRedacted ? value : redact(value, this.secrets));
     const available = Math.max(0, this.outputLimit - active.record.bytes);
-    const length = this.utf8PrefixLength(output, available), written = output.subarray(0, length);
+    const length = utf8PrefixLength(output, available), written = output.subarray(0, length);
     active.record.bytes += written.length;
     if (written.length) {
       if (active.logWriteInFlight) this.appendPendingLog(active, written);
@@ -280,8 +261,24 @@ export class ProcessManager {
       this.enqueueLine(active, state, line);
     }
     if (Buffer.byteLength(state.pending) > OUTPUT_LINE_FLUSH) {
-      const pending = state.pending; state.pending = '';
-      this.enqueueLine(active, state, pending);
+      const pending = state.pending;
+      let windowStart = pending.length, windowBytes = 0;
+      while (windowStart > 0 && windowBytes < 8 * 1024) {
+        const start = pending.charCodeAt(windowStart - 1) >= 0xdc00 ? windowStart - 2 : windowStart - 1;
+        windowBytes += Buffer.byteLength(pending.slice(start, windowStart)); windowStart = start;
+      }
+      let flushEnd = -1;
+      for (let index = pending.length - 1; index >= windowStart; index--) {
+        if (/\s/u.test(pending[index])) { flushEnd = index + 1; break; }
+      }
+      if (flushEnd < 0) {
+        const keep = Math.max(256, ...this.secrets.map(secret => secret.length), 0);
+        flushEnd = Math.max(0, pending.length - keep);
+      }
+      if (flushEnd > 0) {
+        state.pending = pending.slice(flushEnd);
+        this.enqueueLine(active, state, pending.slice(0, flushEnd));
+      }
     }
   }
   private finishOutput(active: ActiveProcess, state: OutputState) {
@@ -415,7 +412,7 @@ export class ProcessManager {
     finally { if (timer) clearTimeout(timer); }
   }
   private async identityMatch(record: ProcessRecord): Promise<'match' | 'mismatch' | 'unavailable'> {
-    if (!record.pid || record.pid < 1) return 'unavailable';
+    if (!record.pid || record.pid < 1 || record.identity === undefined) return 'unavailable';
     const identity = await this.captureIdentity(record.pid);
     if (record.identity !== undefined) {
       if (identity === record.identity) return 'match';
@@ -424,10 +421,7 @@ export class ProcessManager {
       if (legacy === record.identity) return 'match';
       return identity || legacy ? 'mismatch' : 'unavailable';
     }
-    if (!identity) return 'unavailable';
-    const capturedAt = parseIdentityInstant(identity, this.platform), startedAt = Date.parse(record.startedAt);
-    if (capturedAt === undefined || Number.isNaN(startedAt)) return 'unavailable';
-    return Math.abs(capturedAt - startedAt) <= 5_000 ? 'match' : 'mismatch';
+    return 'unavailable';
   }
   private async matching(record: ProcessRecord): Promise<boolean> {
     return (await this.identityMatch(record)) === 'match';
@@ -578,9 +572,23 @@ export class ProcessManager {
     // the writer nor ps/powershell may postpone the detached process deadline.
     const remaining = Math.max(0, input.timeoutMs - (Date.now() - Date.parse(record.startedAt)));
     active.timeout = setTimeout(() => { void this.terminate(active, 'timeout', false).catch(() => {}); }, remaining);
-    // The PID and start-time scheme are durable before identity probing. This
-    // is the crash boundary that lets recovery use the start-time fallback.
-    await this.persistWithFailure(record, true, true);
+    // The PID and start-time scheme is durable before identity probing. This
+    // is the crash boundary that lets recovery inspect the child safely.
+    try {
+      await this.persistWithFailure(record, true, true);
+    } catch (error) {
+      const reason = `persist_failed:${errorMessage(error)}`;
+      try { await this.terminate(active, 'killed', true, reason); } catch { /* the failure is reported below */ }
+      let drainTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([active.drained, new Promise<void>(resolve => {
+          drainTimer = setTimeout(resolve, this.timing.killConfirmMs); drainTimer.unref?.();
+        })]);
+      } finally { if (drainTimer) clearTimeout(drainTimer); }
+      record.status = 'killed'; record.endedAt ??= new Date().toISOString(); record.exitCode = null; record.pidAlive = false; record.reason = reason;
+      try { await this.persist(record, true, clone(record), true); } catch { /* best effort after stopping the child */ }
+      throw new Error(`session could not be saved and the process was stopped: ${errorMessage(error)}`);
+    }
     // Identity is needed only after a restart; an in-session ChildProcess is
     // always signalled through the live handle/pgid.
     const identity = await this.captureIdentity(child.pid);
@@ -695,17 +703,17 @@ export class ProcessManager {
         record.status = 'unknown'; delete record.endedAt; record.reason = 'icy_restarted'; recovered++;
         const state = await this.inspect(record);
         record.pidAlive = state.alive;
-        if (state.alive && state.identity !== 'match') record.reason = 'identity_unconfirmed';
+        if (record.identity === undefined || state.alive && state.identity !== 'match') record.reason = 'identity_unconfirmed';
         changed.push(clone(record));
       } else if (record.status === 'unknown' && record.pid) {
         // Re-probe every unknown PID, including records previously marked
         // unconfirmed. A failed identity capture must not become permanent.
         const state = await this.inspect(record);
-        const wasAlive = record.pidAlive;
+        const wasAlive = record.pidAlive, wasReason = record.reason;
         record.pidAlive = state.alive;
-        if (state.alive && state.identity !== 'match') record.reason = 'identity_unconfirmed';
+        if (record.identity === undefined || state.alive && state.identity !== 'match') record.reason = 'identity_unconfirmed';
         else if (state.alive && record.reason === 'identity_unconfirmed') record.reason = 'icy_restarted';
-        if (wasAlive !== record.pidAlive || state.alive && state.identity === 'match' && record.reason === 'icy_restarted') changed.push(clone(record));
+        if (wasAlive !== record.pidAlive || wasReason !== record.reason || state.alive && state.identity === 'match' && record.reason === 'icy_restarted') changed.push(clone(record));
       }
     }
     if (changed.length) {
@@ -720,6 +728,23 @@ export class ProcessManager {
       else this.armWatchdog(record);
     }
     return recovered;
+  }
+
+  /** Refresh stale unknown liveness before a safety-sensitive verification. */
+  async refreshUnknownLiveness(): Promise<boolean> {
+    const changed: ProcessRecord[] = [];
+    for (const record of this.records()) {
+      if (record.status !== 'unknown' || record.pidAlive === true || !record.pid || record.pid < 1) continue;
+      const alive = await this.pidAlive(record.pid);
+      if (record.pidAlive !== alive) { record.pidAlive = alive; changed.push(clone(record)); }
+    }
+    if (changed.length) {
+      await this.store.save();
+      for (const record of changed) {
+        try { await this.onChange?.(record); } catch { /* liveness remains durable */ }
+      }
+    }
+    return this.records().some(record => record.status === 'unknown' && record.pidAlive === true);
   }
 
   private resolveKillReference(reference: string) {
@@ -738,7 +763,7 @@ export class ProcessManager {
       record.reason = 'identity_unconfirmed';
       await this.persistWithFailure(record); return clone(record);
     }
-    const initial = identityVerified
+    const initial = identityVerified && record.identity !== undefined
       ? { alive: await this.pidAlive(record.pid), identity: 'match' as const }
       : await this.inspect(record);
     record.pidAlive = initial.alive;

@@ -18,6 +18,14 @@ import { bashArgs, fakeChild, fixture, identityToken, nodeCommand, outputChild, 
 
 const exec = promisify(execFile);
 
+test('foreground output cap cuts a UTF-8 character boundary without replacement', { skip: !posix && skipWindows }, async () => {
+  const f = await fixture();
+  try {
+    const result = await runBash(nodeCommand('process.stdout.write(Buffer.concat([Buffer.from("中".repeat(87381)), Buffer.from("中").subarray(0, 2)]));'), f.cwd, 60_000, new AbortController().signal);
+    assert.equal(result.truncated, true); assert.equal((result.content.match(/�/g) ?? []).length, 0);
+  } finally { await f.cleanup(); }
+});
+
 test('foreground and detached streams preserve split UTF-8 characters without replacement', { skip: !posix && skipWindows }, async () => {
   const f = await fixture();
   try {
@@ -161,6 +169,25 @@ test('detached redaction spans decoder chunks for secrets and sk tokens', async 
   } finally { await f.cleanup(); }
 });
 
+test('detached forced line flush retains redaction boundaries', async () => {
+  const { child, stdout, stderr } = outputChild(4405), limit = 64 * 1024;
+  const text = 'store-secret ' + 'a'.repeat(limit - 20) + ' sk-1234567890123456 ' + 'z'.repeat(1024);
+  const processSpawn = (() => {
+    setImmediate(() => {
+      const data = Buffer.from(text); stdout.emit('data', data.subarray(0, limit + 1)); stdout.emit('data', data.subarray(limit + 1));
+      stdout.emit('end'); stdout.emit('close'); stderr.emit('end'); stderr.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake', secrets: ['store-secret'] });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'forced-redaction', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    const log = await readFile(path.join(f.store.dir, 'processes', `${record.id}.log`), 'utf8');
+    assert.match(log, /\[REDACTED\]/); assert.doesNotMatch(log, /store-secret|sk-1234567890123456/);
+  } finally { await f.cleanup(); }
+});
+
 test('detached stderr prefixes complete lines rather than chunks', async () => {
   const { child, stdout, stderr } = outputChild(4402);
   const processSpawn = (() => {
@@ -199,6 +226,27 @@ test('detached burst coalesces a million short lines without changing log bytes'
     await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
     assert.ok(writeCalls <= 2_000, `writer calls: ${writeCalls}`);
     assert.equal(Buffer.concat(chunks).toString(), expected);
+  } finally { await f.cleanup(); }
+});
+
+test('failed coalesced log writes reduce bytes to the accepted log and index', async () => {
+  const { child, stdout, stderr } = outputChild(4406), chunks: Buffer[] = []; let writes = 0;
+  const processSpawn = (() => {
+    setImmediate(() => {
+      stdout.emit('data', Buffer.from('one\ntwo\n')); stdout.emit('end'); stdout.emit('close'); stderr.emit('end'); stderr.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const writer = async (file: string) => ({
+    write: async (data: Uint8Array) => { writes++; if (writes === 1) { await new Promise<void>(resolve => setImmediate(resolve)); throw new Error('injected_log_write'); } chunks.push(Buffer.from(data)); await appendFile(file, data); },
+    end: async () => {},
+  });
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake', processLogWriterFactory: writer });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'failed-log-write', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    const terminal = await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    const log = await readFile(path.join(f.store.dir, 'processes', `${record.id}.log`));
+    assert.equal(terminal.bytes, log.byteLength); assert.equal((await f.store.getProcessManager().readOutput(record.id, 1, 6000)).total, log.toString().length); assert.equal(Buffer.concat(chunks).toString(), log.toString());
   } finally { await f.cleanup(); }
 });
 

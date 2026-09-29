@@ -7,7 +7,7 @@ import { Agent } from '../src/core/agent.js';
 import { canVerifyTask } from '../src/core/run-state.js';
 import type { AgentEvent, Approve, Completion, Message, ProcessRecord, Provider, ToolCall } from '../src/core/types.js';
 import type { Config } from '../src/config/load.js';
-import { SessionStore } from '../src/sessions/store.js';
+import { SessionStore, type SessionStoreOptions } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
 
 const signal = () => new AbortController().signal;
@@ -18,7 +18,7 @@ const write = (id: string, file: string, content: string) => call(id, 'write', {
 const read = (id: string, file: string) => call(id, 'read', { path: file, offset: null, limit: null });
 const absent = (file: string) => assert.rejects(readFile(file), { code: 'ENOENT' });
 
-async function setup(provider: Provider, options: Partial<Config> = {}, approve?: Approve) {
+async function setup(provider: Provider, options: Partial<Config> = {}, approve?: Approve, storeOptions: SessionStoreOptions = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-agent-recovery-'));
   const workspace = path.join(dir, 'workspace'), home = path.join(dir, 'home'); await mkdir(workspace);
   const cwd = await realpath(workspace);
@@ -27,7 +27,7 @@ async function setup(provider: Provider, options: Partial<Config> = {}, approve?
     permissions: 'workspace-edit', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50,
     maxTokens: 100000, maxContextChars: 120000, requestTimeoutMs: 1000, ...options,
   };
-  const store = await SessionStore.create(home, { cwd, provider: config.provider, model: config.model, baseUrl: config.baseUrl }, [config.apiKey]);
+  const store = await SessionStore.create(home, { cwd, provider: config.provider, model: config.model, baseUrl: config.baseUrl }, [config.apiKey], storeOptions);
   const events: AgentEvent[] = [], tools = new ToolRegistry(config, store, approve);
   const agent = new Agent(config, provider, tools, store, event => events.push(event));
   return { dir, cwd, home, config, store, tools, events, agent, cleanup: async () => { await agent.store.close(); await store.close(); await rm(dir, { recursive: true, force: true }); } };
@@ -159,6 +159,19 @@ test('verify refuses live detached records before creating a run or invoking bas
     assert.equal((await s.agent.verify('true', signal())).ok, true);
     assert.equal(s.store.data.runs.length, runs + 1); assert.equal(approvals, 1);
     record.status = 'exited'; record.endedAt = new Date().toISOString();
+  } finally { record.status = 'exited'; record.endedAt ??= new Date().toISOString(); await s.cleanup(); }
+});
+
+test('verify refreshes stale unknown liveness before allowing the command', async () => {
+  let alive = false, approvals = 0;
+  const s = await setup({ async complete() { return done(); } }, {}, async () => { approvals++; return 'once'; }, { processAlive: () => alive });
+  const record: ProcessRecord = { id: '22222222-2222-4222-8222-222222222222', toolCallId: 'stale-live', command: 'sleep 30', cwd: s.cwd, pid: 4242, startedAt: new Date().toISOString(), timeoutMs: 60_000, status: 'unknown', pidAlive: false, bytes: 0 };
+  try {
+    await s.agent.run('prepare work', signal()); s.store.data.processes.push(record); alive = true;
+    await assert.rejects(s.agent.verify('true', signal()), /有后台进程仍在运行/);
+    assert.equal(record.pidAlive, true); assert.equal(approvals, 0);
+    alive = false; record.pidAlive = false;
+    assert.equal((await s.agent.verify('true', signal())).ok, true); assert.equal(approvals, 1);
   } finally { record.status = 'exited'; record.endedAt ??= new Date().toISOString(); await s.cleanup(); }
 });
 
