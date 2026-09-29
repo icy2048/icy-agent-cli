@@ -28,6 +28,8 @@ export interface SessionStoreOptions {
   processAlive?: ProcessManagerOptions['isAlive'];
   processOutputLimit?: number;
   processAppendFile?: ProcessManagerOptions['processAppendFile'];
+  fsWriteFile?: typeof writeFile;
+  fsRename?: typeof rename;
 }
 export class SessionStore {
   readonly dir: string;
@@ -36,7 +38,12 @@ export class SessionStore {
   private readonly platform: NodeJS.Platform;
   private readonly kill: typeof process.kill;
   private readonly processOptions: ProcessManagerOptions;
+  private readonly fsWriteFile: typeof writeFile;
+  private readonly fsRename: typeof rename;
   private manager?: ProcessManager;
+  private pendingSaves: Array<{ resolve: () => void; reject: (error: unknown) => void }> = [];
+  private writing = false;
+  private writeDrain = Promise.resolve();
   get data(): SessionData { return this.snapshot; }
   constructor(readonly home: string, data: SessionData | LegacySessionData, private secrets: string[] = [], options: SessionStoreOptions = {}) {
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(data.id)) throw new Error('无效会话 ID。');
@@ -44,6 +51,8 @@ export class SessionStore {
     this.kill = options.kill ?? process.kill.bind(process);
     this.processOptions = { platform: options.processPlatform ?? this.platform, spawn: options.processSpawn, kill: options.processKill, env: options.processEnv, shellPath: options.shellPath,
       captureIdentity: options.processIdentity, isAlive: options.processAlive, outputLimit: options.processOutputLimit, processAppendFile: options.processAppendFile };
+    this.fsWriteFile = options.fsWriteFile ?? writeFile;
+    this.fsRename = options.fsRename ?? rename;
     this.snapshot = this.normalize(data);
     this.dir = path.join(home, 'sessions', data.id);
   }
@@ -112,19 +121,45 @@ export class SessionStore {
     try { await handle.writeFile(String(process.pid)); }
     finally { await handle.close(); }
   }
-  getProcessManager(onChange?: ProcessManagerOptions['onChange']): ProcessManager {
+  getProcessManager(onChange?: ProcessManagerOptions['onChange'], beforePersist?: ProcessManagerOptions['beforePersist']): ProcessManager {
     if (!this.manager) this.manager = new SessionProcessManager(this, this.secrets, this.processOptions);
-    if (onChange) this.manager.setOnChange(onChange);
+    if (onChange !== undefined || beforePersist !== undefined) this.manager.setHooks(onChange, beforePersist);
     return this.manager;
   }
   get processManager(): ProcessManager { return this.getProcessManager(); }
-  async save() {
-    parseSessionData(this.data, this.data.id);
-    this.data.updatedAt = new Date().toISOString();
+  save(): Promise<void> {
+    const promise = new Promise<void>((resolve, reject) => this.pendingSaves.push({ resolve, reject }));
+    if (!this.writing) {
+      this.writing = true;
+      this.writeDrain = this.runWrites();
+      void this.writeDrain.catch(() => {});
+    }
+    return promise;
+  }
+  private async runWrites() {
+    let failure: unknown, failed = false;
+    try {
+      // Let synchronous mutations following save() join the same write batch.
+      await Promise.resolve();
+      while (this.pendingSaves.length) {
+        const callers = this.pendingSaves;
+        this.pendingSaves = [];
+        try { await this.writeSnapshot(); for (const caller of callers) caller.resolve(); }
+        catch (error) { if (!failed) failure = error; failed = true; for (const caller of callers) caller.reject(error); }
+      }
+    } finally { this.writing = false; }
+    if (failed) throw failure;
+  }
+  private async writeSnapshot() {
+    const snapshot = structuredClone(this.data);
+    snapshot.updatedAt = new Date().toISOString();
+    parseSessionData(snapshot, snapshot.id);
+    this.data.updatedAt = snapshot.updatedAt;
     const temp = path.join(this.dir, `session-${randomUUID()}.tmp`);
     try {
-      await writeFile(temp, this.sanitize(JSON.stringify(this.data)), { mode: 0o600, flag: 'wx' });
-      await rename(temp, path.join(this.dir, 'session.json'));
+      await this.fsWriteFile(temp, this.sanitize(JSON.stringify(snapshot)), { mode: 0o600, flag: 'wx' });
+      await this.fsRename(temp, path.join(this.dir, 'session.json'));
+      this.data.updatedAt = snapshot.updatedAt;
     } finally { await unlink(temp).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }); }
   }
   // JSON escaping must remain valid; sanitize strings before JSON serialization.
@@ -145,7 +180,11 @@ export class SessionStore {
   async close() {
     if (!this.locked) return 0;
     let failure: unknown, terminated = 0;
+    const drains = new Set<Promise<void>>();
+    if (this.writing) drains.add(this.writeDrain);
     try { terminated = await this.getProcessManager().closeAll('session_closed'); } catch (error) { failure = error; }
+    if (this.writing) drains.add(this.writeDrain);
+    for (const drain of drains) try { await drain; } catch (error) { if (!failure) failure = error; }
     try { await unlink(path.join(this.dir, 'lock')); this.locked = false; }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') this.locked = false;
