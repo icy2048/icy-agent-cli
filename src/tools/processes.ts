@@ -13,7 +13,7 @@ import { BASH_UNAVAILABLE, killBashTree, resolveBashShell, spawnBash, type BashO
 const execFileAsync = promisify(execFile);
 const OUTPUT_LIMIT = 16 * 1024 * 1024;
 const MAX_WAIT = 10_000;
-const KILL_CONFIRM_WAIT = 2_000;
+const DEFAULT_TIMING = { escalationMs: 300, killConfirmMs: 2_000, identityTimeoutMs: 3_000, watchdogRetryMs: 5_000, firstOutputWaitMs: 200 } as const;
 const OUTPUT_LINE_FLUSH = 64 * 1024;
 const LOG_INDEX_STRIDE = 65_536;
 const MAX_PAGE_BYTES = 1 * 1024 * 1024;
@@ -71,18 +71,11 @@ export interface ProcessManagerOptions extends BashOptions {
   beforePersist?: BeforePersist;
   outputLimit?: number;
   captureIdentity?: IdentityCapture;
-  identityCapture?: IdentityCapture;
-  identity?: IdentityCapture;
   execFile?: IdentityExecFile;
   isAlive?: LivenessCheck;
-  isPidAlive?: LivenessCheck;
-  liveness?: LivenessCheck;
-  processAlive?: LivenessCheck;
-  processLogWriter?: ProcessLogWriterFactory;
-  processLogWriterFactory?: ProcessLogWriterFactory;
   logWriterFactory?: ProcessLogWriterFactory;
-  processLogReader?: ProcessLogReader;
-  processReadRange?: ProcessLogReader;
+  logReader?: ProcessLogReader;
+  timing?: Partial<{ escalationMs: number; killConfirmMs: number; identityTimeoutMs: number; watchdogRetryMs: number; firstOutputWaitMs: number }>;
 }
 
 const clone = (record: ProcessRecord): ProcessRecord => structuredClone(record);
@@ -142,6 +135,7 @@ export class ProcessManager {
   private readonly logWriterFactory: ProcessLogWriterFactory;
   private readonly logReader: ProcessLogReader;
   private readonly outputLimit: number;
+  private readonly timing: { escalationMs: number; killConfirmMs: number; identityTimeoutMs: number; watchdogRetryMs: number; firstOutputWaitMs: number };
   private onChange?: ProcessChange;
   private beforePersist?: BeforePersist;
   private active = new Map<string, ActiveProcess>();
@@ -159,12 +153,13 @@ export class ProcessManager {
     this.shellPath = options.shellPath;
     this.spawnProcess = options.spawn ?? spawn;
     this.processKill = options.kill;
-    this.captureIdentityOption = options.captureIdentity ?? options.identityCapture ?? options.identity;
+    this.captureIdentityOption = options.captureIdentity;
     this.identityExecFile = options.execFile ?? ((file, args, execOptions) => execFileAsync(file, args, execOptions) as Promise<{ stdout: string | Buffer }>);
-    this.livenessCheck = options.isAlive ?? options.isPidAlive ?? options.liveness ?? options.processAlive;
-    this.logWriterFactory = options.processLogWriter ?? options.processLogWriterFactory ?? options.logWriterFactory ?? defaultLogWriter;
-    this.logReader = options.processLogReader ?? options.processReadRange ?? defaultLogReader;
+    this.livenessCheck = options.isAlive;
+    this.logWriterFactory = options.logWriterFactory ?? defaultLogWriter;
+    this.logReader = options.logReader ?? defaultLogReader;
     this.outputLimit = options.outputLimit ?? OUTPUT_LIMIT;
+    this.timing = { ...DEFAULT_TIMING, ...options.timing };
     this.onChange = options.onChange;
     this.beforePersist = options.beforePersist;
   }
@@ -351,7 +346,7 @@ export class ProcessManager {
           rejectEscalation(error);
         }
       }
-    }, 300);
+    }, this.timing.escalationMs);
     timer.unref?.();
     if (propagate) await active.escalation;
     else void active.escalation.catch(() => { /* timeout/output cleanup reports the failure on the record */ });
@@ -406,14 +401,14 @@ export class ProcessManager {
       : this.platform === 'win32'
         ? Promise.resolve().then(() => this.identityExecFile('powershell.exe', ['-NoProfile', '-Command', scheme === 'v2'
           ? `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CreationDate.ToUniversalTime().ToString('o')`
-          : `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object -ExpandProperty CreationDate`], { windowsHide: true, timeout: 3_000 })).then(result => result.stdout)
-        : Promise.resolve().then(() => this.identityExecFile('ps', ['-o', 'lstart=', '-p', String(pid)], { timeout: 3_000, env: scheme === 'v2'
+          : `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object -ExpandProperty CreationDate`], { windowsHide: true, timeout: this.timing.identityTimeoutMs })).then(result => result.stdout)
+        : Promise.resolve().then(() => this.identityExecFile('ps', ['-o', 'lstart=', '-p', String(pid)], { timeout: this.timing.identityTimeoutMs, env: scheme === 'v2'
           ? { ...process.env, LC_ALL: 'C', LANG: 'C', TZ: 'UTC' }
           : { ...process.env } })).then(result => result.stdout);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const value = await Promise.race([capture, new Promise<undefined>(resolve => {
-        timer = setTimeout(() => resolve(undefined), 3_000);
+        timer = setTimeout(() => resolve(undefined), this.timing.identityTimeoutMs);
       })]);
       return typeof value === 'string' || Buffer.isBuffer(value) ? String(value).trim() || undefined : undefined;
     } catch { return undefined; }
@@ -443,7 +438,7 @@ export class ProcessManager {
     }
     if (this.platform === 'win32') {
       try {
-        const result = await execFileAsync('tasklist.exe', ['/FI', `PID eq ${pid}`], { windowsHide: true, timeout: 3_000 });
+        const result = await execFileAsync('tasklist.exe', ['/FI', `PID eq ${pid}`], { windowsHide: true, timeout: this.timing.identityTimeoutMs });
         return new RegExp(`\\b${pid}\\b`).test(String(result.stdout));
       } catch { return false; }
     }
@@ -492,7 +487,7 @@ export class ProcessManager {
     const retries = (this.watchdogRetries.get(record.id) ?? 0) + 1;
     if (retries <= 3) {
       this.watchdogRetries.set(record.id, retries);
-      this.armWatchdog(record, 5_000);
+      this.armWatchdog(record, this.timing.watchdogRetryMs);
     } else {
       this.watchdogRetries.delete(record.id);
       await this.persist(record);
@@ -592,7 +587,7 @@ export class ProcessManager {
     if (active.settled || active.closed || child.exitCode !== null || child.signalCode !== null) return record;
     record.identity = identity;
     await this.persistWithFailure(record, false, true);
-    await Promise.race([firstOutput, new Promise<void>(resolve => setTimeout(resolve, 200))]);
+    await Promise.race([firstOutput, new Promise<void>(resolve => setTimeout(resolve, this.timing.firstOutputWaitMs))]);
     return record;
   }
 
@@ -760,7 +755,7 @@ export class ProcessManager {
       softError = error;
       record.reason = errorMessage(error);
     }
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, this.timing.escalationMs));
     let forcedGone = false;
     try { forcedGone = await killBashTree(pid, this.platform, this.spawnProcess, this.processKill, 'SIGKILL'); }
     catch (error) {
@@ -773,7 +768,7 @@ export class ProcessManager {
     }
     // Even a taskkill "not found" result is followed by the normal liveness
     // probe; pidAlive is never cleared from an identity result alone.
-    const deadline = Date.now() + (forcedGone ? 0 : KILL_CONFIRM_WAIT);
+    const deadline = Date.now() + (forcedGone ? 0 : this.timing.killConfirmMs);
     let alive = await this.pidAlive(pid);
     while (alive && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 50));

@@ -28,11 +28,9 @@ export interface SessionStoreOptions {
   processExecFile?: ProcessManagerOptions['execFile'];
   processAlive?: ProcessManagerOptions['isAlive'];
   processOutputLimit?: number;
-  processLogWriter?: ProcessManagerOptions['processLogWriter'];
-  processLogWriterFactory?: ProcessManagerOptions['processLogWriterFactory'];
-  logWriterFactory?: ProcessManagerOptions['logWriterFactory'];
-  processLogReader?: ProcessManagerOptions['processLogReader'];
-  processReadRange?: ProcessManagerOptions['processReadRange'];
+  processLogWriterFactory?: ProcessManagerOptions['logWriterFactory'];
+  processLogReader?: ProcessManagerOptions['logReader'];
+  processTiming?: ProcessManagerOptions['timing'];
   fsWriteFile?: typeof writeFile;
   fsRename?: typeof rename;
 }
@@ -56,8 +54,7 @@ export class SessionStore {
     this.kill = options.kill ?? process.kill.bind(process);
     this.processOptions = { platform: options.processPlatform ?? this.platform, spawn: options.processSpawn, kill: options.processKill, env: options.processEnv, shellPath: options.shellPath,
       captureIdentity: options.processIdentity, execFile: options.processExecFile, isAlive: options.processAlive, outputLimit: options.processOutputLimit,
-      processLogWriter: options.processLogWriter, processLogWriterFactory: options.processLogWriterFactory, logWriterFactory: options.logWriterFactory,
-      processLogReader: options.processLogReader, processReadRange: options.processReadRange };
+      logWriterFactory: options.processLogWriterFactory, logReader: options.processLogReader, timing: options.processTiming };
     this.fsWriteFile = options.fsWriteFile ?? writeFile;
     this.fsRename = options.fsRename ?? rename;
     this.snapshot = this.normalize(data);
