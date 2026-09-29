@@ -180,3 +180,22 @@ test('CLI plain mode separates model text on stdout from session diagnostics on 
     assert.doesNotMatch(result.stdout, /session:|icy ·/);
   } finally { await s.close(); }
 });
+
+test('CLI rejects unapproved detached bash in non-interactive mode without starting a process', async () => {
+  const s = await fixture((response, _request, index) => {
+    if (index === 1) call(response, 'bash', { command: `: ${fixtureKey}; echo $$ > detached.pid; sleep 30`, cwd: null, timeoutMs: null, detach: true, kill: null });
+    else setTimeout(() => answer(response), 150);
+  });
+  try {
+    const result = await s.start(['run', 'Start the long command.', '--json']).done;
+    assert.equal(result.code, 2, result.stderr);
+    const events = ndjson(result.stdout);
+    const toolEnd = events.find(event => event.type === 'tool_end') as Event & { call: { name: string }; result: { ok: boolean; content: string } } | undefined;
+    assert.ok(toolEnd);
+    assert.equal(toolEnd.call.name, 'bash');
+    assert.equal(toolEnd.result.ok, false);
+    assert.match(toolEnd.result.content, /approval_required/);
+    assert.equal(events.some(event => event.type === 'process'), false);
+    await assert.rejects(access(path.join(s.cwd, 'detached.pid')));
+  } finally { await s.close(); }
+});

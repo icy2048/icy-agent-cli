@@ -6,7 +6,7 @@ import { profileConfig, saveModelProfile, type ModelProfile, type ModelServices 
 import { ModelProvider } from '../providers/model.js';
 import { Composer } from './Composer.js';
 import { commands, matchCommands } from './commands.js';
-import { cachedEntryLines, changedFiles, entryLines, projectTranscriptEvent, taskStatusLabel, taskSummary, transcriptFromMessages, type Entry } from './transcript.js';
+import { cachedEntryLines, changedFiles, entryLines, processListSummary, processReference, projectTranscriptEvent, taskStatusLabel, taskSummary, transcriptFromMessages, type Entry } from './transcript.js';
 import { saveThinkingPreference } from '../config/load.js';
 import wrapAnsi from 'wrap-ansi';
 import type { Agent } from '../core/agent.js';
@@ -25,7 +25,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   const width = Math.max(30, columns || 80), dual = width >= 120;
   const [modelOpen, setModelOpen] = useState(false);
   const [entries, setEntries] = useState<Entry[]>(() => {
-    const restored = transcriptFromMessages(agent.store.data.messages);
+    const restored = transcriptFromMessages(agent.store.data.messages, agent.store.data.processes ?? []);
     return [...restored, ...(recovery ? [{ kind: 'notice' as const, text: `已恢复会话；${recovery} 个未完成调用已标记中断。请核对实际文件状态。` }] : [])];
   });
   const [input, setInput] = useState(''), [running, setRunning] = useState(false), [stream, setStream] = useState('');
@@ -47,7 +47,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   const changeInput = (value: string) => { setInput(value); setCommandIndex(0); setMenuDismissed(false); };
   const history = useRef<string[]>([]), historyIndex = useRef(0), controller = useRef<AbortController | null>(null), started = useRef(false);
   const busy = useRef(false), pendingRef = useRef<Pending | undefined>(undefined);
-  const exitAfterCancel = useRef(false);
+  const exitAfterCancel = useRef(false), exitStarted = useRef(false);
   const streamBuf = useRef(''), reasoningBuf = useRef(''), flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notice = (text: string) => setEntries(v => [...v, { kind: 'notice', text }]);
   const showTaskState = (nextTask?: TaskState, nextRun?: RunState) => {
@@ -60,7 +60,20 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     thinkingRef.current = expanded; setThinkingExpanded(expanded); setScroll(0);
     preferenceSave.current = preferenceSave.current.then(() => saveThinkingPreference(agent.config.home, expanded)).catch(e => notice(`思考显示设置未保存：${errorText(e)}`));
   };
-  const exitSaved = () => { void preferenceSave.current.then(() => exit()); };
+  const closeAndExit = async () => {
+    if (exitStarted.current) return;
+    exitStarted.current = true;
+    try {
+      await preferenceSave.current;
+      const terminated = await agent.store.close();
+      if (terminated > 0) process.stderr.write(`已终止 ${terminated} 个后台进程（session_closed）。\n`);
+    } catch (error) {
+      process.stderr.write(`退出时关闭会话失败：${errorText(error)}\n`);
+      process.exitCode = 1;
+    }
+    exit();
+  };
+  const exitSaved = () => { exitAfterCancel.current = true; if (!busy.current) void closeAndExit(); };
   const flushBuffers = () => {
     const delta = streamBuf.current, reasoning = reasoningBuf.current;
     streamBuf.current = ''; reasoningBuf.current = '';
@@ -91,6 +104,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
       case 'assistant': flushNow(); setStream(''); setEntries(v => projectTranscriptEvent(v, event)); break;
       case 'tool_start': setStatus(`Running ${event.call.name}`); setEntries(v => projectTranscriptEvent(v, event)); break;
       case 'tool_end': setEntries(v => projectTranscriptEvent(v, event)); break;
+      case 'process': setEntries(v => projectTranscriptEvent(v, event)); break;
       case 'usage': setTokens(`${event.estimated ? '~' : ''}${event.tokens.toLocaleString()}`); break;
       case 'done': flushNow(); setEntries(v => projectTranscriptEvent(v, event)); setStatus(taskStateRef.current ? taskStatusLabel(taskStateRef.current.status) : event.ok ? '已回答 · 未验证' : event.reason === 'cancelled' ? 'Cancelled' : 'Stopped'); setStream(''); break;
     }
@@ -117,7 +131,12 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
     finally { busy.current = false; setRunning(false); controller.current = null; if (exitAfterCancel.current) exitSaved(); }
   };
   const submit = async (value: string) => {
-    const prompt = value.trim(); if (!prompt || busy.current) return;
+    const prompt = value.trim(), processCommand = prompt === '/ps' || prompt === '/kill' || prompt.startsWith('/kill ');
+    if (!prompt) return;
+    if (busy.current && !processCommand) {
+      notice('运行中：只接受 /ps 和 /kill；Esc 取消当前运行。');
+      return;
+    }
     changeInput(''); setScroll(0);
     if (prompt === '/exit') { exitSaved(); return; }
     if (prompt === '/help') { notice(commands.map(c => `${c.command} ${c.description}`).join('\n') + '\n/ 菜单 · ↑↓ 选择 · Enter 执行 · Tab 补全 · Esc 关闭\nCtrl+T 思考 · Ctrl+O 工具 · PgUp/PgDn 翻页'); return; }
@@ -126,7 +145,8 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
       notice(`思考内容已${thinkingRef.current ? '展开' : '收起'}，后续启动沿用此设置。`); return;
     }
     if (prompt === '/model') { if (demo) notice('当前为离线演示；请运行 icy 后使用 /model 配置模型。'); else setModelOpen(true); return; }
-    if (prompt === '/task') { notice(taskSummary(agent.store.data.task, latestRun())); return; }
+    if (prompt === '/task') { notice(taskSummary(agent.store.data.task, latestRun(), agent.store.data.processes ?? [])); return; }
+    if (prompt === '/ps') { notice(processListSummary(agent.store.data.processes ?? [])); return; }
     if (prompt === '/continue') { notice('继续原任务，将开启并记录新预算；已执行工具不会自动重放。'); await runTask(signal => agent.continue(signal)); return; }
     if (prompt === '/sessions' || prompt.startsWith('/sessions ')) {
       const argument = prompt.slice('/sessions'.length).trim();
@@ -147,6 +167,17 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
       return;
     }
     const command = prompt.split(/\s/, 1)[0], argument = prompt.slice(command.length).trim();
+    if (command === '/kill') {
+      if (!argument) { notice('用法：/kill <icy-process:id 或至少 8 个字符的唯一前缀>'); changeInput('/kill '); return; }
+      const killAction = async () => {
+        try {
+          const record = await agent.killProcess(argument);
+          notice(`后台进程 ${processReference(record.id)} 当前状态：${record.status}${record.reason ? `（${record.reason}）` : ''}`);
+        } catch (error) { notice(`无法终止后台进程 ${argument}：${errorText(error)}`); }
+      };
+      if (busy.current) await killAction(); else await localAction(killAction);
+      return;
+    }
     if (['/verify', '/todo', '/done', '/resume'].includes(command)) {
       if (!argument) { notice(`用法：${command} ${command === '/verify' ? '<验收命令>' : command === '/todo' ? '<待办事项>' : command === '/done' ? '<待办编号，从 1 开始>' : '<会话 ID>'}`); changeInput(command + ' '); return; }
       if (command === '/verify') { await runTask(signal => agent.verify(argument, signal)); return; }
@@ -157,7 +188,7 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
         else {
           const restored = await agent.resumeSession(argument);
           flushNow(); setStream('');
-          setEntries([...transcriptFromMessages(agent.store.data.messages), { kind: 'notice', text: `已恢复会话 ${agent.store.data.id}；${restored.recovered} 个未完成调用已标记。/task 查看状态，/continue 以新预算继续。` }]);
+          setEntries([...transcriptFromMessages(agent.store.data.messages, agent.store.data.processes ?? []), { kind: 'notice', text: `已恢复会话 ${agent.store.data.id}；${restored.recovered} 个未完成调用已标记。/task 查看状态，/continue 以新预算继续。` }]);
           setTask(agent.store.data.task?.goal || agent.store.data.messages.findLast(message => message.role === 'user')?.content || '');
           showTaskState(agent.store.data.task, latestRun());
           if (!agent.store.data.task) { setStatus('Ready'); setTurn(0); setTokens('—'); }
@@ -192,9 +223,9 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   }, [running]);
   useEffect(() => {
     const terminate = () => { exitAfterCancel.current = true; if (busy.current) controller.current?.abort(); else exitSaved(); };
-    process.on('SIGTERM', terminate);
+    process.on('SIGINT', terminate); process.on('SIGTERM', terminate);
     if (!started.current) { started.current = true; if (initialPrompt) void submit(initialPrompt); }
-    return () => { process.removeListener('SIGTERM', terminate); controller.current?.abort(); pendingRef.current?.resolve('deny'); if (flushTimer.current) clearTimeout(flushTimer.current); };
+    return () => { process.removeListener('SIGINT', terminate); process.removeListener('SIGTERM', terminate); controller.current?.abort(); pendingRef.current?.resolve('deny'); if (flushTimer.current) clearTimeout(flushTimer.current); };
   }, []);
   useInput((value, key) => {
     if (modelOpen) return;
@@ -230,7 +261,9 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
   const menuStart = Math.max(0, selectedIndex - 5), visibleCommands = matches.slice(menuStart, menuStart + 6);
   const menuRows = menuOpen ? visibleCommands.length + 1 : 0;
   const lineBudget = Math.max(3, (rows || 30) - (pending ? 15 : 9) - menuRows);
-  const approvalLines = pending ? wrapAnsi(clean(`command:\n${pending.request.command}\n\ncwd: ${pending.request.cwd}\ntimeout: ${pending.request.timeoutMs / 1000}s`), contentWidth, { hard: true, trim: false }).split('\n') : [];
+  const approvalLines = pending ? wrapAnsi(clean(pending.request.detach
+    ? `后台命令（最长 ${Math.max(1, Math.ceil(pending.request.timeoutMs / 60_000))} 分钟，输出写入会话目录）\ncommand:\n${pending.request.command}\n\ncwd: ${pending.request.cwd}\ntimeout: ${Math.max(1, Math.ceil(pending.request.timeoutMs / 60_000))} 分钟（${pending.request.timeoutMs / 1000}s）\n输出写入磁盘；命令会在当前轮结束后继续运行。`
+    : `command:\n${pending.request.command}\n\ncwd: ${pending.request.cwd}\ntimeout: ${pending.request.timeoutMs / 1000}s`), contentWidth, { hard: true, trim: false }).split('\n') : [];
   const approvalPages = Math.max(1, Math.ceil(approvalLines.length / lineBudget));
   const committed = useMemo(() => entries.flatMap(e => cachedEntryLines(e, contentWidth, details, thinkingExpanded)), [entries, contentWidth, details, thinkingExpanded]);
   const lines = stream ? [...committed, ...entryLines({ kind: 'assistant', text: stream }, contentWidth, details, thinkingExpanded)] : committed;
@@ -250,13 +283,16 @@ export function App({ agent, approval, initialPrompt = '', demo = false, recover
           <Text dimColor wrap="truncate-end">↑↓ 选择 · Enter 执行 · Tab 补全 · Esc 关闭</Text>
         </Box>}
         {pending ? <Box flexDirection="column" borderStyle="single" borderColor="yellow" paddingX={1}>
-          <Text color="yellow">允许执行命令？</Text>
+          <Text color="yellow">{pending.request.detach ? `后台命令（最长 ${Math.max(1, Math.ceil(pending.request.timeoutMs / 60_000))} 分钟，输出写入会话目录）` : '允许执行命令？'}</Text>
           <Text dimColor>命令预览 {approvalPage + 1}/{approvalPages} · PgUp/PgDn 翻页</Text>
           <Text>{approvalPage < approvalPages - 1 ? '请翻到最后一页查看完整命令；N 拒绝' : 'Y 允许一次 · A 本会话允许 · N 拒绝'}</Text>
-          <Text dimColor>bash 在主机执行，可访问工作区之外的资源。</Text>
+          <Text dimColor>{pending.request.detach ? '输出写入磁盘；命令会在当前轮结束后继续运行。' : 'bash 在主机执行，可访问工作区之外的资源。'}</Text>
         </Box> : <Box flexDirection="column" marginTop={1}><Text dimColor>{'─'.repeat(leftWidth - 2)}</Text><Box paddingX={1}>
           <Text color={accent}>❯ </Text>
-          {running ? <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text> : <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.takesArgument || selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />}
+          <Box flexDirection="column">
+            {running && <Text dimColor>{spinFrames[spin]} {status} {elapsed}s · Esc 取消</Text>}
+            <Composer value={input} onChange={changeInput} onComplete={() => { if (selectedCommand) changeInput(selectedCommand.command + (selectedCommand.takesArgument || selectedCommand.command === '/thinking' ? ' ' : '')); }} onSubmit={value => void submit(selectedCommand?.command ?? value)} width={contentWidth - 4} />
+          </Box>
         </Box></Box>}
       </Box>
       {dual && <Box flexDirection="column" width={28} borderStyle="single" borderTop={false} borderBottom={false} borderRight={false} borderColor="gray" paddingX={1}>

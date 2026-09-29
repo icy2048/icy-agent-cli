@@ -12,6 +12,7 @@ import { ModelProvider, DemoProvider } from './providers/model.js';
 import { Agent } from './core/agent.js';
 import { App, type ApprovalBridge } from './ui/App.js';
 import { errorText, redact } from './core/text.js';
+import { processTranscriptText } from './ui/transcript.js';
 import { resolveWorkspacePath } from './tools/paths.js';
 import type { AgentEvent } from './core/types.js';
 
@@ -37,7 +38,7 @@ const help = `icy — AI agent CLI
   --read-only  --plain  --json  --help  --version
 
 环境变量: ICY_BASE_URL, ICY_MODEL, ICY_PROVIDER, ICY_API_KEY, ICY_HOME
-配置: ~/.icy/config.json。交互: /help /model /new /thinking /task /continue /verify /todo /done /sessions /resume /clear /exit
+配置: ~/.icy/config.json。交互: /help /model /new /thinking /task /ps /kill /continue /verify /todo /done /sessions /resume /clear /exit
 输入 / 选择命令；/model 配置服务并立即启用；Ctrl+T 展开或收起思考，显示设置自动保存。
 默认向模型提供 read / write / edit / bash；--read-only 仅提供 read。
 read 免授权列目录和搜索；bash 需批准（测试、构建和 read 无法完成的其他命令）。非交互模式不执行未批准的 bash。
@@ -119,6 +120,7 @@ export async function main(argv = process.argv.slice(2)) {
         if (e.type === 'assistant') process.stdout.write('\n');
         if (e.type === 'tool_start') process.stderr.write(`→ ${e.call.name}\n`);
         if (e.type === 'tool_end') process.stderr.write(`${e.result.ok ? '✓' : '✗'} ${e.call.name}: ${e.result.content.slice(0, 1200)}\n`);
+        if (e.type === 'process') process.stderr.write(processTranscriptText(e.record) + '\n');
         if (e.type === 'done' && !e.ok) process.stderr.write(`停止：${e.reason}\n`);
       };
       agent.setListener(event);
@@ -134,7 +136,16 @@ export async function main(argv = process.argv.slice(2)) {
       }
       finally { process.removeListener('SIGINT', cancel); process.removeListener('SIGTERM', cancel); }
     }
-  } finally { await agent.store.close(); }
+  } finally {
+    try {
+      const terminated = await agent.store.close();
+      if (terminated > 0) process.stderr.write(`已终止 ${terminated} 个后台进程（session_closed）。\n`);
+    } catch (error) {
+      process.stderr.write(`icy: ${redact(errorText(error))}\n`);
+      process.exitCode = 1;
+      process.exit();
+    }
+  }
 }
 
 main().catch(error => { process.stderr.write(`icy: ${redact(errorText(error))}\n`); process.exitCode = 1; });

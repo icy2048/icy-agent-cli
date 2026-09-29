@@ -9,7 +9,7 @@ export interface BashOptions {
   shellPath?: string;
   env?: NodeJS.ProcessEnv;
   spawn?: typeof spawn;
-  kill?: (pid: number, tree: boolean) => void;
+  kill?: (pid: number, tree: boolean, signal?: NodeJS.Signals) => void | Promise<void>;
 }
 
 const isSystem32Bash = (candidate: string) => /(?:^|\\)windows\\system32\\bash\.exe$/i.test(path.win32.normalize(candidate));
@@ -41,7 +41,60 @@ export function resolveBashShell(
   return undefined;
 }
 
-const BASH_UNAVAILABLE = 'bash 不可用：请安装 Git for Windows，或用 ICY_BASH 指定 bash.exe 路径。';
+export const BASH_UNAVAILABLE = 'bash 不可用：请安装 Git for Windows，或用 ICY_BASH 指定 bash.exe 路径。';
+export const bashArgs = (command: string) => ['--noprofile', '--norc', '-c', command];
+const detachedBashCommand = (command: string) => `${command}\n__ICY_EXIT_STATUS=$?\n: \nexit "$__ICY_EXIT_STATUS"`;
+
+/** Spawn and tree-kill details are shared by foreground and detached commands. */
+export function spawnBash(
+  command: string,
+  cwd: string,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  shellPath: string | undefined,
+  spawnProcess: typeof spawn,
+  preserveShell = false,
+) {
+  if (platform === 'win32' && !shellPath) return undefined;
+  return spawnProcess(shellPath ?? '/bin/bash', bashArgs(preserveShell ? detachedBashCommand(command) : command), {
+    cwd,
+    detached: platform !== 'win32',
+    ...(platform === 'win32' ? { windowsHide: true } : {}),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...env, TERM: 'dumb', NO_COLOR: '1' },
+  });
+}
+
+/** The injected kill keeps the legacy two arguments and may accept a signal as the third. */
+export async function killBashTree(
+  pid: number,
+  platform: NodeJS.Platform,
+  spawnProcess: typeof spawn,
+  kill: BashOptions['kill'] | undefined,
+  signal: NodeJS.Signals,
+): Promise<boolean> {
+  if (platform === 'win32') {
+    if (kill) { await kill(pid, true, signal); return false; }
+    const args = ['/pid', String(pid), '/T', ...(signal === 'SIGKILL' ? ['/F'] : [])];
+    const taskkill = spawnProcess('taskkill.exe', args, {
+      windowsHide: true, detached: false, stdio: 'ignore',
+    });
+    return new Promise<boolean>((resolve, reject) => {
+      let settled = false;
+      const done = (error?: Error, gone = false) => { if (settled) return; settled = true; error ? reject(error) : resolve(gone); };
+      taskkill.once('error', error => done(error instanceof Error ? error : new Error(String(error))));
+      taskkill.once('close', code => {
+        // taskkill reports an already-dead process as 128 or 1282. Both are
+        // successful outcomes for tree termination.
+        if (code === 0) done(undefined, false);
+        else if (code === 128 || code === 1282) done(undefined, true);
+        else done(new Error(`taskkill_failed:${code ?? 'signal'}`));
+      });
+    });
+  }
+  if (kill) { await kill(-pid, false, signal); return false; }
+  process.kill(-pid, signal); return false;
+}
 
 export function runBash(
   command: string,
@@ -59,42 +112,18 @@ export function runBash(
   }
 
   const spawnProcess = options.spawn ?? spawn;
-  const args = ['--noprofile', '--norc', '-c', command];
   const started = Date.now();
   return new Promise(resolve => {
-    const child = spawnProcess(shellPath!, args, {
-      cwd,
-      detached: platform !== 'win32',
-      ...(platform === 'win32' ? { windowsHide: true } : {}),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...env, TERM: 'dumb', NO_COLOR: '1' },
-    });
+    let child;
+    try { child = spawnBash(command, cwd, platform, env, shellPath, spawnProcess)!; }
+    catch (error) {
+      resolve({ ok: false, error: error instanceof Error ? error.message : String(error), content: '' }); return;
+    }
     let output = '', bytes = 0, reason = '', settled = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
-    let killSignal: NodeJS.Signals = 'SIGTERM';
-    const realKill: NonNullable<BashOptions['kill']> = (pid, tree) => {
-      if (platform === 'win32') {
-        try {
-          const taskkill = spawnProcess('taskkill.exe', ['/pid', String(pid), '/T', '/F'], {
-            windowsHide: true,
-            detached: false,
-            stdio: 'ignore',
-          });
-          taskkill.once('error', () => {});
-        } catch { /* taskkill is best effort */ }
-      } else {
-        process.kill(tree ? -pid : pid, killSignal);
-      }
-    };
-    const kill = options.kill ?? realKill;
     const killGroup = (sig: NodeJS.Signals) => {
       if (!child.pid) return;
-      killSignal = sig;
-      try {
-        // POSIX receives the already-negated process-group ID; Windows receives
-        // a positive PID and asks the injected/default implementation for a tree.
-        kill(platform === 'win32' ? child.pid : -child.pid, platform === 'win32');
-      } catch { /* already exited */ }
+      void killBashTree(child.pid, platform, spawnProcess, options.kill, sig).catch(() => { /* already exited */ });
     };
     const terminate = (why: string) => {
       if (reason || settled) return;
@@ -111,11 +140,10 @@ export function runBash(
       if (available > 0) output += (source === 'stderr' ? '[stderr] ' : '') + chunk.subarray(0, available).toString('utf8');
       if (bytes > 256 * 1024) terminate('output_limit');
     };
-    child.stdout.on('data', collect('stdout')); child.stderr.on('data', collect('stderr'));
+    child.stdout!.on('data', collect('stdout')); child.stderr!.on('data', collect('stderr'));
     const finish = (code: number | null, error?: string) => {
       if (settled) return;
       settled = true; clearTimeout(timeout); signal.removeEventListener('abort', onAbort);
-      // Keep the escalation timer when cancellation was requested: descendants may outlive the shell.
       if (!reason && killTimer) clearTimeout(killTimer);
       resolve({ ok: code === 0 && !reason && !error, content: clean(output) + `\nExit code: ${code ?? 'signal'}`, error: reason || error || (code !== 0 ? 'command_failed' : undefined), truncated: bytes > 256 * 1024, durationMs: Date.now() - started });
     };

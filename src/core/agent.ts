@@ -14,39 +14,63 @@ import { startRun, updateRun, finishRun, isActiveRun, canVerifyTask, markMutatio
 const limitedReasons = new Set(['context_limit', 'token_budget', 'budget_exceeded', 'max_tool_calls', 'max_model_turns']);
 export class Agent {
   private busy = false;
+  private switchingStore = false;
   private executing?: string;
   private startedCalls = new Set<string>();
   private endedCalls = new Set<string>();
-  constructor(public config: Config, public provider: Provider, public tools: ToolRegistry, public store: SessionStore, private emit: (event: AgentEvent) => void = () => {}, private semanticFactory?: SemanticProviderFactory) {}
+  constructor(public config: Config, public provider: Provider, public tools: ToolRegistry, public store: SessionStore, private emit: (event: AgentEvent) => void = () => {}, private semanticFactory?: SemanticProviderFactory) {
+    this.bindProcessEvents(store);
+  }
+  private bindProcessEvents(owner: SessionStore) {
+    owner.getProcessManager(async record => {
+      if (owner.data.task && record.status !== 'spawn_error') {
+        markMutation(owner.data);
+        await owner.save();
+      }
+      const safe = JSON.parse(JSON.stringify({ type: 'process', record }, (_key, value) => typeof value === 'string' ? redact(value, [this.config.apiKey]) : value)) as AgentEvent;
+      await owner.event(safe);
+      if (this.store === owner) this.emit(safe);
+    });
+  }
   async configure(config: Config, provider: Provider, persist: () => Promise<void>) {
     if (this.busy) throw new Error('请先结束当前任务。');
-    this.busy = true;
+    this.busy = true; this.switchingStore = true;
     try {
       const next = await SessionStore.create(config.home, { cwd: config.cwd, model: config.model, provider: config.provider, baseUrl: config.baseUrl }, [config.apiKey]);
       try { await persist(); await this.store.close(); } catch (e) { await next.close(); throw e; }
       this.tools = this.tools.forSession(config, next);
-      this.config = config; this.provider = provider; this.store = next;
-    } finally { this.busy = false; }
+      this.config = config; this.provider = provider; this.store = next; this.bindProcessEvents(next);
+    } finally { this.switchingStore = false; this.busy = false; }
   }
   async newConversation() { await this.configure(this.config, this.provider, async () => {}); }
-  async resumeSession(id: string): Promise<{ recovered: number }> {
+  async resumeSession(id: string): Promise<{ recovered: number; unknownProcesses: number }> {
     if (this.busy) throw new Error('请先结束当前任务。');
-    if (id === this.store.data.id) return { recovered: 0 };
-    this.busy = true;
+    if (id === this.store.data.id) return { recovered: 0, unknownProcesses: 0 };
+    this.busy = true; this.switchingStore = true;
     let next: SessionStore | undefined;
     try {
       const restored = await SessionStore.resume(this.config.home, id, [this.config.apiKey]); next = restored.store;
       if (next.data.cwd !== this.config.cwd || next.data.provider !== this.config.provider || next.data.model !== this.config.model || next.data.baseUrl !== this.config.baseUrl) throw new Error('恢复需要相同工作区、provider、model 和 baseUrl；请从对应工作区启动并选择原模型。');
       await this.store.close();
-      this.store = next; this.tools = this.tools.forSession(this.config, next); next = undefined;
-      return { recovered: restored.recovered };
-    } finally { await next?.close(); this.busy = false; }
+      this.store = next; this.tools = this.tools.forSession(this.config, next); this.bindProcessEvents(next); next = undefined;
+      return { recovered: restored.recovered, unknownProcesses: restored.unknownProcesses };
+    } finally { await next?.close(); this.switchingStore = false; this.busy = false; }
   }
   setListener(emit: (event: AgentEvent) => void) { this.emit = emit; }
-  private async event(event: AgentEvent) {
-    const safe = JSON.parse(JSON.stringify(event, (_k, v) => typeof v === 'string' ? redact(v, [this.config.apiKey]) : v)) as AgentEvent;
-    await this.store.event(safe); this.emit(safe);
+  async killProcess(reference: string) {
+    if (this.switchingStore) throw new Error('正在切换会话。');
+    const id = reference.startsWith('icy-process:') ? reference.slice('icy-process:'.length) : reference;
+    if (!id || (id.length < 8 && !this.store.data.processes.some(record => record.id === id))) throw new Error('process_not_found');
+    const matches = this.store.data.processes.filter(record => record.id === id || record.id.startsWith(id));
+    if (!matches.length) throw new Error('process_not_found');
+    if (matches.length > 1) throw new Error('process_ambiguous');
+    return this.store.getProcessManager().kill(matches[0].id, 'user_kill');
   }
+  private async eventFor(owner: SessionStore, event: AgentEvent) {
+    const safe = JSON.parse(JSON.stringify(event, (_k, v) => typeof v === 'string' ? redact(v, [this.config.apiKey]) : v)) as AgentEvent;
+    await owner.event(safe); if (this.store === owner) this.emit(safe);
+  }
+  private async event(event: AgentEvent) { await this.eventFor(this.store, event); }
   private async progress(patch: RunProgress) {
     updateRun(this.store.data, patch);
     await this.store.save();
@@ -65,7 +89,9 @@ export class Agent {
     const fingerprintOptions = { ignorePaths: [this.store.dir], signal };
     const before = verification ? await fingerprintWorkspace(this.config.cwd, fingerprintOptions) : undefined;
     // Invalidate evidence before any possibly mutating operation, including uncertain failures.
-    if (!verification && ['write', 'edit', 'bash'].includes(call.name)) markMutation(this.store.data);
+    let detached = false;
+    if (call.name === 'bash') { try { detached = JSON.parse(call.arguments).detach === true; } catch { /* parseToolInput reports malformed arguments later */ } }
+    if (!verification && ['write', 'edit'].includes(call.name) || !verification && call.name === 'bash' && !detached || !verification && detached && this.store.data.task?.status === 'verified') markMutation(this.store.data);
     this.store.data.running = call.id;
     await this.progress({ toolCalls: (this.store.data.runs.at(-1)?.toolCalls ?? 0) + 1, checkpoint: `before_tool:${call.id}` });
     this.startedCalls.add(call.id); await this.event({ type: 'tool_start', call });
@@ -120,7 +146,7 @@ export class Agent {
     await this.closePending(pending, reason);
     const run = this.store.data.runs.at(-1);
     if (run && isActiveRun(run)) {
-      const status: RunOutcome = ok ? canVerifyTask(this.store.data) ? 'verified' : 'answered' : reason === 'cancelled' ? 'cancelled' : limitedReasons.has(reason) ? 'limited' : 'failed';
+      const status: RunOutcome = ok ? canVerifyTask(this.store.data, this.store.data.processes) ? 'verified' : 'answered' : reason === 'cancelled' ? 'cancelled' : limitedReasons.has(reason) ? 'limited' : 'failed';
       finishRun(this.store.data, status, reason);
     }
     await this.store.save();
@@ -229,7 +255,7 @@ export class Agent {
     if (!task) throw new Error('请先执行一个任务，再指定验收命令。');
     if (!command.trim()) throw new Error('请提供验收命令：/verify <命令>');
     this.busy = true; this.startedCalls.clear(); this.endedCalls.clear();
-    const call: ToolCall = { id: randomUUID(), name: 'bash', arguments: JSON.stringify({ command, cwd: null, timeoutMs: null }) };
+    const call: ToolCall = { id: randomUUID(), name: 'bash', arguments: JSON.stringify({ command, cwd: null, timeoutMs: null, detach: false, kill: null }) };
     let pending: ToolCall[] = [];
     let runStarted = false;
     try {
