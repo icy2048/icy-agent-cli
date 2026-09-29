@@ -14,6 +14,7 @@ const MAX_WAIT = 10_000;
 const KILL_CONFIRM_WAIT = 2_000;
 
 type ProcessChange = (record: ProcessRecord) => void | Promise<void>;
+type BeforePersist = (record: ProcessRecord) => void;
 type IdentityCapture = (pid: number) => string | undefined | Promise<string | undefined>;
 type LivenessCheck = (pid: number) => boolean | Promise<boolean>;
 interface ActiveProcess {
@@ -37,6 +38,7 @@ interface ActiveProcess {
 interface Waiter { resolve: (record: ProcessRecord) => void; timer: ReturnType<typeof setTimeout>; signal?: AbortSignal; abort?: () => void }
 export interface ProcessManagerOptions extends BashOptions {
   onChange?: ProcessChange;
+  beforePersist?: BeforePersist;
   outputLimit?: number;
   captureIdentity?: IdentityCapture;
   identityCapture?: IdentityCapture;
@@ -66,11 +68,11 @@ export class ProcessManager {
   private readonly processAppendFile: NonNullable<ProcessManagerOptions['processAppendFile']>;
   private readonly outputLimit: number;
   private onChange?: ProcessChange;
+  private beforePersist?: BeforePersist;
   private active = new Map<string, ActiveProcess>();
   private waiters = new Map<string, Waiter[]>();
   private watchdogs = new Map<string, ReturnType<typeof setTimeout>>();
   private watchdogRetries = new Map<string, number>();
-  private saveQueue = Promise.resolve();
 
   constructor(private readonly store: SessionStore, secretsOrOptions: string[] | ProcessManagerOptions = [], suppliedOptions: ProcessManagerOptions = {}) {
     const secrets = Array.isArray(secretsOrOptions) ? secretsOrOptions : [];
@@ -86,18 +88,17 @@ export class ProcessManager {
     this.processAppendFile = options.processAppendFile ?? appendFile;
     this.outputLimit = options.outputLimit ?? OUTPUT_LIMIT;
     this.onChange = options.onChange;
+    this.beforePersist = options.beforePersist;
   }
 
   setOnChange(onChange?: ProcessChange) { this.onChange = onChange; }
+  setHooks(onChange?: ProcessChange, beforePersist?: BeforePersist) { this.onChange = onChange; this.beforePersist = beforePersist; }
   private records() { return this.store.data.processes; }
   private find(id: string) { return this.records().find(record => record.id === id); }
   private logPath(id: string) { return `${this.store.dir}/processes/${id}.log`; }
-  private queueSave() {
-    this.saveQueue = this.saveQueue.catch(() => {}).then(() => this.store.save());
-    return this.saveQueue;
-  }
-  private async persist(_record: ProcessRecord, notify = true, eventRecord = clone(_record)) {
-    await this.queueSave();
+  private async persist(record: ProcessRecord, notify = true, eventRecord = clone(record), prepared = false) {
+    if (!prepared) this.beforePersist?.(record);
+    await this.store.save();
     if (notify) {
       try { await this.onChange?.(eventRecord); } catch { /* status persistence must not lose the process result */ }
     }
@@ -187,6 +188,8 @@ export class ProcessManager {
     if (signal) record.signal = signal;
     record.pidAlive = false;
     if (error) record.reason = error;
+    let prepared = false, preparationError: unknown;
+    try { this.beforePersist?.(record); prepared = true; } catch (error) { preparationError = error; }
     // A reader must never wait for a failed snapshot write. The terminal state
     // is visible in memory before the snapshot is awaited; keep the active
     // entry until the accepted output has drained so readers can await it.
@@ -205,8 +208,10 @@ export class ProcessManager {
       this.active.delete(record.id);
     }
     this.resolveWaiters(record.id, record);
-    try { await this.persist(record); }
-    catch (persistError) {
+    try {
+      if (preparationError) throw preparationError;
+      await this.persist(record, true, clone(record), prepared);
+    } catch (persistError) {
       await this.reportPersistFailure(record, persistError);
       throw persistError;
     }
@@ -376,6 +381,9 @@ export class ProcessManager {
       await failed;
       return record;
     }
+    // Reserve the start mutation before identity probing can yield to another
+    // snapshot writer. A fast child may add the terminal bump separately.
+    this.beforePersist?.(record);
     // Arm the timeout before identity capture: ps/powershell is a best-effort
     // safety check and must never postpone the detached process deadline.
     const remaining = Math.max(0, input.timeoutMs - (Date.now() - Date.parse(record.startedAt)));
@@ -384,7 +392,7 @@ export class ProcessManager {
     // always signalled through its live handle/pgid.
     record.identity = await this.captureIdentity(child.pid);
     if (active.settled) return record;
-    await this.persist(record, true, clone(record));
+    await this.persist(record, true, clone(record), true);
     await Promise.race([firstOutput, new Promise<void>(resolve => setTimeout(resolve, 200))]);
     return record;
   }
@@ -467,7 +475,7 @@ export class ProcessManager {
       }
     }
     if (changed.length) {
-      await this.queueSave();
+      await this.store.save();
       for (const record of changed) {
         try { await this.onChange?.(record); } catch { /* recovery remains durable even if an observer is unavailable */ }
       }

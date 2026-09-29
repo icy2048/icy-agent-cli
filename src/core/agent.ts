@@ -23,13 +23,11 @@ export class Agent {
   }
   private bindProcessEvents(owner: SessionStore) {
     owner.getProcessManager(async record => {
-      if (owner.data.task && record.status !== 'spawn_error') {
-        markMutation(owner.data);
-        await owner.save();
-      }
       const safe = JSON.parse(JSON.stringify({ type: 'process', record }, (_key, value) => typeof value === 'string' ? redact(value, [this.config.apiKey]) : value)) as AgentEvent;
       await owner.event(safe);
       if (this.store === owner) this.emit(safe);
+    }, record => {
+      if (owner.data.task && record.status !== 'spawn_error') markMutation(owner.data);
     });
   }
   async configure(config: Config, provider: Provider, persist: () => Promise<void>) {
