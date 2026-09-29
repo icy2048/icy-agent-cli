@@ -275,6 +275,7 @@ export class ProcessManager {
         const keep = Math.max(256, ...this.secrets.map(secret => secret.length), 0);
         flushEnd = Math.max(0, pending.length - keep);
       }
+      if (flushEnd > 0 && flushEnd < pending.length && pending.charCodeAt(flushEnd) >= 0xdc00 && pending.charCodeAt(flushEnd) <= 0xdfff) flushEnd--;
       if (flushEnd > 0) {
         state.pending = pending.slice(flushEnd);
         this.enqueueLine(active, state, pending.slice(0, flushEnd));
@@ -585,9 +586,14 @@ export class ProcessManager {
           drainTimer = setTimeout(resolve, this.timing.killConfirmMs); drainTimer.unref?.();
         })]);
       } finally { if (drainTimer) clearTimeout(drainTimer); }
-      record.status = 'killed'; record.endedAt ??= new Date().toISOString(); record.exitCode = null; record.pidAlive = false; record.reason = reason;
+      const stopped = active.settled || active.closed || child.exitCode !== null || child.signalCode !== null;
+      if (stopped) {
+        record.status = 'killed'; record.endedAt ??= new Date().toISOString(); record.exitCode = null; record.pidAlive = false; record.reason = reason;
+      } else {
+        record.status = 'running'; record.pidAlive = true; record.reason = `${reason};kill_unconfirmed`;
+      }
       try { await this.persist(record, true, clone(record), true); } catch { /* best effort after stopping the child */ }
-      throw new Error(`session could not be saved and the process was stopped: ${errorMessage(error)}`);
+      throw new Error(`session could not be saved and the process was ${stopped ? '' : 'not '}stopped: ${errorMessage(error)}`);
     }
     // Identity is needed only after a restart; an in-session ChildProcess is
     // always signalled through the live handle/pgid.

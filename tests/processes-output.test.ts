@@ -169,6 +169,25 @@ test('detached redaction spans decoder chunks for secrets and sk tokens', async 
   } finally { await f.cleanup(); }
 });
 
+test('detached forced line flush keeps astral characters intact', async () => {
+  const { child, stdout, stderr } = outputChild(4407);
+  const expected = '😀'.repeat(35 * 1024) + 'a';
+  const processSpawn = (() => {
+    setImmediate(() => {
+      stdout.emit('data', Buffer.from(expected)); stdout.emit('end'); stdout.emit('close');
+      stderr.emit('end'); stderr.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake' });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'forced-astral', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    const log = await readFile(path.join(f.store.dir, 'processes', `${record.id}.log`), 'utf8');
+    assert.doesNotMatch(log, /�/); assert.equal(log, expected);
+  } finally { await f.cleanup(); }
+});
+
 test('detached forced line flush retains redaction boundaries', async () => {
   const { child, stdout, stderr } = outputChild(4405), limit = 64 * 1024;
   const text = 'store-secret ' + 'a'.repeat(limit - 20) + ' sk-1234567890123456 ' + 'z'.repeat(1024);

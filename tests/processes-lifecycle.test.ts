@@ -81,6 +81,29 @@ test('first detached snapshot failure stops the live child and reports a saved-s
   } finally { await f.cleanup(); }
 });
 
+test('failed first snapshot reports an unconfirmed stop as live', async () => {
+  let fail = false, killCalls = 0;
+  const child = fakeChild(4507), processSpawn = (() => child) as unknown as typeof spawn;
+  const injectedWriteFile = ((...args: Parameters<typeof writeFile>) => {
+    if (fail) { fail = false; return Promise.reject(new Error('injected_first_snapshot')); }
+    return writeFile(...args);
+  }) as typeof writeFile;
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn,
+    processKill: () => { killCalls++; }, processIdentity: () => 'fake', fsWriteFile: injectedWriteFile });
+  try {
+    fail = true;
+    await assert.rejects(f.store.getProcessManager().start({ toolCallId: 'persist-unconfirmed', command: 'sleep 30', cwd: f.cwd, timeoutMs: 10_000 }),
+      /session could not be saved and the process was not stopped: injected_first_snapshot/);
+    const record = f.store.data.processes[0];
+    assert.equal(record.status, 'running'); assert.equal(record.pidAlive, true);
+    assert.equal(record.reason, 'persist_failed:injected_first_snapshot;kill_unconfirmed');
+    assert.equal(record.endedAt, undefined); assert.ok(killCalls >= 1);
+    child.emit('close', null, 'SIGKILL');
+    await waitFor(() => record.status !== 'running');
+  } finally { await f.cleanup(); }
+});
+
 test('detached timeout kills the process tree', { skip: !posix && skipWindows }, async () => {
   const f = await fixture();
   try {
