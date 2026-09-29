@@ -45,6 +45,21 @@ test('chat-completions reconstructs streamed tool arguments and maps tool result
   } finally { await s.close(); }
 });
 
+test('chat-completions accumulates split, repeated, cumulative, and single tool names correctly', async () => {
+  const cases = [['re', 'ad'], ['read', 'read'], ['re', 'rea', 'read'], ['read']];
+  for (const parts of cases) {
+    const s = await server([
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'name-call', type: 'function', function: { name: parts[0], arguments: '{"path":"a.txt"}' } }] }, finish_reason: null }] },
+      ...parts.slice(1).map(name => ({ choices: [{ delta: { tool_calls: [{ index: 0, function: { name } }] }, finish_reason: null }] })),
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+    ]);
+    try {
+      const result = await new ModelProvider(config(s.baseUrl)).complete([], advertisedTools(s.baseUrl), new AbortController().signal, () => {});
+      assert.deepEqual(result.calls, [{ id: 'name-call', name: 'read', arguments: '{"path":"a.txt"}' }]);
+    } finally { await s.close(); }
+  }
+});
+
 test('truncated stream is rejected before execution', async () => {
   const s = await server([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'a', function: { name: 'bash', arguments: '{' } }] }, finish_reason: null }] }]);
   try { await assert.rejects(new ModelProvider(config(s.baseUrl)).complete([], [], new AbortController().signal, () => {}), /stream_interrupted/); }
@@ -85,6 +100,17 @@ test('Responses failed or incomplete terminal events cannot be upgraded by a con
       assert.equal(result.incomplete, type, 'the runtime must reject this completion before any tools execute');
     } finally { await s.close(); }
   }
+});
+
+test('Responses keeps the first terminal event and ignores a later completed function call', async () => {
+  const s = await server([
+    { type: 'response.failed', response: { status: 'failed', output: [], error: { message: 'upstream failed' } } },
+    { type: 'response.completed', response: { status: 'completed', output: [{ type: 'function_call', call_id: 'unsafe', name: 'write', arguments: '{"path":"never.txt","content":"unsafe","expectedHash":null}' }] } },
+  ]);
+  try {
+    const result = await new ModelProvider(config(s.baseUrl, 'responses')).complete([], advertisedTools(s.baseUrl), new AbortController().signal, () => {});
+    assert.ok(result.incomplete); assert.equal(result.calls.length, 0);
+  } finally { await s.close(); }
 });
 
 test('Responses streams visible summaries separately and falls back to completed summary', async () => {

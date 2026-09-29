@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { link, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, open as openFile, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { BigIntStats } from 'node:fs';
@@ -78,6 +78,30 @@ test('new-file writes fall back from link and refuse a target that appears durin
     await store.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('Windows new-file writes use exclusive creation after link failure and preserve a concurrent file', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'icy-win-write-'));
+  const cwd = path.join(root, 'workspace'), home = path.join(root, 'home'); await mkdir(cwd);
+  const store = await SessionStore.create(home, { cwd, provider: 'responses', model: 'fixture', baseUrl: 'https://example.test' });
+  try {
+    const linkFailure = async () => { throw errorWithCode('EPERM'); };
+    const target = path.join(cwd, 'raced.txt');
+    const exclusiveOpen = async (file: Parameters<typeof openFile>[0], flags: Parameters<typeof openFile>[1], mode?: Parameters<typeof openFile>[2]) => {
+      if (flags === 'wx') await writeFile(target, 'other writer');
+      return openFile(file, flags, mode);
+    };
+    const raced = new ToolExecutor({ cwd }, store, { platform: 'win32', link: linkFailure, open: exclusiveOpen });
+    await assert.rejects(raced.execute(writeCall('raced.txt', 'must not replace'), new AbortController().signal), { message: 'file_changed' });
+    assert.equal(await readFile(target, 'utf8'), 'other writer');
+
+    const linked = new ToolExecutor({ cwd }, store, { platform: 'win32' });
+    assert.equal((await linked.execute(writeCall('linked.txt', 'linked'), new AbortController().signal)).ok, true);
+    const fallback = new ToolExecutor({ cwd }, store, { platform: 'win32', link: linkFailure });
+    assert.equal((await fallback.execute(writeCall('fallback.txt', 'fallback'), new AbortController().signal)).ok, true);
+    await writeFile(path.join(cwd, 'existing.txt'), 'existing');
+    await assert.rejects(fallback.execute(writeCall('existing.txt', 'replace'), new AbortController().signal), { message: 'file_changed_or_hash_required' });
+  } finally { await store.close(); await rm(root, { recursive: true, force: true }); }
 });
 
 test('session lock liveness treats EPERM as live and ESRCH as stale', async () => {

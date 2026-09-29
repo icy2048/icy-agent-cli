@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, open as openFile, writeFile, readFile, rename, rm, mkdir, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Config } from '../src/config/load.js';
@@ -11,6 +11,8 @@ import type { Approve, Completion, Provider, Message, AgentEvent } from '../src/
 import { runBash } from '../src/tools/bash.js';
 import { reminderMessage } from '../src/core/harness.js';
 import { makeSymlink } from './helpers/fs.js';
+import { ToolExecutor } from '../src/tools/executor.js';
+import type { ToolInput } from '../src/tools/definitions.js';
 
 async function setup(approve?: Approve, options: Partial<Config> = {}) {
   const dir = await mkdtemp(path.join(tmpdir(), 'icy-test-'));
@@ -23,6 +25,36 @@ async function setup(approve?: Approve, options: Partial<Config> = {}) {
   return { dir, cwd, home, config, store, tools, cleanup, call };
 }
 const response = (name: string, args: unknown, id = 'call'): Completion => ({ text: '', calls: [{ id, name, arguments: JSON.stringify(args) }] });
+const directRead = (file: string): ToolInput => ({ name: 'read', args: { path: file, offset: null, limit: null, depth: null, pattern: null, regex: null } });
+
+test('read rejects a missing intermediate and both directory-swap races without exposing outside content', async () => {
+  const s = await setup();
+  try {
+    const missing = new ToolExecutor({ cwd: s.cwd }, s.store);
+    await assert.rejects(missing.execute(directRead('missing/data.txt'), new AbortController().signal), /ENOENT/);
+
+    const outside = path.join(s.dir, 'outside'), inner = path.join(s.cwd, 'inner'), moved = path.join(s.cwd, 'inner-real'), probe = path.join(s.cwd, 'link-probe');
+    await mkdir(outside);
+    try { await makeSymlink(outside, probe, 'dir'); await rm(probe, { recursive: true, force: true }); }
+    catch { return; }
+    await mkdir(inner); await writeFile(path.join(inner, 'data.txt'), 'inside-marker'); await writeFile(path.join(outside, 'data.txt'), 'outside-marker');
+    let swappedBeforeOpen = false;
+    const swapBeforeOpen = new ToolExecutor({ cwd: s.cwd }, s.store, { open: async (file, flags, mode) => {
+      swappedBeforeOpen = true; await rename(inner, moved); await makeSymlink(outside, inner, 'dir');
+      return openFile(file, flags, mode);
+    }});
+    try { await assert.rejects(swapBeforeOpen.execute(directRead('inner/data.txt'), new AbortController().signal), { message: 'file_changed_during_read' }); }
+    finally { if (swappedBeforeOpen) { await unlink(inner); await rename(moved, inner); } }
+
+    const swapBackAfterOpen = new ToolExecutor({ cwd: s.cwd }, s.store, { open: async (file, flags, mode) => {
+      await rename(inner, moved); await makeSymlink(outside, inner, 'dir');
+      const handle = await openFile(file, flags, mode);
+      await unlink(inner); await rename(moved, inner);
+      return handle;
+    }});
+    await assert.rejects(swapBackAfterOpen.execute(directRead('inner/data.txt'), new AbortController().signal), { message: 'file_changed_during_read' });
+  } finally { await s.cleanup(); }
+});
 
 test('agent autonomously reads, edits, verifies and returns tool results with matching IDs', async () => {
   const s = await setup(async () => 'once');
