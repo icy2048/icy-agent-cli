@@ -210,7 +210,7 @@ usage 合计包含预处理及本地估算。部分运行只有估算总数，�
 
 契约是：前台命令最多 60 秒，detached 命令默认且最多 30 分钟；没有交互 stdin；kill 不需额外审批，审批 key 包含 detach；进程启动和退出都会推进 `mutationRevision`，运行中的进程阻止“已验证完成”。恢复不会重启旧进程，原先 running 的记录变为 `unknown` 并带 `pidAlive`，旧验收证据失效。输出不进入内存长结果，而保存在 `~/.icy/sessions/<id>/processes/<id>.log`。
 
-自动化测试新增了进程生命周期、Unicode 日志分页、16 MiB 限制、超时／树终止、无审批 kill、会话恢复、验收证据失效、Workbench 命令与审批／恢复显示，以及 CLI HTTP fixture 的 NDJSON 和子进程清理覆盖。动机不是声称已经观察到真实评测被长命令阻断：迭代计划的“真实任务经常被 60 秒阻断”门槛**未被评测数据满足**，已有记录中的 bash 没有一次命中 `timeout` 或 `output_limit`；本仓库自身在快速机器上的完整 `npm test` 约 24 秒，`build && test` 链接近该上限，因此仍有实际开发场景价值。本功能尚未运行 live-model evaluation batch。
+自动化测试新增了进程生命周期、Unicode 日志分页、16 MiB 限制、超时／树终止、无审批 kill、会话恢复、验收证据失效、Workbench 命令与审批／恢复显示，以及 CLI HTTP fixture 的 NDJSON 和子进程清理覆盖。动机不是声称已经观察到真实评测被长命令阻断：迭代计划的“真实任务经常被 60 秒阻断”门槛**未被评测数据满足**，已有记录中的 bash 没有一次命中 `timeout` 或 `output_limit`；本仓库自身在快速机器上的完整 `npm test` 约 24 秒，`build && test` 链接近该上限，因此仍有实际开发场景价值。本功能尚未运行 live-model evaluation batch。CI 发现进程终态可能早于日志排空而被读取，本轮已增加 per-process drain barrier 修复该竞态。
 
 诚实边界：detached 进程不提供操作系统沙箱，没有 per-process 资源限制，不支持交互输入，也不自动重启；detached 子进程会继承写入 icy 的管道，如果 icy 自身崩溃（不是正常退出），继续写输出的子进程会收到 EPIPE/SIGPIPE 并通常退出，崩溃后的尾部输出会丢失；恢复只观察 PID 身份，不接管旧进程。Windows CI 状态为“尚未运行”，Windows 真机状态为“尚未进行”，分支已推送，`ec21645` 的[三平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36509915094) 全部通过：macOS/Linux 各 343 项、0 跳过；Windows 321 项通过、22 项跳过（4 项既有 POSIX 专属用例加 18 项依赖 POSIX 进程组/`ps` 的后台进程用例，Windows `taskkill`/`tasklist` 路径只有注入 spawn 的单元覆盖）。未升版本、未提交发布或 PR。
 
