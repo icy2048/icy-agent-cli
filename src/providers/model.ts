@@ -83,7 +83,13 @@ export class ModelProvider implements Provider {
       for (const delta of choice.delta.tool_calls ?? []) {
         const call = calls.get(delta.index) ?? { id: '', name: '', arguments: '' };
         if (delta.id) call.id = delta.id;
-        if (delta.function?.name) call.name += delta.function.name;
+        const name = delta.function?.name;
+        if (name) {
+          if (!call.name) call.name = name;
+          else if (name === call.name) { /* repeated full name */ }
+          else if (name.startsWith(call.name)) call.name = name;
+          else call.name += name;
+        }
         if (delta.function?.arguments) call.arguments += delta.function.arguments;
         calls.set(delta.index, call);
       }
@@ -105,7 +111,7 @@ export class ModelProvider implements Provider {
   }
   private async responses(messages: Message[], tools: ToolDefinition[], signal: AbortSignal, onDelta: (text: string) => void, onReasoning?: (text: string) => void, maxOutputTokens?: number): Promise<Completion> {
     const stream = await this.client.responses.create(this.responsesRequest(messages, tools, maxOutputTokens), { signal });
-    let response: Completion | undefined;
+    let response: Completion | undefined, terminalSeen = false;
     let reasoning = '', summaryPart = ''; 
     for await (const event of stream) {
       signal.throwIfAborted();
@@ -117,6 +123,8 @@ export class ModelProvider implements Provider {
       }
       if (event.type === 'error') throw new Error(event.message);
       if (event.type === 'response.completed' || event.type === 'response.incomplete' || event.type === 'response.failed') {
+        if (terminalSeen) continue;
+        terminalSeen = true;
         const r = event.response;
         if (!r || !Array.isArray(r.output)) {
           const detail = typeof r?.error?.message === 'string' ? r.error.message : 'terminal response is missing its output array';

@@ -51,6 +51,27 @@ test('directory listing is sorted, bounded, and skips protected entries while ma
   } finally { await closeFixture(f); }
 });
 
+test('sensitive names are case-insensitive while public keys remain readable and ignored names are case-insensitive', async () => {
+  const f = await makeFixture();
+  try {
+    for (const name of ['.envrc', 'id_dsa', 'id_ecdsa', 'id_ecdsa_sk', 'id_ed25519_sk']) await writeFile(path.join(f.cwd, name), 'secret');
+    for (const name of ['id_rsa.pub', 'id_ecdsa.pub']) await writeFile(path.join(f.cwd, name), 'public');
+    for (const name of ['Node_Modules', 'DIST', '.GIT']) { await mkdir(path.join(f.cwd, name)); await writeFile(path.join(f.cwd, name, 'hidden.txt'), 'ignored-marker'); }
+    for (const name of ['.envrc', 'id_dsa', 'id_ecdsa', 'id_ecdsa_sk', 'id_ed25519_sk']) {
+      const result = await runRead(f.tools, name);
+      assert.equal(result.ok, false); assert.match(result.content, /sensitive_path/);
+    }
+    for (const name of ['id_rsa.pub', 'id_ecdsa.pub']) {
+      const result = await runRead(f.tools, name);
+      assert.equal(result.ok, true); assert.match(result.content, /public/);
+    }
+    const listed = await runRead(f.tools, '.', { depth: 2 });
+    assert.equal(listed.ok, true); for (const name of ['Node_Modules', 'DIST', '.GIT', 'hidden.txt']) assert.doesNotMatch(listed.content, new RegExp(name));
+    const searched = await runRead(f.tools, '.', { pattern: 'ignored-marker' });
+    assert.equal(searched.ok, true); assert.doesNotMatch(searched.content, /hidden\.txt/);
+  } finally { await closeFixture(f); }
+});
+
 test('recursive listings page entries and never return more than 500 entries', async () => {
   const f = await makeFixture();
   try {

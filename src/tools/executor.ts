@@ -1,4 +1,5 @@
-import { readFile, stat, mkdir, writeFile, rename, unlink, link } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { stat, lstat, mkdir, writeFile, rename, unlink, link, open } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createTwoFilesPatch } from 'diff';
@@ -21,6 +22,7 @@ export interface ToolExecutorOptions {
   platform?: NodeJS.Platform;
   pathModule?: Pick<typeof path, 'dirname' | 'join'>;
   link?: typeof link;
+  open?: typeof open;
   stat?: typeof stat;
   rename?: typeof rename;
 }
@@ -29,22 +31,36 @@ export class ToolExecutor {
   private readonly platform: NodeJS.Platform;
   private readonly pathModule: Pick<typeof path, 'dirname' | 'join'>;
   private readonly link: typeof link;
+  private readonly open: typeof open;
   private readonly stat: typeof stat;
   private readonly rename: typeof rename;
   constructor(private config: Pick<Config, 'cwd'>, private store: SessionStore, options: ToolExecutorOptions = {}) {
     this.platform = options.platform ?? process.platform;
     this.pathModule = options.pathModule ?? path;
     this.link = options.link ?? link;
+    this.open = options.open ?? open;
     this.stat = options.stat ?? stat;
     this.rename = options.rename ?? rename;
   }
   private async readFileContent(file: string) {
-    const resolved = await workspacePath(this.config.cwd, file);
-    const info = await this.stat(resolved);
-    if (!info.isFile() || info.size > 1_000_000) throw new Error('not_text_file_or_too_large');
-    const content = await readFile(resolved, 'utf8');
-    if (content.includes('\0')) throw new Error('binary_file');
-    return content;
+    const resolved = await workspacePath(this.config.cwd, file, { mustExist: true });
+    const noFollow = (constants as { O_NOFOLLOW?: number }).O_NOFOLLOW ?? 0;
+    const handle = await this.open(resolved, constants.O_RDONLY | noFollow);
+    try {
+      const info = await handle.stat();
+      if (!info.isFile() || info.size > 1_000_000) throw new Error('not_text_file_or_too_large');
+      const content = await handle.readFile({ encoding: 'utf8' });
+      try {
+        const checked = await workspacePath(this.config.cwd, file, { mustExist: true });
+        const pathInfo = await lstat(checked);
+        if (!pathInfo.isFile() || pathInfo.dev !== info.dev || pathInfo.ino !== info.ino) throw new Error('file_changed_during_read');
+      } catch (error) {
+        if (error instanceof Error && error.message === 'file_changed_during_read') throw error;
+        throw new Error('file_changed_during_read');
+      }
+      if (content.includes('\0')) throw new Error('binary_file');
+      return content;
+    } finally { await handle.close(); }
   }
   private async write(file: string, content: string, expectedHash: string | null, signal: AbortSignal): Promise<ToolResult> {
     if (file.startsWith('icy-output:') || file.startsWith('icy-process:')) throw new Error('output_reference_is_read_only');
@@ -64,28 +80,26 @@ export class ToolExecutor {
         if (sha256(await this.readFileContent(file)) !== expectedHash) throw new Error('file_changed');
         await this.rename(temp, target);
       } else {
-        const fallback = async () => {
-          // rename() can replace a target on some platforms, so check again immediately before it.
-          try { await this.stat(target); throw new Error('file_changed'); }
-          catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-              if (error instanceof Error && error.message === 'file_changed') throw error;
-              throw new Error('file_changed');
-            }
-          }
-          await this.rename(temp, target);
+        const createExclusively = async () => {
+          let handle;
+          try {
+            handle = await this.open(target, 'wx', 0o644);
+            await handle.writeFile(content);
+            await handle.sync();
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new Error('file_changed');
+            throw error;
+          } finally { await handle?.close(); }
         };
-        if (this.platform === 'win32') await fallback();
-        else {
-          let linked = false;
-          try { await this.link(temp, target); linked = true; }
-          catch (error) {
-            const code = (error as NodeJS.ErrnoException).code;
-            if (!['EPERM', 'EXDEV', 'ENOSYS'].includes(code ?? '')) throw error;
-            await fallback();
-          }
-          if (linked) await unlink(temp);
+        let linked = false;
+        try { await this.link(temp, target); linked = true; }
+        catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (code === 'EEXIST') throw new Error('file_changed');
+          if (!['EPERM', 'EXDEV', 'ENOSYS', 'EINVAL', 'ENOTSUP', 'EACCES'].includes(code ?? '')) throw error;
+          await createExclusively();
         }
+        if (linked) await unlink(temp);
       } // no overwrite if another process creates the target
     } finally { await unlink(temp).catch(() => {}); }
     return { ok: true, content: `Updated ${file}\nSHA256: ${sha256(content)}`, changedFile: file, diff: createTwoFilesPatch(file, file, before, content) };
@@ -133,7 +147,7 @@ export class ToolExecutor {
         if (a.pattern !== null) {
           return { ok: true, content: await searchWorkspace(this.config.cwd, a.path, a.pattern, a.regex ?? false, a.offset, a.limit, a.depth, signal) };
         }
-        const resolved = await workspacePath(this.config.cwd, a.path);
+        const resolved = await workspacePath(this.config.cwd, a.path, { mustExist: true });
         const info = await stat(resolved);
         if (info.isDirectory()) return { ok: true, content: await listDirectory(this.config.cwd, a.path, a.offset, a.limit, a.depth, signal) };
         const content = await this.readFileContent(a.path);
