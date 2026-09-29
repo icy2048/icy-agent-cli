@@ -1,67 +1,101 @@
-# 第六轮起的迭代计划：单一写者、可信边界与终端交互
+# 第六轮起的迭代计划：单一写者、进程可靠性与终端交互
 
-制定日期：2026-09-29。基线：`main` / `4efd309`（第五轮长命令支持及其竞态修复已合并，三平台 CI 通过，344 项测试）。本文接续 [原迭代计划](iteration-plan.md) 第 5 节的后续队列，依据是两份独立审查：[整库代码审查](evaluations/code-review-2026-09-29.md) 和 [UI/交互审查](evaluations/ui-review-2026-09-29.md)（均为 grok-4.6 只读审查，素材含 [离线 demo 真实录屏](evaluations/ui-tour-demo-transcript.txt)）。审查意见的复现状态在各条目中标注：**已核对**表示编排方读源码确认逻辑成立，**未复现**表示尚未构造失败用例，验收时必须先补复现。
+制定日期：2026-09-29。基线：`main` / `ffad2c6`（第五轮长命令支持及其竞态修复已合并，`4efd309` 三平台 CI 通过，344 项测试）。本文接续[原迭代计划](iteration-plan.md)第 5 节的后续队列。依据是两份独立审查：[整库代码审查](evaluations/code-review-2026-09-29.md)与[UI/交互审查](evaluations/ui-review-2026-09-29.md)（grok-4.6 只读审查，素材含[离线 demo 真实录屏](evaluations/ui-tour-demo-transcript.txt)），以及编排方随后的逐条复现核对（第 2 节）。
 
 ## 1. 当前判断
 
-单 Agent 串行工具循环、调用配对、恢复不重放、软预算、机械压缩、长命令这些契约本身是自洽的，测试对串行主路径覆盖充分。但第五轮引入了第二个快照写者（ProcessManager）和第一个与 Agent 并发修改工作区的主体（detached 进程），暴露出三类结构性问题：
+单 Agent 串行工具循环、调用配对、恢复不重放、软预算、机械压缩和长命令这些契约本身是自洽的，串行主路径的测试覆盖充分。第五轮引入了第二个快照写者（进程管理器）和第一个与 Agent 并发修改工作区的主体（detached 进程），由此暴露三类问题：
 
-1. **会话快照没有单一写者。** `SessionStore.save()` 是"最后 rename 者胜"的整对象快照；Agent、进程管理器的 `saveQueue` 和 `onChange` 回调各自调用 `save()`。两次序列化之间的另一方修改会被覆盖（已核对：`store.ts` 无互斥，`processes.ts` 独立队列，`agent.ts` 回调内再 `save()`；未复现丢失轮次的用例）。
-2. **文件工具的边界假设"没有并发修改者"。** `workspacePath` 只在解析时 `lstat`，随后的 `stat`/`readFile`/`readdir`/`rename` 会跟随之后被替换的符号链接（已核对）。第五轮之前这只是"外部编辑器"脚注，现在获批的后台脚本就是同会话内的并发修改者。
-3. **工具、权限、UI 都是四工具的闭合特例。** `schemas` 是闭合对象，策略只认 `bash`，执行器是四分支 `switch`，`kill`/进程读取以 `bash`/`read` 参数形式"夹带"；App 同时是命令路由、审批、信号处理和布局。MCP 与多 Agent 不能在这个形状上继续堆分支。
+1. **会话快照没有单一写者。** `SessionStore.save()` 是"最后 rename 者胜"的整对象快照；Agent、进程管理器自己的保存队列和进程回调各自保存。复现见 R1。
+2. **后台进程的持久化与身份不够稳。** 进程记录要等 identity 捕获完成才落盘（R2）；identity 令牌随语言环境和时区变化（R6）。
+3. **工具、权限、UI 仍是四工具的闭合特例。** MCP 与多 Agent 不能在这个形状上继续堆分支（第八轮）。
 
-UI 侧最重的问题：运行期输入框常驻却只接受两个命令、提交后才提示；大量英文状态与错误码；只读/演示模式下 `/verify` 不弹审批却会把随后按下的 `y` 变成新任务；后台命令审批卡片缺少主机风险与授权范围说明。
+UI 侧最重的问题：运行中有草稿时 Esc 仍直接取消任务；只读或演示模式下 `/verify` 不弹审批，随后按下的 `y` 会与下一条命令拼成新目标提交；状态栏和错误码大量是英文；后台命令审批卡片缺少主机风险与授权范围说明。
 
-## 2. 交付顺序
+## 2. 复现与核对（2026-09-29）
 
-### 迭代六：单一写者与可信边界（v0.2.0 候选，约 5–7 个工作日）
+编排方对审查结论逐条读源码，并用临时脚本在本机（macOS，Node 22.15）实际复现。脚本未进仓库；每个修复单元先把对应场景写成会失败的回归测试，再提交修复。
 
-目标：并发写者不再丢状态；后台进程从 spawn 起就可恢复；文件工具在同会话并发修改下仍守住边界；提供者兼容性不再让整轮失败。
+| 编号 | 问题 | 核对方式 | 结果 | 定级 |
+| --- | --- | --- | --- | --- |
+| R1 | 多个写者并发保存会话快照，旧快照可能最后落盘 | 真实并发保存 | 同尺寸并发 3000 次中 30 次留下旧快照；大快照与 `/clear` 同时保存 200 次全部撤销清空 | 高，第五轮引入 |
+| R2 | 后台进程在 identity 捕获完成前没有落盘 | 捕获期间 SIGKILL 宿主进程 | 子进程存活，磁盘 0 条记录，恢复后 `/kill` 报 `process_not_found` | 高 |
+| R6 | identity 令牌（`ps -o lstart=`）随语言环境和时区变化 | 同一进程换环境调用 ps | 默认输出为中文星期格式；`LC_ALL=C`、`TZ=UTC` 各自改变结果；换终端恢复后进程一直"未确认"，超时看门狗失效 | 中，审查未发现 |
+| R5 | stdout/stderr 逐块解码，多字节字符跨块处变成 U+FFFD | 真实命令输出中文 | 前台 216,000 字节出现 45 处；后台 3.6 MB 日志出现 732 处 | 中，审查未发现 |
+| V1 | 后台进程在 `/verify` 执行中退出时，验收记录仍按当前修改版本计为证据 | 读源码（`Agent.verify` 与进程回调的 `markMutation`） | 逻辑成立 | 中，审查未发现 |
+| R7 | Chat Completions 流式工具名逐块拼接 | 本地假服务重复发送完整工具名 | 解析为 `readread` | 中低 |
+| R4 | 并发进程把目录换成符号链接，读取越出工作区 | 真实并发替换，读取 5000 次 | 47 次读到工作区外内容；路径检查遇到中间段 ENOENT 会直接放行，放大了窗口 | 中低，README 已声明此类竞态 |
+| R3 | Windows 新建文件先 `stat` 再 `rename` | 注入并发创建 | 对方刚创建的内容被覆盖 | 低，窗口为微秒级 |
+| R8 | 后台日志每块一次 `appendFile` | 10 万行无缓冲输出 | 约 1.1 万次追加；日志排空 0.56 秒，直接写文件 0.16 秒 | 低 |
+| R9 | 每翻一页都读取全文并切成字符数组 | 16 MiB 日志翻页 | 每页 115–173 ms，堆内存最多多占约 168 MB | 低，审查未发现 |
+| T1 | 测试耗时 | 逐文件计时 | `npm test` 53 秒（第五轮前约 24 秒）；`processes.test.ts` 单独 47.6 秒 | 中 |
+| P1 | npm 包带上评测记录 | `npm pack --dry-run` | 解包 7.8 MB、154 个文件，其中 `docs/evaluations` 6.8 MB | 低 |
 
-1. **PR A：会话单一写者。** `SessionStore` 内建串行保存队列（可重入或批量补丁），所有写者只通过它；进程 `onChange` 只通知不保存，`markMutation` 并入进程持久化补丁；进程记录在 spawn 成功后**立即**持久化，identity 捕获放到之后并作为补丁更新。
-   - 验收：注入慢 `save` 的用例证明 Agent 轮次与进程状态更新交错时两者都落盘；在 identity 捕获期间 SIGKILL icy，恢复后进程行存在且可 `/kill`；原有 344 项回归通过。
-   - 风险：`save → onChange → save` 若未彻底移除会死锁；用带超时的回归覆盖。
-2. **PR B：文件工具的并发安全。** 读写改为基于文件描述符：`O_NOFOLLOW` 打开后用 `fstat` 复核类型，目录行走在进入每级前重新 `lstat`，写入的临时文件与目标同目录且 rename 前再次校验父目录未被换成链接；Windows 新建文件走"不替换"路径（当前 `stat`+`rename` 有 TOCTOU，已核对）；`explore` 的忽略名与敏感名统一大小写不敏感，敏感名补 `.envrc`、`id_ecdsa`、`*.pub` 例外说明。
-   - 验收：用真实后台脚本在 `read`/`search`/`write` 执行中途把目录换成指向 `~/.ssh` 的链接，工具必须拒绝而不是返回内容；Windows CI 用 `platform: 'win32'` 真实路径测试并发创建不覆盖；补路径逃逸与 `edit` 唯一性的属性测试（随机路径、Unicode、重叠匹配）。
-3. **PR C：提供者与会话小缺陷。** Chat Completions 按能力标志发送 `max_tokens` 或 `max_completion_tokens`；Responses 的 `include: reasoning.encrypted_content` 改为可配置且默认跟随 `reasoningSummary`；流式工具调用名去重（重复全名不再拼接成 `readread`）；`response.failed` 之后的 `response.completed` 不得升级为可执行调用；`/clear` 终止本会话后台进程；进程内 `/resume` 保留"本会话允许"授权（README 已如此承诺）。
-   - 验收：双协议 HTTP fixture 各加对应用例；`/model` 探针对不支持 `include` 的服务给出协议级诊断而不是每轮失败。
-4. **PR D：测试与工程卫生。** 看门狗与 identity 超时用可注入时钟，去掉对 `watchdogs: Map` 和 `hasRef()` 的实现细节断言；`package.json` 的 `files` 排除 `docs/evaluations`（约 7 MB 评测记录不应进 npm 包）；CI 对 `docs/evaluations/**` 加路径过滤；`npm test` 目标从约 25 秒降到 15 秒以内。
-5. **评测补课（与 PR 并行）。** 第五轮没有真实模型批次：在现有 `eval:tasks` 夹具中加入一个必须使用 `detach` 才能完成的任务（例如超过 60 秒的测试链），三模式各 5 次，记录 detach 使用率、轮询次数、`kill` 使用与审批次数。样本小，不作可靠性结论，只验证模型能按工具描述正确使用句柄。
+不成立或被高估的审查结论：
 
-### 迭代七：终端交互修正（v0.2.x，约 4–6 个工作日）
+- **`/clear` 后进程回调会因没有任务而抛错**：不成立，回调先判断任务是否存在。`/clear` 后进程仍被跟踪并在退出时终止，属于语义选择。
+- **进程内 `/resume` 丢失"本会话允许"授权**：符合授权不跨会话的设计和现有测试；问题只在 README 对授权范围的描述含糊，且未写 `detach`。
+- **Chat 总发送 `max_completion_tokens` 会让整轮失败**：未观察到。此前的 vLLM 评测批次一直发送该参数且全部通过；保留为兼容性加固。
+- **符号链接竞态与 Windows 覆盖为高危**：前者需要已获批或恶意的并发进程，README 已声明；后者窗口极短。分别降为中低和低。
+
+UI 审查引用的画面均能在原始录屏中找到，逐条对照源码成立。
+
+## 3. 交付顺序
+
+### 迭代六：数据完整性与进程可靠性（v0.2.0 候选）
+
+目标：会话快照只有一个写者；后台进程从启动起可恢复且身份稳定；命令输出不再乱码；`npm test` 回到 25 秒以内。
+
+分支 `codex/iteration-6`。实现交给 gpt-5.6-luna；每个单元合入后本机跑类型检查、全量测试、构建、安装包和 PTY 门禁；整合后由 grok-4.6 独立审查。
+
+| 单元 | 行为变化 | 预计修改文件 | 证明测试 |
+| --- | --- | --- | --- |
+| 0 | 补回缺失的录屏；按复现结果更新本计划 | `docs/evaluations/ui-tour-demo-transcript.txt`、本文 | 文档链接全部可解析 |
+| A | 所有快照写入走 `SessionStore` 内一个串行合并队列；进程管理器去掉自带保存队列；进程回调只通知，不再自己保存 | `src/sessions/store.ts`、`src/tools/processes.ts`、`src/core/agent.ts`、新增 `tests/session-writer.test.ts` | R1 两个场景成为回归，旧快照落盘为 0；一次保存失败后下一次保存仍成功 |
+| B | 进程记录在 spawn 后立即落盘，identity 随后补写；POSIX 固定以 `LC_ALL=C`、`TZ=UTC` 捕获 | `src/tools/processes.ts`、`tests/processes.test.ts` | R2 崩溃场景：恢复后记录可见、状态未知、pid 存活；不同 LANG 与 TZ 下令牌一致 |
+| C | 前台与后台输出改为流式 UTF-8 解码并按行脱敏；每个进程一个写入流；日志翻页只读所需范围 | `src/tools/bash.ts`、`src/tools/processes.ts`、`tests/processes.test.ts`、`tests/runtime.test.ts` | 中文输出 0 处替换字符；跨块密钥被脱敏；翻页读取字节数有上限 |
+| D | 有运行中或存活未知的后台进程时拒绝 `/verify`；重复工具名不再拼接；Responses 只认第一个终止事件；敏感名补 `.envrc`、`id_ecdsa`、`id_dsa`，忽略名不分大小写；Windows 新建文件不再覆盖；读取时中间路径缺失即拒绝并在读后复核 | `src/core/agent.ts`、`src/providers/model.ts`、`src/tools/paths.ts`、`src/tools/explore.ts`、`src/tools/executor.ts` 及对应测试 | V1、R7、R3 各一个回归；注入"检查后换成符号链接"时读取必须拒绝 |
+| E | 看门狗与 identity 超时改用可注入时钟；相互独立的进程测试并发执行；删去对内部 `Map` 与 `hasRef()` 的断言；npm 包排除 `docs/evaluations`；CI 跳过只改评测记录的提交 | `tests/processes.test.ts`、`src/tools/processes.ts`、`package.json`、`.github/workflows/ci.yml` | `npm test` ≤ 25 秒，`processes.test.ts` ≤ 10 秒；试打包不含评测记录 |
+| F | 任务评测夹具加入一个必须使用 `detach` 才能完成的任务，三种模式各 5 次 | `scripts/evaluate-tasks.ts`、`docs/evaluations` 新记录 | 记录 detach 使用率、轮询次数、kill 与审批次数；样本小，不作可靠性结论 |
+
+执行顺序：单元 0 由编排方完成；A 与 D 在两个独立 worktree 并行；B、C、E 都修改进程管理器，在 A 之后依次执行；整合审查的阻塞项关闭后运行 F（调用本机配置的 vLLM 服务）。合并到 main、推送触发 CI、升级到 0.2.0 需用户单独确认。
+
+### 迭代七：终端交互修正（v0.2.x）
 
 目标：用户在每个关键时刻都知道发生了什么、能做什么；不再有英文机器码直接面对用户。
 
-6. **PR E：运行期输入模型。** 运行中输入框显示持久提示 `运行中 · 仅 /ps /kill /task /help /thinking · Esc 取消`；第一次 Esc 清空非空草稿，第二次 Esc 才取消运行；允许排队一条后续消息，运行结束后自动提交（Claude Code 行为），取代提交后才出现的"只接受 /ps 和 /kill"提示；`/task`、`/help`、`/thinking` 在运行中可用。
-7. **PR F：状态与错误中文化。** 页脚状态（`Ready`/`Stopped`/`Awaiting approval`/`Running read`）、`/task` 的检查点与停止原因枚举、`/ps` 状态、工具错误码（`process_not_found`、`read_only`、`permission_denied`、`token_budget`、`verification_failed` 等）统一映射为中文并附下一步提示（如"达到预算，/continue 开启新预算"）；审批拒绝后在用户通道写一行"已拒绝该命令"；Ctrl+T 与 `/thinking` 行为一致并在页脚显示展开/收起状态；演示模式头部不显示真实 API 主机。
-8. **PR G：只读/演示模式与遗留按键。** `/verify` 在只读或演示模式前置拒绝并说明原因；没有审批弹窗时按下的 `y`/`n`/`a` 不得进入输入框成为新任务（保留为无操作并提示）；`/continue`、`/verify` 无任务时不先打印乐观通知。
-9. **PR H：审批卡片与授权语义。** 后台命令卡片保留主机逃逸提示，写明 30 分钟硬上限、日志路径、16 MiB、无 stdin、崩溃后 EPIPE；"A 本会话允许"明确为"相同 command+cwd+timeout+detach"，并说明 `/new` 后失效；审批时可查看触发该命令的最近轨迹而不是整屏替换。
-10. **PR I：发现性与信息密度。** `/help` 补 Y/A/N、翻页规则、Esc 与 Ctrl+C 区别、多行输入、`/kill` 的 id 规则、`/verify` 的只读限制；命令面板在输入参数时保留用法提示，对 `/hepl` 类拼写给出最近命令；`/sessions` 交互版显示状态；`/ps` 以 `icy-process:` 引用为主、pid 为辅，`/kill` 收到疑似 pid 时明确说明；`/help`、`/task`、`/ps`、`/sessions` 改为临时浮层而非永久 `!` 通知（较大，可拆到后续）；非交互 `--help` 列出全部 NDJSON 事件名，`--continue` 缺 `--resume` 的退出码与 README 对齐为 2。
-    - 验收：UI 审查第 6 节列出的未覆盖场景逐项进入 `tests/ui-*.test.ts` 与 `scripts/pty-smoke.py`（至少补 `/kill`、`/help`、运行中后续输入、只读 `/verify`、遗留 `y`）；80 列下 `/task` 与审批卡片有截图断言。
+1. **运行期输入模型。** 运行中输入框显示持久提示；第一次 Esc 清空非空草稿，第二次才取消运行；允许排队一条后续消息，运行结束后自动提交；`/task`、`/help`、`/thinking` 在运行中可用。
+2. **状态与错误中文化。** 页脚状态、`/task` 的检查点与停止原因、`/ps` 状态、工具错误码统一映射为中文并附下一步提示；审批拒绝后在用户通道写一行"已拒绝该命令"；Ctrl+T 与 `/thinking` 行为一致并在页脚显示展开或收起；演示模式头部不显示真实 API 主机。
+3. **只读/演示模式与遗留按键。** `/verify` 在只读或演示模式前置拒绝并说明原因；没有审批弹窗时按下的 `y`/`n`/`a` 不进入输入框成为新目标；`/continue`、`/verify` 无任务时不先打印乐观通知。
+4. **审批卡片与授权语义。** 后台命令卡片保留主机逃逸提示，写明 30 分钟硬上限、日志路径、16 MiB、无 stdin、崩溃后 EPIPE；README 写清"本会话允许"是相同 command、cwd、timeout 与 detach，并说明 `/new`、`/resume` 后失效；审批时可查看触发该命令的最近轨迹。
+5. **发现性与信息密度。** `/help` 补 Y/A/N、翻页规则、Esc 与 Ctrl+C 区别、多行输入、`/kill` 的 id 规则、`/verify` 的只读限制；命令面板在输入参数时保留用法提示；`/sessions` 显示状态；`/ps` 以 `icy-process:` 引用为主；恢复提示写出状态未知的后台进程数；非交互 `--help` 列出全部 NDJSON 事件名。
 
-### 迭代八：可扩展的工具表与界面拆分（为 MCP 做准备，约 6–8 个工作日）
+验收：[UI 审查](evaluations/ui-review-2026-09-29.md)第 6 节列出的未覆盖场景逐项进入 `tests/ui-*.test.ts` 与 `scripts/pty-smoke.py`；每个交互改动附真实 PTY 录屏。
 
-11. **PR J：工具表与策略泛化。** `ToolRegistry` 改为按工具描述表注册（名称、schema、风险等级、执行器），`PermissionPolicy` 按风险等级而不是硬编码 `bash` 判断；`kill` 与进程读取成为独立的策略动词或独立工具，不再以 `bash`/`read` 参数夹带；审批 key 格式与 NDJSON 事件保持兼容并有迁移测试。四个内置工具的对外 schema 与审批语义不变。
-12. **PR K：Agent 与 App 拆分。** 把会话切换、进程事件绑定、工作区指纹、验收从 `Agent` 拆到独立协作对象，`Agent` 只编排一次运行；`App.tsx` 拆成不依赖 Ink 的命令路由器和视图，`setListener`/审批桥接放进 effect。
-13. **PR L：MCP 客户端（只读工具优先）。** 在工具表上接入 MCP stdio 服务器，首版只允许声明为只读的工具免审批、其余一律审批；工具结果走既有外置与脱敏；`/model` 探针扩展为工具连通性探针。
+### 迭代八：可扩展的工具表与界面拆分（为 MCP 做准备）
+
+前提：迭代六单元 A 完成。单一写者是 MCP 与多 Agent 的共同前置。
+
+1. **工具表与策略泛化。** `ToolRegistry` 按工具描述表注册（名称、schema、风险等级、执行器），`PermissionPolicy` 按风险等级判断；`kill` 与进程读取成为独立的策略动词或工具；四个内置工具的对外 schema 与审批语义不变，审批 key 与 NDJSON 有迁移测试。
+2. **Agent 与 App 拆分。** 会话切换、进程事件绑定、工作区指纹、验收从 `Agent` 拆出；`App.tsx` 拆成不依赖 Ink 的命令路由器和视图，监听与审批桥接放进 effect。
+3. **MCP 客户端（只读工具优先）。** 在工具表上接入 MCP stdio 服务器，只有声明为只读的工具免审批；结果走既有外置与脱敏；`/model` 探针扩展为工具连通性探针。
 
 ### 后续队列（不排期）
 
 - **后台任务编排**：非交互 `icy run` 退出即终止后台进程的契约要先改为"可选保活+可查询"，再谈编排；需要每任务预算与任务图。
-- **多 Agent**：等 PR J/K 之后；额外需要文件修改冲突与授权传播设计。
-- **自动上下文摘要**：只能作为 `ContextManager` 的新后端、在现有调用配对与 opaque 不变量之内实现，不做第二个历史改写者；先建评测门禁。
+- **多 Agent**：等迭代八之后；另需文件修改冲突与授权传播设计。
+- **自动上下文摘要**：只能作为 `ContextManager` 的新后端、在调用配对与 opaque 不变量之内实现；先建评测门禁。
 - **Windows 实机交互验收**：仍未进行；`taskkill`/`tasklist` 路径只有注入覆盖。
 
-## 3. 门禁与证据要求
+## 4. 门禁与证据要求
 
-- 每个 PR 沿用现有门禁：锁文件安装、类型检查、全量测试、构建、安装包 smoke、POSIX PTY smoke、三平台 CI；合并前独立审查（grok-4.6），阻塞项关闭后再合并。
-- 审查中标注"未复现"的缺陷，修复 PR 必须先提交能失败的复现用例，再提交修复；不能只改代码。
-- 迭代六结束时重新跑第五轮的 45 次重复评测夹具（含新增 detach 任务），与 [批次 B](evaluations/repeated-tasks-iter4-summary.json) 对比拒绝次数、token 与耗时；差异如实记录，不宣称改进。
-- 迭代七的每个交互改动都要有真实 PTY 录屏（沿用 `docs/evaluations/ui-tour-demo-transcript.txt` 的生成方式）作为审查素材，并把关键画面加入 `scripts/pty-smoke.py`。
-- 版本：迭代六合并并通过评测复跑后升 0.2.0，一次性升版；迭代七、八为 0.2.x / 0.3.0。
+- 每个单元沿用现有门禁：锁文件安装、类型检查、全量测试、构建、安装包 smoke、POSIX PTY smoke；整合后三平台 CI；合并前独立审查，阻塞项关闭后再合并。
+- 修复必须先有能失败的复现测试，再有修复；不能只改代码。
+- 迭代六结束时 `npm test` 回到 25 秒以内（当前 53 秒）；单元 F 的结果与[第四轮批次 B](evaluations/repeated-tasks-iter4-summary.json)分开报告，不宣称改进。
+- 版本：迭代六合并并通过评测后，经用户确认一次性升到 0.2.0。
 
-## 4. 明确不做的事
+## 5. 明确不做的事
 
-- 不改变四工具对模型的外部契约（名称、参数、审批语义），MCP 工具是增量而不是替换。
-- 不在迭代六之前接入 MCP 或第二个 Agent；审查结论是"先做写者拆分与工具表"，编排方同意。
-- 不把 detached 进程改为子进程自持日志描述符（会失去写盘前脱敏和字节上限的即时执行）；icy 崩溃导致子进程 SIGPIPE 继续作为文档边界。
+- 不改变四工具对模型的外部契约（名称、参数、审批语义）；MCP 工具是增量而不是替换。
+- 迭代六之前不接入 MCP 或第二个 Agent。
+- 不让 detached 子进程直接持有日志描述符（会失去写盘前脱敏和字节上限）；icy 自身崩溃导致子进程 SIGPIPE 继续作为文档边界。
