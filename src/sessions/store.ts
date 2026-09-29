@@ -25,6 +25,7 @@ export interface SessionStoreOptions {
   processEnv?: NodeJS.ProcessEnv;
   shellPath?: string;
   processIdentity?: ProcessManagerOptions['captureIdentity'];
+  processExecFile?: ProcessManagerOptions['execFile'];
   processAlive?: ProcessManagerOptions['isAlive'];
   processOutputLimit?: number;
   processAppendFile?: ProcessManagerOptions['processAppendFile'];
@@ -50,7 +51,7 @@ export class SessionStore {
     this.platform = options.platform ?? process.platform;
     this.kill = options.kill ?? process.kill.bind(process);
     this.processOptions = { platform: options.processPlatform ?? this.platform, spawn: options.processSpawn, kill: options.processKill, env: options.processEnv, shellPath: options.shellPath,
-      captureIdentity: options.processIdentity, isAlive: options.processAlive, outputLimit: options.processOutputLimit, processAppendFile: options.processAppendFile };
+      captureIdentity: options.processIdentity, execFile: options.processExecFile, isAlive: options.processAlive, outputLimit: options.processOutputLimit, processAppendFile: options.processAppendFile };
     this.fsWriteFile = options.fsWriteFile ?? writeFile;
     this.fsRename = options.fsRename ?? rename;
     this.snapshot = this.normalize(data);

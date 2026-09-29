@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { appendFile, mkdtemp, mkdir, readFile, rm, unlink } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { appendFile, mkdtemp, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
 import type { ChildProcess, spawn } from 'node:child_process';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
@@ -15,14 +17,16 @@ import type { AgentEvent, ProcessRecord, Provider } from '../src/core/types.js';
 import { canVerifyTask, markMutation, recordVerification, registerVerification, startRun, type SessionExecutionState } from '../src/core/run-state.js';
 import type { Config } from '../src/config/load.js';
 import type { ProcessManagerOptions } from '../src/tools/processes.js';
+import { promisify } from 'node:util';
 
+const exec = promisify(execFile);
 const posix = process.platform !== 'win32';
 const skipWindows = 'POSIX process-group test is skipped on Windows';
 const nodeCommand = (script: string) => `${process.execPath} -e '${script.replaceAll("'", `'"'"'`)}'`;
 async function fixture(options: {
   platform?: NodeJS.Platform; shellPath?: string; processSpawn?: ProcessManagerOptions['spawn'];
   processKill?: ProcessManagerOptions['kill']; processIdentity?: ProcessManagerOptions['captureIdentity'];
-  processAlive?: ProcessManagerOptions['isAlive']; processOutputLimit?: number;
+  processExecFile?: ProcessManagerOptions['execFile']; processAlive?: ProcessManagerOptions['isAlive']; processOutputLimit?: number;
   processAppendFile?: ProcessManagerOptions['processAppendFile'];
 } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'icy-process-')), cwd = path.join(root, 'workspace'), home = path.join(root, 'home');
@@ -30,7 +34,7 @@ async function fixture(options: {
   const config: Config = { home, cwd, provider: 'responses', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: '', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000 };
   const store = await SessionStore.create(home, config, [], {
     platform: options.platform === 'win32' ? undefined : options.platform, processPlatform: options.platform, shellPath: options.shellPath, processSpawn: options.processSpawn, processKill: options.processKill,
-    processIdentity: options.processIdentity, processAlive: options.processAlive, processOutputLimit: options.processOutputLimit,
+    processIdentity: options.processIdentity, processExecFile: options.processExecFile, processAlive: options.processAlive, processOutputLimit: options.processOutputLimit,
     processAppendFile: options.processAppendFile,
   });
   const approvals: unknown[] = [], tools = new ToolRegistry(config, store, async request => { approvals.push(request); return 'once'; });
@@ -44,6 +48,11 @@ function fakeChild(pid = 4242): ChildProcess {
 }
 
 const bashArgs = (command: string, extra: Record<string, unknown> = {}) => ({ command, cwd: null, timeoutMs: null, detach: false, kill: null, ...extra });
+const identityToken = (date: Date) => {
+  if (!posix) return date.toISOString();
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${weekdays[date.getUTCDay()]} ${months[date.getUTCMonth()]} ${String(date.getUTCDate()).padStart(2, ' ')} ${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')} ${date.getUTCFullYear()}`;
+};
 
 test('running detached processes block verification even with current evidence, then require re-verification after exit', () => {
   const state: SessionExecutionState = { runs: [], processes: [] };
@@ -551,4 +560,118 @@ test('v1 and v2 snapshots without processes remain loadable while malformed reco
   const migrated = parseSessionData(legacy, 'fixture'); assert.deepEqual(migrated.processes, []);
   const modern = parseSessionData({ ...legacy, version: 2, runs: [] }, 'fixture'); assert.deepEqual(modern.processes, []);
   assert.throws(() => parseSessionData({ ...modern, processes: [{ id: 'bad' }] }, 'fixture'), /processes\.0/);
+});
+
+test('the running process snapshot survives a host SIGKILL during identity capture', { skip: !posix && skipWindows }, async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'icy-process-crash-')), cwd = path.join(root, 'workspace'), home = path.join(root, 'home'), marker = path.join(root, 'marker.json'), script = path.join(root, 'crash.mts');
+  await mkdir(cwd); await mkdir(home);
+  let pid: number | undefined, resumed: SessionStore | undefined;
+  try {
+    const storeSource = fileURLToPath(new URL('../src/sessions/store.ts', import.meta.url));
+    await writeFile(script, `import { writeFileSync } from 'node:fs';
+import { SessionStore } from ${JSON.stringify(storeSource)};
+const [home, cwd, marker] = process.argv.slice(2);
+const store = await SessionStore.create(home, { cwd, provider: 'responses', model: 'fixture', baseUrl: 'http://127.0.0.1:1' }, [], { processIdentity: pid => {
+  writeFileSync(marker, JSON.stringify({ sessionId: store.data.id, pid }));
+  process.kill(process.pid, 'SIGKILL');
+  return new Promise(() => {});
+} });
+await store.getProcessManager().start({ toolCallId: 'crash-window', command: 'sleep 60', cwd, timeoutMs: 60_000 });
+`);
+    await exec(process.execPath, ['--import', import.meta.resolve('tsx'), script, home, cwd, marker], { cwd: process.cwd(), timeout: 15_000 }).catch(() => {});
+    const crash = JSON.parse(await readFile(marker, 'utf8')) as { sessionId: string; pid: number };
+    pid = crash.pid;
+    const snapshot = JSON.parse(await readFile(path.join(home, 'sessions', crash.sessionId, 'session.json'), 'utf8')) as { processes: ProcessRecord[] };
+    assert.equal(snapshot.processes.length, 1); assert.equal(snapshot.processes[0].status, 'running'); assert.equal(snapshot.processes[0].pid, pid);
+    const restored = await SessionStore.resume(home, crash.sessionId); resumed = restored.store;
+    const record = resumed.data.processes[0];
+    assert.equal(record.status, 'unknown'); assert.equal(record.pidAlive, true);
+    const killed = await resumed.getProcessManager().kill(record.id, 'user_kill');
+    assert.equal(killed.status, 'killed'); assert.throws(() => process.kill(pid!, 0), { code: 'ESRCH' });
+  } finally {
+    if (pid) { try { process.kill(-pid, 'SIGKILL'); } catch { /* already gone */ } }
+    await resumed?.close(); await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('v2 identity capture is stable across locale and timezone changes', { skip: !posix && skipWindows }, async () => {
+  const saved = { LANG: process.env.LANG, LC_ALL: process.env.LC_ALL, TZ: process.env.TZ }, f = await fixture();
+  let resumed: SessionStore | undefined;
+  try {
+    process.env.LANG = 'zh_CN.UTF-8'; process.env.LC_ALL = 'zh_CN.UTF-8'; process.env.TZ = 'Asia/Shanghai';
+    const started = await f.store.getProcessManager().start({ toolCallId: 'stable-identity', command: 'sleep 30', cwd: f.cwd, timeoutMs: 60_000 });
+    assert.ok(started.pid); assert.ok(started.identity);
+    const capture = (f.store.getProcessManager() as unknown as { captureIdentity(pid: number): Promise<string | undefined> }).captureIdentity.bind(f.store.getProcessManager());
+    const first = started.identity, second = await capture(started.pid!);
+    process.env.LANG = 'C'; process.env.LC_ALL = 'C'; process.env.TZ = 'UTC';
+    const third = await capture(started.pid!);
+    assert.equal(first, second); assert.equal(second, third);
+    await f.store.save(); await unlink(path.join(f.store.dir, 'lock'));
+    resumed = (await SessionStore.resume(f.home, f.store.data.id)).store;
+    assert.equal(resumed.data.processes[0].status, 'unknown'); assert.equal(resumed.data.processes[0].pidAlive, true); assert.equal(resumed.data.processes[0].reason, 'icy_restarted');
+    assert.equal((await resumed.getProcessManager().kill(started.id, 'user_kill')).status, 'killed');
+  } finally {
+    if (saved.LANG === undefined) delete process.env.LANG; else process.env.LANG = saved.LANG;
+    if (saved.LC_ALL === undefined) delete process.env.LC_ALL; else process.env.LC_ALL = saved.LC_ALL;
+    if (saved.TZ === undefined) delete process.env.TZ; else process.env.TZ = saved.TZ;
+    await resumed?.close(); await f.cleanup();
+  }
+});
+
+test('legacy inherited identity records still permit a matching recovered kill', async () => {
+  let alive = true, killCalls = 0, captures = 0;
+  const f = await fixture({ processExecFile: () => ({ stdout: ++captures === 1 ? 'v2-token' : 'legacy-token' }), processAlive: () => alive, processKill: () => { killCalls++; alive = false; } });
+  try {
+    const id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    f.store.data.processes.push({ id, toolCallId: id, command: 'sleep 30', cwd: f.cwd, pid: 4242, identity: 'legacy-token', startedAt: new Date().toISOString(), timeoutMs: 60_000, status: 'unknown', pidAlive: true, bytes: 0 });
+    const result = await f.store.getProcessManager().kill(id, 'user_kill');
+    assert.equal(result.status, 'killed'); assert.equal(killCalls, 2); assert.equal(captures, 2);
+  } finally { alive = false; await f.cleanup(); }
+});
+
+test('a missing identity an hour from the recorded start stays unconfirmed and is never killed', async () => {
+  let killCalls = 0, alive = true;
+  const answer = identityToken(new Date());
+  const f = await fixture({ processIdentity: () => answer, processAlive: () => alive, processKill: () => { killCalls++; alive = false; } });
+  try {
+    const id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    f.store.data.processes.push({ id, toolCallId: id, command: 'sleep 30', cwd: f.cwd, pid: 4242, startedAt: new Date(Date.now() - 3_600_000).toISOString(), timeoutMs: 60_000, status: 'running', bytes: 0 });
+    await f.store.getProcessManager().recover();
+    const record = f.store.data.processes[0];
+    assert.equal(record.status, 'unknown'); assert.equal(record.pidAlive, true); assert.equal(record.reason, 'identity_unconfirmed');
+    const result = await f.store.getProcessManager().kill(id, 'user_kill');
+    assert.equal(result.status, 'unknown'); assert.equal(result.reason, 'identity_unconfirmed'); assert.equal(killCalls, 0);
+  } finally { alive = false; await f.cleanup(); }
+});
+
+test('Windows identity runner uses UTC ISO and matches or rejects start-time fallback', async () => {
+  const calls: Array<{ file: string; args: string[]; options: unknown }> = [], now = new Date(), f = await fixture({ platform: 'win32', processAlive: () => true, processExecFile: (file, args, options) => {
+    calls.push({ file, args, options }); return { stdout: now.toISOString() };
+  } });
+  try {
+    const within = { id: 'ffffffff-ffff-4fff-8fff-ffffffffffff', toolCallId: 'win-within', command: 'sleep 30', cwd: f.cwd, pid: 4242, startedAt: now.toISOString(), timeoutMs: 60_000, status: 'running' as const, bytes: 0 };
+    const off = { id: '11111111-1111-4111-8111-111111111111', toolCallId: 'win-off', command: 'sleep 30', cwd: f.cwd, pid: 4243, startedAt: new Date(now.getTime() - 3_600_000).toISOString(), timeoutMs: 60_000, status: 'running' as const, bytes: 0 };
+    f.store.data.processes.push(within, off); await f.store.getProcessManager().recover();
+    assert.equal(f.store.data.processes[0].reason, 'icy_restarted'); assert.equal(f.store.data.processes[1].reason, 'identity_unconfirmed');
+    assert.ok(calls.length >= 2); assert.equal(calls[0].file, 'powershell.exe'); assert.match(calls[0].args[2], /ToUniversalTime\(\)\.ToString\('o'\)/);
+  } finally { for (const record of f.store.data.processes) record.status = 'exited'; await f.cleanup(); }
+});
+
+test('the running snapshot precedes delayed identity capture and emits only one start event', { skip: !posix && skipWindows }, async () => {
+  const events: ProcessRecord[] = [], f = await fixture({ processIdentity: async () => { await new Promise(resolve => setTimeout(resolve, 300)); return 'delayed-token'; } });
+  let bumps = 0;
+  try {
+    const manager = f.store.getProcessManager(record => { events.push(structuredClone(record)); }, () => { bumps++; });
+    const starting = manager.start({ toolCallId: 'persist-order', command: 'sleep 30', cwd: f.cwd, timeoutMs: 60_000 });
+    const deadline = Date.now() + 2000; let snapshot: { processes: ProcessRecord[] } | undefined;
+    while (Date.now() < deadline) {
+      try { snapshot = JSON.parse(await readFile(path.join(f.store.dir, 'session.json'), 'utf8')) as { processes: ProcessRecord[] }; if (snapshot.processes[0]?.status === 'running') break; }
+      catch { /* the initial snapshot is still being replaced */ }
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.equal(snapshot?.processes[0]?.status, 'running'); assert.ok(snapshot?.processes[0]?.pid);
+    assert.equal(events.length, 1); assert.equal(events[0].status, 'running');
+    const record = await starting;
+    assert.equal(record.identity, 'delayed-token'); assert.equal(record.identityScheme, 'v2'); assert.equal(events.length, 1); assert.equal(bumps, 1);
+  } finally { await f.cleanup(); }
 });

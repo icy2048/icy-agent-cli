@@ -16,6 +16,7 @@ const KILL_CONFIRM_WAIT = 2_000;
 type ProcessChange = (record: ProcessRecord) => void | Promise<void>;
 type BeforePersist = (record: ProcessRecord) => void;
 type IdentityCapture = (pid: number) => string | undefined | Promise<string | undefined>;
+type IdentityExecFile = (file: string, args: string[], options: { timeout?: number; windowsHide?: boolean; env?: NodeJS.ProcessEnv }) => { stdout: string | Buffer } | Promise<{ stdout: string | Buffer }>;
 type LivenessCheck = (pid: number) => boolean | Promise<boolean>;
 interface ActiveProcess {
   record: ProcessRecord;
@@ -25,6 +26,7 @@ interface ActiveProcess {
   killTimer?: ReturnType<typeof setTimeout>;
   timeout?: ReturnType<typeof setTimeout>;
   settled: boolean;
+  closed: boolean;
   terminating?: boolean;
   logWrites: Promise<void>;
   outputDone: Promise<void>;
@@ -43,6 +45,7 @@ export interface ProcessManagerOptions extends BashOptions {
   captureIdentity?: IdentityCapture;
   identityCapture?: IdentityCapture;
   identity?: IdentityCapture;
+  execFile?: IdentityExecFile;
   isAlive?: LivenessCheck;
   isPidAlive?: LivenessCheck;
   liveness?: LivenessCheck;
@@ -54,6 +57,18 @@ const clone = (record: ProcessRecord): ProcessRecord => structuredClone(record);
 const terminal = (status: ProcessRecord['status']) => status !== 'running';
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error);
 const isGone = (error: unknown) => (error as NodeJS.ErrnoException)?.code === 'ESRCH';
+const posixIdentity = /^(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/;
+const identityMonths = new Map(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, index) => [month, index]));
+const parsePosixIdentity = (value: string) => {
+  const match = posixIdentity.exec(value.trim());
+  if (!match) return undefined;
+  const month = identityMonths.get(match[1]), day = Number(match[2]), hour = Number(match[3]), minute = Number(match[4]), second = Number(match[5]), year = Number(match[6]);
+  if (month === undefined || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return undefined;
+  const instant = Date.UTC(year, month, day, hour, minute, second);
+  const date = new Date(instant);
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day && date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second ? instant : undefined;
+};
+const parseIdentityInstant = (value: string, platform: NodeJS.Platform) => platform === 'win32' ? (Number.isNaN(Date.parse(value)) ? undefined : Date.parse(value)) : parsePosixIdentity(value);
 
 /** Session-owned detached process state and its bounded, redacted output logs. */
 export class ProcessManager {
@@ -64,6 +79,7 @@ export class ProcessManager {
   private readonly spawnProcess: typeof spawn;
   private readonly processKill?: BashOptions['kill'];
   private readonly captureIdentityOption?: IdentityCapture;
+  private readonly identityExecFile: IdentityExecFile;
   private readonly livenessCheck?: LivenessCheck;
   private readonly processAppendFile: NonNullable<ProcessManagerOptions['processAppendFile']>;
   private readonly outputLimit: number;
@@ -84,6 +100,7 @@ export class ProcessManager {
     this.spawnProcess = options.spawn ?? spawn;
     this.processKill = options.kill;
     this.captureIdentityOption = options.captureIdentity ?? options.identityCapture ?? options.identity;
+    this.identityExecFile = options.execFile ?? ((file, args, execOptions) => execFileAsync(file, args, execOptions) as Promise<{ stdout: string | Buffer }>);
     this.livenessCheck = options.isAlive ?? options.isPidAlive ?? options.liveness ?? options.processAlive;
     this.processAppendFile = options.processAppendFile ?? appendFile;
     this.outputLimit = options.outputLimit ?? OUTPUT_LIMIT;
@@ -103,8 +120,8 @@ export class ProcessManager {
       try { await this.onChange?.(eventRecord); } catch { /* status persistence must not lose the process result */ }
     }
   }
-  private async persistWithFailure(record: ProcessRecord, notify = true) {
-    try { await this.persist(record, notify); }
+  private async persistWithFailure(record: ProcessRecord, notify = true, prepared = false) {
+    try { await this.persist(record, notify, clone(record), prepared); }
     catch (error) {
       await this.reportPersistFailure(record, error);
       throw error;
@@ -217,26 +234,39 @@ export class ProcessManager {
     }
   }
 
-  private async captureIdentity(pid: number): Promise<string | undefined> {
+  private async captureIdentity(pid: number, scheme: 'v2' | 'legacy' = 'v2'): Promise<string | undefined> {
     const capture = this.captureIdentityOption
       ? Promise.resolve().then(() => this.captureIdentityOption!(pid))
       : this.platform === 'win32'
-        ? execFileAsync('powershell.exe', ['-NoProfile', '-Command', `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object -ExpandProperty CreationDate`], { windowsHide: true, timeout: 3_000 }).then(result => result.stdout)
-        : execFileAsync('ps', ['-o', 'lstart=', '-p', String(pid)], { timeout: 3_000 }).then(result => result.stdout);
+        ? Promise.resolve().then(() => this.identityExecFile('powershell.exe', ['-NoProfile', '-Command', scheme === 'v2'
+          ? `(Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}').CreationDate.ToUniversalTime().ToString('o')`
+          : `Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object -ExpandProperty CreationDate`], { windowsHide: true, timeout: 3_000 })).then(result => result.stdout)
+        : Promise.resolve().then(() => this.identityExecFile('ps', ['-o', 'lstart=', '-p', String(pid)], { timeout: 3_000, env: scheme === 'v2'
+          ? { ...process.env, LC_ALL: 'C', LANG: 'C', TZ: 'UTC' }
+          : { ...process.env } })).then(result => result.stdout);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const value = await Promise.race([capture, new Promise<undefined>(resolve => {
         timer = setTimeout(() => resolve(undefined), 3_000);
       })]);
-      return typeof value === 'string' ? value.trim() || undefined : undefined;
+      return typeof value === 'string' || Buffer.isBuffer(value) ? String(value).trim() || undefined : undefined;
     } catch { return undefined; }
     finally { if (timer) clearTimeout(timer); }
   }
   private async identityMatch(record: ProcessRecord): Promise<'match' | 'mismatch' | 'unavailable'> {
-    if (!record.pid || record.pid < 1 || record.identity === undefined) return 'unavailable';
+    if (!record.pid || record.pid < 1) return 'unavailable';
     const identity = await this.captureIdentity(record.pid);
+    if (record.identity !== undefined) {
+      if (identity === record.identity) return 'match';
+      if (record.identityScheme === 'v2') return identity ? 'mismatch' : 'unavailable';
+      const legacy = this.captureIdentityOption ? identity : await this.captureIdentity(record.pid, 'legacy');
+      if (legacy === record.identity) return 'match';
+      return identity || legacy ? 'mismatch' : 'unavailable';
+    }
     if (!identity) return 'unavailable';
-    return identity === record.identity ? 'match' : 'mismatch';
+    const capturedAt = parseIdentityInstant(identity, this.platform), startedAt = Date.parse(record.startedAt);
+    if (capturedAt === undefined || Number.isNaN(startedAt)) return 'unavailable';
+    return Math.abs(capturedAt - startedAt) <= 5_000 ? 'match' : 'mismatch';
   }
   private async matching(record: ProcessRecord): Promise<boolean> {
     return (await this.identityMatch(record)) === 'match';
@@ -307,7 +337,7 @@ export class ProcessManager {
     signal?.throwIfAborted();
     const record: ProcessRecord = {
       id: randomUUID(), toolCallId: input.toolCallId, command: input.command, cwd: input.cwd,
-      startedAt: new Date().toISOString(), timeoutMs: input.timeoutMs, status: 'running', bytes: 0,
+      startedAt: new Date().toISOString(), timeoutMs: input.timeoutMs, status: 'running', bytes: 0, identityScheme: 'v2',
     };
     const log = this.logPath(record.id);
     await mkdir(`${this.store.dir}/processes`, { recursive: true, mode: 0o700 });
@@ -337,7 +367,7 @@ export class ProcessManager {
     const outputDone = new Promise<void>(resolve => { resolveOutputDone = resolve; });
     let resolveDrained!: () => void;
     const drained = new Promise<void>(resolve => { resolveDrained = resolve; });
-    const active: ActiveProcess = { record, child, log, settled: false, logWrites: Promise.resolve(), outputDone, resolveOutputDone, drained, resolveDrained };
+    const active: ActiveProcess = { record, child, log, settled: false, closed: false, logWrites: Promise.resolve(), outputDone, resolveOutputDone, drained, resolveDrained };
     this.active.set(record.id, active);
     const outputStreams = [child.stdout, child.stderr].filter((stream): stream is NonNullable<ChildProcess['stdout']> => stream !== null);
     let outputRemaining = outputStreams.length;
@@ -362,12 +392,14 @@ export class ProcessManager {
     child.stderr?.on('data', collect('stderr'));
     let failed: Promise<void> | undefined;
     child.once('error', error => {
+      active.closed = true;
       if (!active.reason) active.reason = 'spawn_error';
       active.resolveOutputDone();
       failed = this.finish(active, null, undefined, error.message);
       void failed.catch(() => {});
     });
     child.once('close', (code, signalCode) => {
+      active.closed = true;
       // Give stdout/stderr data events queued with the close notification a
       // chance to enqueue their final log writes before finish persists.
       setImmediate(() => {
@@ -384,15 +416,19 @@ export class ProcessManager {
     // Reserve the start mutation before identity probing can yield to another
     // snapshot writer. A fast child may add the terminal bump separately.
     this.beforePersist?.(record);
-    // Arm the timeout before identity capture: ps/powershell is a best-effort
-    // safety check and must never postpone the detached process deadline.
+    // Arm the timeout before the first snapshot and identity capture: neither
+    // the writer nor ps/powershell may postpone the detached process deadline.
     const remaining = Math.max(0, input.timeoutMs - (Date.now() - Date.parse(record.startedAt)));
     active.timeout = setTimeout(() => { void this.terminate(active, 'timeout', false).catch(() => {}); }, remaining);
+    // The PID and start-time scheme are durable before identity probing. This
+    // is the crash boundary that lets recovery use the start-time fallback.
+    await this.persistWithFailure(record, true, true);
     // Identity is needed only after a restart; an in-session ChildProcess is
-    // always signalled through its live handle/pgid.
-    record.identity = await this.captureIdentity(child.pid);
-    if (active.settled) return record;
-    await this.persist(record, true, clone(record), true);
+    // always signalled through the live handle/pgid.
+    const identity = await this.captureIdentity(child.pid);
+    if (active.settled || active.closed || child.exitCode !== null || child.signalCode !== null) return record;
+    record.identity = identity;
+    await this.persistWithFailure(record, false, true);
     await Promise.race([firstOutput, new Promise<void>(resolve => setTimeout(resolve, 200))]);
     return record;
   }
