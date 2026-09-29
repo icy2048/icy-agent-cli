@@ -31,7 +31,7 @@
 | 后续队列：只读仓库探索 | `5f0f9f8` 让 `read` 以 `depth`/`pattern`/`regex` 免审批列举与搜索，上限 500 项 / 200 匹配 / 2,000 文件 / 1 MB / 10 秒；`3b4d301` 加正则 `node:vm` 隔离、有界行走与提示对齐；`tests/explore.test.ts` 覆盖边界、敏感与符号链接跳过、VM 超时、分页与严格 schema；探索调用与拒绝记录见[批次 A](evaluations/repeated-tasks-iter4-explore.json)、[批次 B](evaluations/repeated-tasks-iter4-explore-tuned.json)与[汇总](evaluations/repeated-tasks-iter4-summary.json) | 通过；批次 B 45 次全部免审批完成探索且检查为空；小样本不证明一般可靠性，CI 未运行 |
 | 后续队列：模型能力诊断 | `58e5a17` 在 `/model` 增加探针：文本请求 + `icy_probe` 诊断调用 + 工具结果续接，按 auth/connect/protocol/model/text/tool_call/tool_result 分级，不执行主机工具；`tests/model-probe.test.ts` 覆盖双协议各失败分类、探针工具白名单与向导界面；第四轮评测批次运行于含该功能的提交（[汇总](evaluations/repeated-tasks-iter4-summary.json)） | 通过；已配置 vLLM 实测完整通过 2.2 秒、错误模型名归入模型不存在；该服务接受任意 API key，认证失败分支只有回归证据 |
 | 后续队列：会话过滤 | `73c4b14` 按规格实现 `icy sessions --status/--cwd` 与 `/sessions status=... cwd=...`：九种状态、非法状态退出 2、列举只读；早前评测候选 patch 未被采用；`tests/session-list.test.ts`、`tests/cli-resume.test.ts`、`tests/ui-task.test.ts` 覆盖状态枚举、嵌套工作区、非法值与界面；第四轮评测见[批次 B](evaluations/repeated-tasks-iter4-explore-tuned.json) | 通过；行为以规格与回归为准，没有针对该功能的真实模型批次；CI 未运行 |
-| 后续队列：长命令支持 | `src/tools/processes.ts`、Workbench `/ps`/`/kill`、统一 transcript 投影、CLI process 事件和正常退出清理；`tests/processes.test.ts`、`tests/ui-processes.test.ts`、`tests/cli.test.ts` 覆盖生命周期、恢复未知、验收证据、审批、NDJSON 与子进程终止 | 测试在本地通过；CI 未运行；无真实模型批次 |
+| 后续队列：长命令支持 | `src/tools/processes.ts`、Workbench `/ps`/`/kill`、统一 transcript 投影、CLI process 事件和正常退出清理；`tests/processes.test.ts`、`tests/ui-processes.test.ts`、`tests/cli.test.ts` 覆盖生命周期、恢复未知、验收证据、审批、NDJSON 与子进程终止 | 测试在本地通过；`ec21645` 的[三平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36509915094) 通过（macOS/Linux 343 项，Windows 321 项通过、22 项 POSIX 专属跳过）；无真实模型批次；Windows 实机未验收 |
 
 ## 可复现场景索引
 
