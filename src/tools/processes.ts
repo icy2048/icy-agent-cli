@@ -1,6 +1,8 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { createWriteStream } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { appendFile, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, unlink, writeFile } from 'node:fs/promises';
+import { StringDecoder } from 'node:string_decoder';
 import { promisify } from 'node:util';
 import type { SessionStore } from '../sessions/store.js';
 import type { ProcessRecord } from '../core/types.js';
@@ -12,23 +14,49 @@ const execFileAsync = promisify(execFile);
 const OUTPUT_LIMIT = 16 * 1024 * 1024;
 const MAX_WAIT = 10_000;
 const KILL_CONFIRM_WAIT = 2_000;
+const OUTPUT_LINE_FLUSH = 64 * 1024;
+const LOG_INDEX_STRIDE = 65_536;
+const MAX_PAGE_BYTES = 1 * 1024 * 1024;
 
 type ProcessChange = (record: ProcessRecord) => void | Promise<void>;
 type BeforePersist = (record: ProcessRecord) => void;
 type IdentityCapture = (pid: number) => string | undefined | Promise<string | undefined>;
 type IdentityExecFile = (file: string, args: string[], options: { timeout?: number; windowsHide?: boolean; env?: NodeJS.ProcessEnv }) => { stdout: string | Buffer } | Promise<{ stdout: string | Buffer }>;
 type LivenessCheck = (pid: number) => boolean | Promise<boolean>;
+export interface ProcessLogWriter {
+  write(data: Uint8Array): Promise<void>;
+  end(): Promise<void>;
+}
+export type ProcessLogWriterFactory = (path: string) => ProcessLogWriter | Promise<ProcessLogWriter>;
+export type ProcessLogReader = (path: string, offset: number, length: number) => Promise<Uint8Array>;
+interface LogIndexEntry { chars: number; bytes: number }
+interface LogIndex { entries: LogIndexEntry[]; total: number; bytes: number; complete: boolean; building?: Promise<void> }
+interface OutputState {
+  source: 'stdout' | 'stderr';
+  decoder: StringDecoder;
+  pending: string;
+  ended: boolean;
+}
 interface ActiveProcess {
   record: ProcessRecord;
   child: ChildProcess;
   log: string;
+  writer: ProcessLogWriter;
+  index: LogIndex;
+  outputStates: OutputState[];
+  outputRemaining: number;
   reason?: 'killed' | 'timeout' | 'output_limit' | 'spawn_error';
   killTimer?: ReturnType<typeof setTimeout>;
   timeout?: ReturnType<typeof setTimeout>;
   settled: boolean;
   closed: boolean;
   terminating?: boolean;
-  logWrites: Promise<void>;
+  pendingLog: Buffer;
+  pendingLogBytes: number;
+  logWriteInFlight: boolean;
+  logDrain: Promise<void>;
+  resolveLogDrain: () => void;
+  outputsFinished: boolean;
   outputDone: Promise<void>;
   resolveOutputDone: () => void;
   drained: Promise<void>;
@@ -50,7 +78,11 @@ export interface ProcessManagerOptions extends BashOptions {
   isPidAlive?: LivenessCheck;
   liveness?: LivenessCheck;
   processAlive?: LivenessCheck;
-  processAppendFile?: (path: string, data: Uint8Array) => Promise<void>;
+  processLogWriter?: ProcessLogWriterFactory;
+  processLogWriterFactory?: ProcessLogWriterFactory;
+  logWriterFactory?: ProcessLogWriterFactory;
+  processLogReader?: ProcessLogReader;
+  processReadRange?: ProcessLogReader;
 }
 
 const clone = (record: ProcessRecord): ProcessRecord => structuredClone(record);
@@ -69,6 +101,32 @@ const parsePosixIdentity = (value: string) => {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month && date.getUTCDate() === day && date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second ? instant : undefined;
 };
 const parseIdentityInstant = (value: string, platform: NodeJS.Platform) => platform === 'win32' ? (Number.isNaN(Date.parse(value)) ? undefined : Date.parse(value)) : parsePosixIdentity(value);
+const defaultLogWriter: ProcessLogWriterFactory = file => {
+  const stream = createWriteStream(file, { flags: 'a', mode: 0o600 });
+  let streamError: unknown;
+  stream.on('error', error => { streamError ??= error; });
+  return {
+    write(data: Uint8Array) {
+      return new Promise<void>((resolve, reject) => {
+        if (streamError) { reject(streamError); return; }
+        stream.write(data, (error?: Error | null) => error ? reject(error) : resolve());
+      });
+    },
+    end() {
+      return new Promise<void>((resolve, reject) => {
+        if (streamError) { reject(streamError); return; }
+        stream.end((error?: Error | null) => error ? reject(error) : resolve());
+      });
+    },
+  };
+};
+const defaultLogReader: ProcessLogReader = async (file, offset, length) => {
+  const handle = await open(file, 'r');
+  try {
+    const buffer = Buffer.alloc(length), result = await handle.read(buffer, 0, length, offset);
+    return buffer.subarray(0, result.bytesRead);
+  } finally { await handle.close(); }
+};
 
 /** Session-owned detached process state and its bounded, redacted output logs. */
 export class ProcessManager {
@@ -81,7 +139,8 @@ export class ProcessManager {
   private readonly captureIdentityOption?: IdentityCapture;
   private readonly identityExecFile: IdentityExecFile;
   private readonly livenessCheck?: LivenessCheck;
-  private readonly processAppendFile: NonNullable<ProcessManagerOptions['processAppendFile']>;
+  private readonly logWriterFactory: ProcessLogWriterFactory;
+  private readonly logReader: ProcessLogReader;
   private readonly outputLimit: number;
   private onChange?: ProcessChange;
   private beforePersist?: BeforePersist;
@@ -89,6 +148,7 @@ export class ProcessManager {
   private waiters = new Map<string, Waiter[]>();
   private watchdogs = new Map<string, ReturnType<typeof setTimeout>>();
   private watchdogRetries = new Map<string, number>();
+  private logIndexes = new Map<string, LogIndex>();
 
   constructor(private readonly store: SessionStore, secretsOrOptions: string[] | ProcessManagerOptions = [], suppliedOptions: ProcessManagerOptions = {}) {
     const secrets = Array.isArray(secretsOrOptions) ? secretsOrOptions : [];
@@ -102,7 +162,8 @@ export class ProcessManager {
     this.captureIdentityOption = options.captureIdentity ?? options.identityCapture ?? options.identity;
     this.identityExecFile = options.execFile ?? ((file, args, execOptions) => execFileAsync(file, args, execOptions) as Promise<{ stdout: string | Buffer }>);
     this.livenessCheck = options.isAlive ?? options.isPidAlive ?? options.liveness ?? options.processAlive;
-    this.processAppendFile = options.processAppendFile ?? appendFile;
+    this.logWriterFactory = options.processLogWriter ?? options.processLogWriterFactory ?? options.logWriterFactory ?? defaultLogWriter;
+    this.logReader = options.processLogReader ?? options.processReadRange ?? defaultLogReader;
     this.outputLimit = options.outputLimit ?? OUTPUT_LIMIT;
     this.onChange = options.onChange;
     this.beforePersist = options.beforePersist;
@@ -131,17 +192,125 @@ export class ProcessManager {
     record.reason = `persist_failed:${errorMessage(error)}`;
     try { await this.onChange?.(clone(record)); } catch { /* the in-memory terminal result remains available */ }
   }
-  private enqueueLog(active: ActiveProcess, value: string) {
-    if (active.settled) return;
-    const output = Buffer.from(redact(value, this.secrets));
+  private indexText(index: LogIndex, text: string) {
+    for (let offset = 0; offset < text.length;) {
+      if (index.total % LOG_INDEX_STRIDE === 0 && index.entries[index.entries.length - 1]?.chars !== index.total) index.entries.push({ chars: index.total, bytes: index.bytes });
+      const codePoint = text.codePointAt(offset)!;
+      index.total++;
+      index.bytes += codePoint <= 0x7f ? 1 : codePoint <= 0x7ff ? 2 : codePoint <= 0xffff ? 3 : 4;
+      offset += codePoint > 0xffff ? 2 : 1;
+    }
+    if (index.total % LOG_INDEX_STRIDE === 0 && index.entries[index.entries.length - 1]?.chars !== index.total) index.entries.push({ chars: index.total, bytes: index.bytes });
+  }
+  private indexBytes(index: LogIndex, data: Uint8Array) { this.indexText(index, Buffer.from(data).toString('utf8')); }
+  private logError(active: ActiveProcess, error: unknown) {
+    if (!active.record.reason) active.record.reason = errorMessage(error);
+  }
+  private appendPendingLog(active: ActiveProcess, data: Buffer) {
+    const required = active.pendingLogBytes + data.length;
+    if (required > active.pendingLog.length) {
+      const capacity = Math.max(required, Math.max(64 * 1024, active.pendingLog.length * 2));
+      const pending = Buffer.allocUnsafe(capacity);
+      active.pendingLog.copy(pending, 0, 0, active.pendingLogBytes);
+      active.pendingLog = pending;
+    }
+    data.copy(active.pendingLog, active.pendingLogBytes);
+    active.pendingLogBytes = required;
+  }
+  private takePendingLog(active: ActiveProcess) {
+    if (!active.pendingLogBytes) return undefined;
+    const pending = active.pendingLog.subarray(0, active.pendingLogBytes);
+    active.pendingLog = Buffer.allocUnsafe(0);
+    active.pendingLogBytes = 0;
+    return pending;
+  }
+  private maybeResolveLogDrain(active: ActiveProcess) {
+    if (active.outputsFinished && !active.logWriteInFlight && !active.pendingLogBytes) active.resolveLogDrain();
+  }
+  private writeLog(active: ActiveProcess, data: Buffer) {
+    active.logWriteInFlight = true;
+    let write: Promise<void>;
+    try { write = Promise.resolve(active.writer.write(data)); }
+    catch (error) { write = Promise.reject(error); }
+    void (async () => {
+      try {
+        await write;
+        this.indexBytes(active.index, data);
+      } catch (error) {
+        this.logError(active, error);
+      }
+      const pending = this.takePendingLog(active);
+      if (pending) this.writeLog(active, pending);
+      else {
+        active.logWriteInFlight = false;
+        this.maybeResolveLogDrain(active);
+      }
+    })();
+  }
+  private utf8PrefixLength(output: Uint8Array, limit: number) {
+    if (limit >= output.length) return output.length;
+    let end = Math.max(0, limit);
+    if (!end) return 0;
+    let start = end - 1;
+    while (start > 0 && (output[start] & 0xc0) === 0x80) start--;
+    const first = output[start], width = first < 0x80 ? 1 : first >= 0xf0 ? 4 : first >= 0xe0 ? 3 : first >= 0xc0 ? 2 : 1;
+    return start + width <= end ? end : start;
+  }
+  private enqueueLog(active: ActiveProcess, value: string, alreadyRedacted = false) {
+    const output = Buffer.from(alreadyRedacted ? value : redact(value, this.secrets));
     const available = Math.max(0, this.outputLimit - active.record.bytes);
-    const written = output.subarray(0, available);
+    const length = this.utf8PrefixLength(output, available), written = output.subarray(0, length);
     active.record.bytes += written.length;
-    if (written.length) active.logWrites = active.logWrites.catch(() => {}).then(() => this.processAppendFile(active.log, written));
+    if (written.length) {
+      if (active.logWriteInFlight) this.appendPendingLog(active, written);
+      else this.writeLog(active, written);
+    }
     if (output.length > available) {
       active.record.truncated = true;
-      void this.terminate(active, 'output_limit', false).catch(() => {});
+      if (active.settled) { active.reason ??= 'output_limit'; active.record.reason ??= 'output_limit'; }
+      else void this.terminate(active, 'output_limit', false).catch(() => {});
     }
+  }
+  private enqueueLine(active: ActiveProcess, state: OutputState, line: string) {
+    const prefix = state.source === 'stderr' ? '[stderr] ' : '';
+    this.enqueueLog(active, `${prefix}${redact(line, this.secrets)}`, true);
+  }
+  private consumeOutput(active: ActiveProcess, state: OutputState, chunk: Buffer | string) {
+    if (state.ended) return;
+    state.pending += state.decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    while (true) {
+      const newline = state.pending.indexOf('\n');
+      if (newline < 0) break;
+      const line = state.pending.slice(0, newline + 1); state.pending = state.pending.slice(newline + 1);
+      this.enqueueLine(active, state, line);
+    }
+    if (Buffer.byteLength(state.pending) > OUTPUT_LINE_FLUSH) {
+      const pending = state.pending; state.pending = '';
+      this.enqueueLine(active, state, pending);
+    }
+  }
+  private finishOutput(active: ActiveProcess, state: OutputState) {
+    if (state.ended) return;
+    state.ended = true;
+    try { state.pending += state.decoder.end(); }
+    catch (error) { this.logError(active, error); }
+    while (true) {
+      const newline = state.pending.indexOf('\n');
+      if (newline < 0) break;
+      const line = state.pending.slice(0, newline + 1); state.pending = state.pending.slice(newline + 1);
+      this.enqueueLine(active, state, line);
+    }
+    if (state.pending) {
+      const pending = state.pending; state.pending = '';
+      this.enqueueLine(active, state, pending);
+    }
+    if (--active.outputRemaining === 0) active.resolveOutputDone();
+  }
+  private finishOutputs(active: ActiveProcess) {
+    for (const state of active.outputStates) this.finishOutput(active, state);
+    active.outputsFinished = true;
+    if (!active.outputRemaining) active.resolveOutputDone();
+    this.maybeResolveLogDrain(active);
   }
   private async terminate(active: ActiveProcess, reason: ActiveProcess['reason'], propagate: boolean, detail: string = reason ?? '') {
     if (active.settled) return;
@@ -198,6 +367,7 @@ export class ProcessManager {
     if (active.killTimer) clearTimeout(active.killTimer);
     active.resolveEscalation?.();
     const record = active.record;
+    this.finishOutputs(active);
     const reason = active.reason;
     record.status = reason === 'killed' ? 'killed' : reason === 'timeout' ? 'timeout' : reason === 'output_limit' ? 'output_limit' : reason === 'spawn_error' ? 'spawn_error' : 'exited';
     record.endedAt = new Date().toISOString();
@@ -212,14 +382,10 @@ export class ProcessManager {
     // entry until the accepted output has drained so readers can await it.
     try {
       await active.outputDone;
-      let stableWrites = 0;
-      while (stableWrites < 2) {
-        const writes = active.logWrites;
-        await writes.catch(() => {});
-        await new Promise<void>(resolve => setImmediate(resolve));
-        if (writes === active.logWrites) stableWrites++;
-        else stableWrites = 0;
-      }
+      await active.logDrain;
+      try { await active.writer.end(); }
+      catch (writeError) { this.logError(active, writeError); }
+      active.index.complete = true;
     } finally {
       active.resolveDrained();
       this.active.delete(record.id);
@@ -346,67 +512,64 @@ export class ProcessManager {
     // created, cancellation does not undo the detached process contract.
     signal?.throwIfAborted();
     this.records().push(record);
-    let child: ChildProcess;
+    let child: ChildProcess, writer: ProcessLogWriter | undefined;
     try {
+      signal?.throwIfAborted();
+      writer = await this.logWriterFactory(log);
       signal?.throwIfAborted();
       const shell = this.shellPath ?? resolveBashShell(this.platform, this.env);
       if (this.platform === 'win32' && !shell) throw new Error(BASH_UNAVAILABLE);
       child = spawnBash(input.command, input.cwd, this.platform, this.env, shell, this.spawnProcess, true)!;
     } catch (error) {
+      if (writer) await writer.end().catch(endError => { record.reason = errorMessage(endError); });
       if (signal?.aborted) {
         this.records().splice(this.records().indexOf(record), 1);
         await unlink(log).catch(() => {});
         throw error;
       }
       record.status = 'spawn_error'; record.endedAt = new Date().toISOString(); record.exitCode = null;
-      record.reason = errorMessage(error); record.pidAlive = false;
+      record.reason ??= errorMessage(error); record.pidAlive = false;
       await this.persistWithFailure(record);
       return record;
     }
+    const index: LogIndex = { entries: [{ chars: 0, bytes: 0 }], total: 0, bytes: 0, complete: false };
+    this.logIndexes.set(record.id, index);
     let resolveOutputDone!: () => void;
     const outputDone = new Promise<void>(resolve => { resolveOutputDone = resolve; });
     let resolveDrained!: () => void;
     const drained = new Promise<void>(resolve => { resolveDrained = resolve; });
-    const active: ActiveProcess = { record, child, log, settled: false, closed: false, logWrites: Promise.resolve(), outputDone, resolveOutputDone, drained, resolveDrained };
+    let resolveLogDrain!: () => void;
+    const logDrain = new Promise<void>(resolve => { resolveLogDrain = resolve; });
+    const outputStates: OutputState[] = [];
+    if (child.stdout) outputStates.push({ source: 'stdout', decoder: new StringDecoder('utf8'), pending: '', ended: false });
+    if (child.stderr) outputStates.push({ source: 'stderr', decoder: new StringDecoder('utf8'), pending: '', ended: false });
+    const active: ActiveProcess = { record, child, log, writer: writer!, index, outputStates, outputRemaining: outputStates.length,
+      settled: false, closed: false, pendingLog: Buffer.allocUnsafe(0), pendingLogBytes: 0, logWriteInFlight: false, logDrain, resolveLogDrain,
+      outputsFinished: false, outputDone, resolveOutputDone, drained, resolveDrained };
     this.active.set(record.id, active);
-    const outputStreams = [child.stdout, child.stderr].filter((stream): stream is NonNullable<ChildProcess['stdout']> => stream !== null);
-    let outputRemaining = outputStreams.length;
-    const endedStreams = new Set<NonNullable<ChildProcess['stdout']>>();
-    const markOutputDone = (stream: NonNullable<ChildProcess['stdout']>) => {
-      if (endedStreams.has(stream)) return;
-      endedStreams.add(stream);
-      if (--outputRemaining === 0) active.resolveOutputDone();
-    };
-    for (const stream of outputStreams) { stream.once('end', () => markOutputDone(stream)); stream.once('close', () => markOutputDone(stream)); }
-    if (!outputRemaining) active.resolveOutputDone();
+    if (!active.outputRemaining) active.resolveOutputDone();
     if (child.pid !== undefined) record.pid = child.pid;
     record.pidAlive = Boolean(child.pid);
     let firstOutputResolve!: () => void;
     const firstOutput = new Promise<void>(resolve => { firstOutputResolve = resolve; });
-    const collect = (source: 'stdout' | 'stderr') => (chunk: Buffer | string) => {
-      firstOutputResolve();
-      const value = `${source === 'stderr' ? '[stderr] ' : ''}${Buffer.isBuffer(chunk) ? chunk.toString('utf8') : chunk}`;
-      this.enqueueLog(active, value);
-    };
-    child.stdout?.on('data', collect('stdout'));
-    child.stderr?.on('data', collect('stderr'));
+    for (const state of outputStates) {
+      const stream = state.source === 'stdout' ? child.stdout : child.stderr;
+      stream?.on('data', (chunk: Buffer | string) => { firstOutputResolve(); this.consumeOutput(active, state, chunk); });
+      stream?.once('end', () => this.finishOutput(active, state));
+      stream?.once('close', () => this.finishOutput(active, state));
+    }
     let failed: Promise<void> | undefined;
     child.once('error', error => {
       active.closed = true;
       if (!active.reason) active.reason = 'spawn_error';
-      active.resolveOutputDone();
+      firstOutputResolve();
       failed = this.finish(active, null, undefined, error.message);
       void failed.catch(() => {});
     });
     child.once('close', (code, signalCode) => {
       active.closed = true;
-      // Give stdout/stderr data events queued with the close notification a
-      // chance to enqueue their final log writes before finish persists.
-      setImmediate(() => {
-        if (outputStreams.every(stream => stream.readable === undefined)) active.resolveOutputDone();
-      });
       firstOutputResolve();
-      void this.finish(active, code, signalCode ?? undefined).catch(() => {});
+      setImmediate(() => { void this.finish(active, code, signalCode ?? undefined).catch(() => {}); });
     });
     if (child.pid === undefined) {
       await new Promise<void>(resolve => child.once('close', () => resolve()));
@@ -436,6 +599,38 @@ export class ProcessManager {
   private async waitForDrain(id: string) {
     const active = this.active.get(id);
     if (active && terminal(active.record.status)) await active.drained;
+  }
+  private async buildLogIndex(id: string, index: LogIndex) {
+    const decoder = new StringDecoder('utf8'), log = this.logPath(id);
+    let offset = 0;
+    while (true) {
+      const chunk = await this.logReader(log, offset, 64 * 1024);
+      if (!chunk.length) break;
+      offset += chunk.length;
+      this.indexText(index, decoder.write(Buffer.from(chunk)));
+    }
+    this.indexText(index, decoder.end());
+    index.bytes = offset;
+    index.complete = true;
+  }
+  private async ensureLogIndex(id: string) {
+    const active = this.active.get(id);
+    if (active) return active.index;
+    let index = this.logIndexes.get(id);
+    if (!index) {
+      index = { entries: [{ chars: 0, bytes: 0 }], total: 0, bytes: 0, complete: false };
+      this.logIndexes.set(id, index);
+    }
+    if (!index.complete) {
+      if (!index.building) {
+        index.building = this.buildLogIndex(id, index).catch(error => {
+          index!.entries = [{ chars: 0, bytes: 0 }]; index!.total = 0; index!.bytes = 0; index!.complete = false;
+          throw error;
+        }).finally(() => { index!.building = undefined; });
+      }
+      await index.building;
+    }
+    return index;
   }
   private resolveWaiters(id: string, record: ProcessRecord) {
     const waiters = this.waiters.get(id);
@@ -482,11 +677,19 @@ export class ProcessManager {
     const record = this.find(id);
     if (!record) throw new Error('process_not_found');
     await this.waitForDrain(id);
-    const chars = Array.from(await readFile(this.logPath(id), 'utf8'));
-    const start = (offset ?? 1) - 1, size = Math.min(limit ?? 6000, 6000);
-    if (start < 0 || start > chars.length) throw new Error('offset_out_of_range');
-    const end = Math.min(chars.length, start + size);
-    return { text: chars.slice(start, end).join(''), end, total: chars.length, truncated: end < chars.length };
+    const index = await this.ensureLogIndex(id), start = (offset ?? 1) - 1, size = Math.min(limit ?? 6000, 6000);
+    if (start < 0 || start > index.total) throw new Error('offset_out_of_range');
+    const end = Math.min(index.total, start + size);
+    if (end <= start) return { text: '', end, total: index.total, truncated: end < index.total };
+    let entry = index.entries[0];
+    for (const candidate of index.entries) {
+      if (candidate.chars > start) break;
+      entry = candidate;
+    }
+    const bytes = await this.logReader(this.logPath(id), entry.bytes, Math.min(MAX_PAGE_BYTES, index.bytes - entry.bytes));
+    const chars = Array.from(Buffer.from(bytes).toString('utf8'));
+    const localStart = start - entry.chars;
+    return { text: chars.slice(localStart, localStart + end - start).join(''), end, total: index.total, truncated: end < index.total };
   }
 
   async recover(): Promise<number> {

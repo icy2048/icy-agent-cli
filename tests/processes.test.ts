@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { execFile } from 'node:child_process';
-import { appendFile, mkdtemp, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, mkdir, open as openFile, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { writeFileSync } from 'node:fs';
 import type { ChildProcess, spawn } from 'node:child_process';
 import path from 'node:path';
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { SessionStore } from '../src/sessions/store.js';
 import { ToolRegistry } from '../src/tools/registry.js';
-import { killBashTree } from '../src/tools/bash.js';
+import { killBashTree, runBash } from '../src/tools/bash.js';
 import { parseSessionData } from '../src/sessions/schema.js';
 import { Agent } from '../src/core/agent.js';
 import type { AgentEvent, ProcessRecord, Provider } from '../src/core/types.js';
@@ -27,15 +27,15 @@ async function fixture(options: {
   platform?: NodeJS.Platform; shellPath?: string; processSpawn?: ProcessManagerOptions['spawn'];
   processKill?: ProcessManagerOptions['kill']; processIdentity?: ProcessManagerOptions['captureIdentity'];
   processExecFile?: ProcessManagerOptions['execFile']; processAlive?: ProcessManagerOptions['isAlive']; processOutputLimit?: number;
-  processAppendFile?: ProcessManagerOptions['processAppendFile'];
+  processLogWriter?: ProcessManagerOptions['processLogWriter']; processLogReader?: ProcessManagerOptions['processLogReader']; secrets?: string[];
 } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'icy-process-')), cwd = path.join(root, 'workspace'), home = path.join(root, 'home');
   await mkdir(cwd);
   const config: Config = { home, cwd, provider: 'responses', baseUrl: 'http://127.0.0.1:1', model: 'fixture', apiKey: '', apiKeyEnv: 'ICY_TEST_KEY', permissions: 'workspace-edit', promptCompaction: 'off', compactionMinChars: 200, maxModelTurns: 20, maxToolCalls: 50, maxTokens: 100_000, maxContextChars: 120_000, requestTimeoutMs: 1000 };
-  const store = await SessionStore.create(home, config, [], {
+  const store = await SessionStore.create(home, config, options.secrets ?? [], {
     platform: options.platform === 'win32' ? undefined : options.platform, processPlatform: options.platform, shellPath: options.shellPath, processSpawn: options.processSpawn, processKill: options.processKill,
     processIdentity: options.processIdentity, processExecFile: options.processExecFile, processAlive: options.processAlive, processOutputLimit: options.processOutputLimit,
-    processAppendFile: options.processAppendFile,
+    processLogWriter: options.processLogWriter, processLogReader: options.processLogReader,
   });
   const approvals: unknown[] = [], tools = new ToolRegistry(config, store, async request => { approvals.push(request); return 'once'; });
   const call = (id: string, name: string, args: unknown, signal = new AbortController().signal) => tools.execute({ id, name, arguments: JSON.stringify(args) }, signal);
@@ -45,6 +45,11 @@ function fakeChild(pid = 4242): ChildProcess {
   const child = new EventEmitter() as unknown as ChildProcess;
   Object.assign(child, { pid, exitCode: null, signalCode: null, stdout: null, stderr: null });
   return child;
+}
+function outputChild(pid = 4242) {
+  const child = fakeChild(pid), stdout = new EventEmitter(), stderr = new EventEmitter();
+  Object.assign(child, { stdout, stderr });
+  return { child, stdout, stderr };
 }
 
 const bashArgs = (command: string, extra: Record<string, unknown> = {}) => ({ command, cwd: null, timeoutMs: null, detach: false, kill: null, ...extra });
@@ -92,11 +97,25 @@ test('foreground timeout above 60 seconds is rejected before approval', async ()
   } finally { await f.cleanup(); }
 });
 
+test('foreground and detached streams preserve split UTF-8 characters without replacement', { skip: !posix && skipWindows }, async () => {
+  const f = await fixture();
+  try {
+    const foreground = await runBash(nodeCommand('process.stdout.write("中".repeat(72_000));'), f.cwd, 60_000, new AbortController().signal);
+    assert.equal(foreground.ok, true); assert.equal((foreground.content.match(/�/g) ?? []).length, 0); assert.equal((foreground.content.match(/中/g) ?? []).length, 72_000);
+    const detached = await f.call('detached-cjk-emoji', 'bash', bashArgs(nodeCommand('process.stdout.write("中".repeat(250_000) + "😀".repeat(200_000));'), { detach: true }));
+    const id = detached.content.match(/icy-process:([0-9a-f-]+)/)![1];
+    await f.store.getProcessManager().status(id, { waitMs: 10_000 });
+    const log = await readFile(path.join(f.store.dir, 'processes', `${id}.log`), 'utf8');
+    assert.equal((log.match(/�/g) ?? []).length, 0); assert.equal(log, '中'.repeat(250_000) + '😀'.repeat(200_000));
+  } finally { await f.cleanup(); }
+});
+
 test('detached output is persisted and paged by Unicode characters', { skip: !posix && skipWindows }, async () => {
   const f = await fixture();
   try {
     const result = await f.call('detached', 'bash', bashArgs(nodeCommand('process.stdout.write("中🙂猫😀");'), { detach: true }));
-    assert.equal(result.ok, true); const reference = result.content.match(/icy-process:[0-9a-f-]+/)![0];
+    assert.equal(result.ok, true); const reference = result.content.match(/icy-process:[0-9a-f-]+/)![0], id = reference.slice('icy-process:'.length);
+    await f.store.getProcessManager().status(id, { waitMs: 10_000 });
     const first = await f.call('read-1', 'read', { path: reference, offset: 1, limit: 2, depth: null, pattern: null, regex: null });
     assert.equal(first.ok, true); assert.match(first.content, /中🙂/); assert.match(first.content, /offset=3/);
     const second = await f.call('read-2', 'read', { path: reference, offset: 3, limit: 6000, depth: null, pattern: null, regex: null });
@@ -106,40 +125,88 @@ test('detached output is persisted and paged by Unicode characters', { skip: !po
   } finally { await f.cleanup(); }
 });
 
+test('readOutput paging matches the old code-point reference at sparse-index boundaries', async () => {
+  const f = await fixture();
+  try {
+    const id = '12121212-1212-4121-8121-121212121212', text = 'a中🙂😀'.repeat(250_000), bytes = Buffer.byteLength(text);
+    await mkdir(path.join(f.store.dir, 'processes'), { recursive: true }); await writeFile(path.join(f.store.dir, 'processes', `${id}.log`), text);
+    f.store.data.processes.push({ id, toolCallId: 'paging', command: 'fixture', cwd: f.cwd, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), timeoutMs: 1000, status: 'exited', exitCode: 0, bytes });
+    const chars = Array.from(text), reference = (offset: number, limit: number | null) => {
+      const start = offset - 1, size = Math.min(limit ?? 6000, 6000), end = Math.min(chars.length, start + size);
+      if (start < 0 || start > chars.length) throw new Error('offset_out_of_range');
+      return { text: chars.slice(start, end).join(''), end, total: chars.length, truncated: end < chars.length };
+    };
+    const offsets = [1, 65_536, 65_537, Math.floor(chars.length / 2), chars.length - 10, chars.length + 1];
+    for (const offset of offsets) for (const limit of [1, 17, 6000, 9000]) assert.deepEqual(await f.store.getProcessManager().readOutput(id, offset, limit), reference(offset, limit));
+    await assert.rejects(f.store.getProcessManager().readOutput(id, chars.length + 2, 10), { message: 'offset_out_of_range' });
+  } finally { await f.cleanup(); }
+});
+
+test('readOutput uses bounded range reads after indexing and caches restart indexes', async () => {
+  let bytesRead = 0, readerCalls = 0;
+  const reader = async (file: string, offset: number, length: number) => {
+    readerCalls++;
+    const handle = await openFile(file, 'r');
+    try { const buffer = Buffer.alloc(length), result = await handle.read(buffer, 0, length, offset); bytesRead += result.bytesRead; return buffer.subarray(0, result.bytesRead); }
+    finally { await handle.close(); }
+  };
+  const f = await fixture({ processLogReader: reader }); let restored: SessionStore | undefined;
+  try {
+    const id = '34343434-3434-4343-8434-343434343434', text = 'a中🙂😀'.repeat(1_400_000), bytes = Buffer.byteLength(text);
+    await mkdir(path.join(f.store.dir, 'processes'), { recursive: true }); await writeFile(path.join(f.store.dir, 'processes', `${id}.log`), text);
+    f.store.data.processes.push({ id, toolCallId: 'bounded', command: 'fixture', cwd: f.cwd, startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), timeoutMs: 1000, status: 'exited', exitCode: 0, bytes });
+    const total = Array.from(text).length, manager = f.store.getProcessManager();
+    await manager.readOutput(id, total - 10, 10); assert.ok(readerCalls > 0); readerCalls = 0; bytesRead = 0; await manager.readOutput(id, total - 20, 10); assert.ok(bytesRead <= 1.5 * 1024 * 1024, `${bytesRead} bytes read after cached index`);
+    await f.store.save(); await f.store.close(); restored = (await SessionStore.resume(f.home, f.store.data.id, [], { processReadRange: reader })).store;
+    await restored.getProcessManager().readOutput(id, total - 10, 10); assert.ok(readerCalls > 0); readerCalls = 0; bytesRead = 0; await restored.getProcessManager().readOutput(id, total - 20, 10); assert.ok(bytesRead <= 1.5 * 1024 * 1024, `${bytesRead} bytes read after restart index`);
+  } finally { await restored?.close(); await f.store.close(); await f.cleanup(); }
+});
+
 test('detached output is capped at the configured limit and the process is terminated', { skip: !posix && skipWindows }, async () => {
   const outputLimit = 256 * 1024, f = await fixture({ processOutputLimit: outputLimit });
   try {
-    const result = await f.call('cap', 'bash', bashArgs(nodeCommand('process.stdout.write("a".repeat(300 * 1024));'), { detach: true }));
+    const result = await f.call('cap', 'bash', bashArgs(nodeCommand('process.stdout.write("中".repeat(100 * 1024));'), { detach: true }));
     assert.equal(result.ok, true); const id = result.content.match(/icy-process:([0-9a-f-]+)/)![1];
     const record = await f.store.getProcessManager().status(id, { waitMs: 10_000 });
-    assert.equal(record.status, 'output_limit'); assert.equal(record.truncated, true); assert.equal(record.bytes, outputLimit);
-    const log = await readFile(path.join(f.store.dir, 'processes', `${id}.log`)); assert.equal(log.byteLength, outputLimit);
+    assert.equal(record.status, 'output_limit'); assert.equal(record.truncated, true); assert.ok(record.bytes <= outputLimit); assert.ok(record.bytes >= outputLimit - 3);
+    const log = await readFile(path.join(f.store.dir, 'processes', `${id}.log`)); assert.equal(log.byteLength, record.bytes); assert.doesNotMatch(log.toString(), /�/);
   } finally { await f.cleanup(); }
 });
 
 test('terminal status waits for a delayed process log drain', { skip: !posix && skipWindows }, async () => {
   const outputLimit = 256 * 1024;
-  let appendCalls = 0, resolveSecondAppend!: () => void;
-  const secondAppendStarted = new Promise<void>(resolve => { resolveSecondAppend = resolve; });
+  let factoryCalls = 0, writeCalls = 0, endCalled = false, resolveSecondWrite!: () => void, resolveEndStarted!: () => void;
+  const secondWriteStarted = new Promise<void>(resolve => { resolveSecondWrite = resolve; });
+  const endStarted = new Promise<void>(resolve => { resolveEndStarted = resolve; });
   const f = await fixture({
     processOutputLimit: outputLimit,
-    processAppendFile: async (file, data) => {
-      appendCalls++;
-      if (appendCalls === 2) {
-        resolveSecondAppend();
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-      return appendFile(file, data);
+    processLogWriter: file => {
+      factoryCalls++;
+      return {
+        write: async data => {
+          writeCalls++;
+          if (writeCalls === 2) {
+            resolveSecondWrite();
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+          await appendFile(file, data);
+        },
+        end: async () => { resolveEndStarted(); await new Promise(resolve => setTimeout(resolve, 100)); endCalled = true; },
+      };
     },
   });
   try {
     const result = await f.call('cap-drain-race', 'bash', bashArgs(nodeCommand('process.stdout.write("a".repeat(300 * 1024));'), { detach: true }));
     const id = result.content.match(/icy-process:([0-9a-f-]+)/)![1];
-    await secondAppendStarted;
+    await secondWriteStarted;
     const record = f.store.data.processes[0];
     while (record.status === 'running') await new Promise<void>(resolve => setImmediate(resolve));
-    const terminal = await f.store.getProcessManager().status(id);
-    assert.equal(terminal.status, 'output_limit'); assert.equal(terminal.bytes, outputLimit); assert.ok(appendCalls >= 2);
+    const terminalPending = f.store.getProcessManager().status(id);
+    await endStarted; let statusResolved = false;
+    void terminalPending.then(() => { statusResolved = true; });
+    await new Promise(resolve => setTimeout(resolve, 20)); assert.equal(statusResolved, false);
+    const terminal = await terminalPending;
+    assert.equal(terminal.status, 'output_limit'); assert.equal(terminal.bytes, outputLimit); assert.equal(factoryCalls, 1); assert.ok(writeCalls >= 2); assert.equal(endCalled, true);
     const expected = 'a'.repeat(outputLimit);
     const log = await readFile(path.join(f.store.dir, 'processes', `${id}.log`)); assert.equal(log.toString(), expected);
     let offset = 1, output = '';
@@ -150,6 +217,93 @@ test('terminal status waits for a delayed process log drain', { skip: !posix && 
       offset = page.end + 1;
     }
     assert.equal(output, expected);
+  } finally { await f.cleanup(); }
+});
+
+test('detached redaction spans decoder chunks for secrets and sk tokens', async () => {
+  const { child, stdout, stderr } = outputChild(4401);
+  const processSpawn = (() => {
+    setImmediate(() => {
+      stdout.emit('data', Buffer.from('store-'));
+      stdout.emit('data', Buffer.from('secret sk-1234'));
+      stdout.emit('data', Buffer.from('567890123456')); stdout.emit('end'); stdout.emit('close');
+      stderr.emit('end'); stderr.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake', secrets: ['store-secret'] });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'chunk-redaction', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    const log = await readFile(path.join(f.store.dir, 'processes', `${record.id}.log`), 'utf8');
+    assert.match(log, /\[REDACTED\]/); assert.doesNotMatch(log, /store-secret|sk-1234567890123456/);
+  } finally { await f.cleanup(); }
+});
+
+test('detached stderr prefixes complete lines rather than chunks', async () => {
+  const { child, stdout, stderr } = outputChild(4402);
+  const processSpawn = (() => {
+    setImmediate(() => {
+      stderr.emit('data', Buffer.from('a\nb')); stderr.emit('data', Buffer.from('c\n')); stderr.emit('end'); stderr.emit('close');
+      stdout.emit('end'); stdout.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake' });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'stderr-lines', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    const log = await readFile(path.join(f.store.dir, 'processes', `${record.id}.log`), 'utf8');
+    assert.equal(log, '[stderr] a\n[stderr] bc\n');
+  } finally { await f.cleanup(); }
+});
+
+test('detached burst coalesces a million short lines without changing log bytes', async () => {
+  const { child, stdout, stderr } = outputChild(4403), expected = 'x\n'.repeat(1_000_000), chunks: Buffer[] = [];
+  let writeCalls = 0;
+  const processSpawn = (() => {
+    setImmediate(() => {
+      stdout.emit('data', Buffer.from(expected)); stdout.emit('end'); stdout.emit('close');
+      stderr.emit('end'); stderr.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const writer = async () => ({
+    write: async (data: Uint8Array) => { writeCalls++; chunks.push(Buffer.from(data)); await new Promise<void>(resolve => setImmediate(resolve)); },
+    end: async () => {},
+  });
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake', processLogWriter: writer });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'burst-coalesce', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    assert.ok(writeCalls <= 2_000, `writer calls: ${writeCalls}`);
+    assert.equal(Buffer.concat(chunks).toString(), expected);
+  } finally { await f.cleanup(); }
+});
+
+test('detached coalesced writes preserve interleaved stdout and stderr enqueue order', async () => {
+  const { child, stdout, stderr } = outputChild(4404), chunks: Buffer[] = [];
+  let writeCalls = 0;
+  const processSpawn = (() => {
+    setImmediate(() => {
+      stdout.emit('data', Buffer.from('out-1\nout-2\n'));
+      stderr.emit('data', Buffer.from('err-1\n'));
+      stdout.emit('data', Buffer.from('out-3\n'));
+      stderr.emit('data', Buffer.from('err-2\n'));
+      stdout.emit('end'); stdout.emit('close'); stderr.emit('end'); stderr.emit('close'); child.emit('close', 0, null);
+    }); return child;
+  }) as unknown as typeof spawn;
+  const writer = async () => ({
+    write: async (data: Uint8Array) => { writeCalls++; chunks.push(Buffer.from(data)); await new Promise<void>(resolve => setTimeout(resolve, 20)); },
+    end: async () => {},
+  });
+  const fakePlatform = process.platform === 'win32' ? 'win32' : process.platform;
+  const f = await fixture({ platform: fakePlatform, shellPath: fakePlatform === 'win32' ? 'C:\\Git\\bin\\bash.exe' : '/bin/bash', processSpawn, processIdentity: () => 'fake', processLogWriter: writer });
+  try {
+    const record = await f.store.getProcessManager().start({ toolCallId: 'interleaved-coalesce', command: 'fake', cwd: f.cwd, timeoutMs: 10_000 });
+    await f.store.getProcessManager().status(record.id, { waitMs: 10_000 });
+    assert.ok(writeCalls < 5);
+    assert.equal(Buffer.concat(chunks).toString(), 'out-1\nout-2\n[stderr] err-1\nout-3\n[stderr] err-2\n');
   } finally { await f.cleanup(); }
 });
 
