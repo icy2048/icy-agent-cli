@@ -1,8 +1,8 @@
 # 原计划逐项验收核对
 
-核对日期：2026-09-28。范围来自 [原迭代计划](iteration-plan.md) 的三个核心迭代、模块边界和硬门禁，以及 [四项缺口](gap-closure.md)。原计划最后列出的长命令、MCP、多 Agent 仍是后续队列，不是本轮交付；只读仓库探索、模型能力诊断与会话过滤已由第四轮迭代交付（会话过滤按规格实现，评测候选 patch 未合入），逐项见下方新增行及[第四轮记录](gap-closure.md)。六个实施单元合并在同一个工作分支和 PR 中，没有发布版本、合并 PR 或创建发布 tag。
+核对日期：2026-09-29。范围来自 [原迭代计划](iteration-plan.md) 的三个核心迭代、模块边界和硬门禁，以及 [四项缺口](gap-closure.md)。原计划最后列出的长命令、MCP、多 Agent 仍是后续队列，不是本轮交付；只读仓库探索、模型能力诊断与会话过滤已由第四轮迭代交付（会话过滤按规格实现，评测候选 patch 未合入），逐项见下方新增行及[第四轮记录](gap-closure.md)。原计划的六个实施单元（PR 1–6）在 `codex/reliable-long-runs` 分支交付，已于 `f46d68b` 合并到 main；没有发布版本或创建发布 tag。第六轮的 A–F 另见文末“第六轮迭代：A–F 验收核对”，在 `codex/iteration-6` 分支完成，分支尚未推送、本轮 CI 尚未运行、尚未合并。
 
-以下“通过”对应实现行为和所列检查，不把模型文字收尾当作验收，也不把有限任务样本当作通用成功率。长任务最终续跑运行时为 `ad9871e`；随后 `a5dc186` 增加用户明确启用的私有 IPv4 HTTP 及无工具 Chat Completions 兼容。正确配置 vLLM 的完整评测来源为 `961231e`，两种模型名和实际预处理状态均保存。
+以下“通过”对应实现行为和所列检查，不把模型文字收尾当作验收，也不把有限任务样本当作通用成功率。长任务最终续跑运行时为 `ad9871e`；随后 `a5dc186` 增加用户明确启用的私有 IPv4 HTTP 及无工具 Chat Completions 兼容。正确配置 vLLM 的完整评测来源为 `961231e`，两种模型名和实际预处理状态均保存。第六轮 A–F 的实现、证据和限制见下方新增表；本轮分支尚未推送，CI 尚未运行，版本仍为 `0.1.0`。
 
 | 原计划要求 | 已核对的实现与证据 | 结论 |
 | --- | --- | --- |
@@ -31,7 +31,18 @@
 | 后续队列：只读仓库探索 | `5f0f9f8` 让 `read` 以 `depth`/`pattern`/`regex` 免审批列举与搜索，上限 500 项 / 200 匹配 / 2,000 文件 / 1 MB / 10 秒；`3b4d301` 加正则 `node:vm` 隔离、有界行走与提示对齐；`tests/explore.test.ts` 覆盖边界、敏感与符号链接跳过、VM 超时、分页与严格 schema；探索调用与拒绝记录见[批次 A](evaluations/repeated-tasks-iter4-explore.json)、[批次 B](evaluations/repeated-tasks-iter4-explore-tuned.json)与[汇总](evaluations/repeated-tasks-iter4-summary.json) | 通过；批次 B 45 次全部免审批完成探索且检查为空；小样本不证明一般可靠性，CI 未运行 |
 | 后续队列：模型能力诊断 | `58e5a17` 在 `/model` 增加探针：文本请求 + `icy_probe` 诊断调用 + 工具结果续接，按 auth/connect/protocol/model/text/tool_call/tool_result 分级，不执行主机工具；`tests/model-probe.test.ts` 覆盖双协议各失败分类、探针工具白名单与向导界面；第四轮评测批次运行于含该功能的提交（[汇总](evaluations/repeated-tasks-iter4-summary.json)） | 通过；已配置 vLLM 实测完整通过 2.2 秒、错误模型名归入模型不存在；该服务接受任意 API key，认证失败分支只有回归证据 |
 | 后续队列：会话过滤 | `73c4b14` 按规格实现 `icy sessions --status/--cwd` 与 `/sessions status=... cwd=...`：九种状态、非法状态退出 2、列举只读；早前评测候选 patch 未被采用；`tests/session-list.test.ts`、`tests/cli-resume.test.ts`、`tests/ui-task.test.ts` 覆盖状态枚举、嵌套工作区、非法值与界面；第四轮评测见[批次 B](evaluations/repeated-tasks-iter4-explore-tuned.json) | 通过；行为以规格与回归为准，没有针对该功能的真实模型批次；CI 未运行 |
-| 后续队列：长命令支持 | `src/tools/processes.ts`、Workbench `/ps`/`/kill`、统一 transcript 投影、CLI process 事件和正常退出清理；`tests/processes.test.ts`、`tests/ui-processes.test.ts`、`tests/cli.test.ts` 覆盖生命周期、恢复未知、验收证据、审批、NDJSON 与子进程终止 | 测试在本地通过；`ec21645` 的[三平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36509915094) 通过（macOS/Linux 343 项，Windows 321 项通过、22 项 POSIX 专属跳过）；无真实模型批次；Windows 实机未验收 |
+| 后续队列：长命令支持 | `src/tools/processes.ts`、Workbench `/ps`/`/kill`、统一 transcript 投影、CLI process 事件和正常退出清理；`tests/processes-*.test.ts`、`tests/ui-processes.test.ts`、`tests/cli.test.ts` 覆盖生命周期、恢复未知、验收证据、审批、NDJSON 与子进程终止 | 测试在本地通过；`ec21645` 的[三平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36509915094) 通过（macOS/Linux 343 项，Windows 321 项通过、22 项 POSIX 专属跳过）；无真实模型批次；Windows 实机未验收 |
+
+## 第六轮迭代：A–F 验收核对
+
+| 单元 | 实现 | 证据 | 结论 |
+| --- | --- | --- | --- |
+| A | `SessionStore` 统一串行合并保存；进程回调只通知；提交 `122afd1`，合并提交 `4c82862` | `tests/session-writer.test.ts`；R1 从同尺寸并发 `30/3000`、大快照与 `/clear` `200/200` 留下旧快照，变为 `0/3000`、`0/200` | 通过；本地门禁通过，未以 CI 代替验证 |
+| B | spawn 后先持久化进程记录，再补写 identity；POSIX identity 固定 C locale/UTC；提交 `0cab76b` | `tests/processes-recovery.test.ts`；R2 从磁盘 `0` 条记录变为恢复可见的 running/pid 记录，恢复显示 unknown、identity_unconfirmed、`pidAlive=true`；R6 的三种 LANG/TZ 组合由三个不同令牌变为同一令牌 | 通过；无 token 记录 fail closed，仍不向其发信号 |
+| C | stdout/stderr 流式 UTF-8 解码、逐行脱敏和统一写流；索引分页；提交 `5c991ec`，审查跟进 `d13cf87` | `tests/processes-output.test.ts` 与 `tests/runtime.test.ts`；R5 的前台 `45` 个、后台 `732` 个 U+FFFD 变为 `0/0`；R8 约 `11,000` 次追加变约 `1,300` 次；R9 单页 `115–173 ms`、约 `168 MB` 堆增变为 `3–29 ms`、约 `7–10 MB` | 通过；无空白超长敏感值在强制刷新边界仍有文档限制 |
+| D | `/verify` 先重探测并拒绝运行中或未知但存活的进程；加固文件读、新文件独占创建和 provider 流解析；提交 `211edb8`，合并提交 `bf35d0f`，审查跟进 `bbdcd17` | `tests/review-regressions.test.ts`、`tests/windows-paths.test.ts`、`tests/processes-recovery.test.ts`、provider 回归；V1 的不可靠验收路径被拒绝；R4 `47/5000` 越界读取变为 `0/5000`；R3 改为 hard link 后 `wx`，并发创建返回 `file_changed`；R7 的 `readread` 变为 `read` | 通过；目录列举和搜索仍保留文档化竞态，Windows 实机未验收 |
+| E | 进程测试按文件并行隔离、超时使用可注入时钟、npm 包排除 `docs/evaluations`、CI 加路径过滤；提交 `5092d16` | `tests/processes-*.test.ts`；`npm test` 三次为 `21.5–23.0 s`，最慢进程测试文件 `3.8 s`；试打包从 `154` 文件/`7.8 MB`（其中评测记录 `6.8 MB`）变为 `101` 文件/`0.76 MB`；本轮 CI 尚未运行 | 本地门禁通过；不能把本地结果表述为三平台 CI 通过 |
+| F | 评测夹具加入必须使用 `detach` 的 `detached-service` 任务；提交 `a1ea25e`，合并提交 `9441245` | `tests/evaluate-detach.test.ts` 自测通过；[15 次 live 记录](evaluations/repeated-tasks-iter6-detach.json)为 off/local/model 各 `5/5`，首次 detached 启动各 `5/5`，轮询 `3/6/7` 次，kill `5/5/7` 次 | 通过夹具目标；这是一个本地模型、一个合成夹具的 `15` 次描述性样本，不是可靠性结论 |
 
 ## 可复现场景索引
 

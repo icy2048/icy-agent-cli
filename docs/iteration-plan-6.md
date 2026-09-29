@@ -42,9 +42,11 @@ UI 审查引用的画面均能在原始录屏中找到，逐条对照源码成�
 
 ## 3. 交付顺序
 
-### 迭代六：数据完整性与进程可靠性（v0.2.0 候选）
+### 迭代六：数据完整性与进程可靠性（已交付；版本仍为 0.1.0）
 
 目标：会话快照只有一个写者；后台进程从启动起可恢复且身份稳定；命令输出不再乱码；`npm test` 回到 25 秒以内。
+
+本轮 A–F 及整合跟进已在分支 `codex/iteration-6` 交付：单元 0 为 `e8d6a8a`；A 为 `122afd1`、合并提交 `4c82862`；B 为 `0cab76b`；C 为 `5c991ec`；D 为 `211edb8`、合并提交 `bf35d0f`；E 为 `5092d16`；F 为 `a1ea25e`、合并提交 `9441245`。独立审查后的跟进为 `bbdcd17`、`d13cf87`。这里的“交付”指实现和本地门禁已完成，不表示本轮 CI、推送、合并或发布已完成。
 
 分支 `codex/iteration-6`。实现交给 gpt-5.6-luna；每个单元合入后本机跑类型检查、全量测试、构建、安装包和 PTY 门禁；整合后由 grok-4.6 独立审查。
 
@@ -52,15 +54,15 @@ UI 审查引用的画面均能在原始录屏中找到，逐条对照源码成�
 | --- | --- | --- | --- |
 | 0 | 补回缺失的录屏；按复现结果更新本计划 | `docs/evaluations/ui-tour-demo-transcript.txt`、本文 | 文档链接全部可解析 |
 | A | 所有快照写入走 `SessionStore` 内一个串行合并队列；进程管理器去掉自带保存队列；进程回调只通知，不再自己保存 | `src/sessions/store.ts`、`src/tools/processes.ts`、`src/core/agent.ts`、新增 `tests/session-writer.test.ts` | R1 两个场景成为回归，旧快照落盘为 0；一次保存失败后下一次保存仍成功 |
-| B | 进程记录在 spawn 后立即落盘，identity 随后补写；POSIX 固定以 `LC_ALL=C`、`TZ=UTC` 捕获 | `src/tools/processes.ts`、`tests/processes.test.ts` | R2 崩溃场景：恢复后记录可见、状态未知、pid 存活；不同 LANG 与 TZ 下令牌一致 |
-| C | 前台与后台输出改为流式 UTF-8 解码并按行脱敏；每个进程一个写入流；日志翻页只读所需范围 | `src/tools/bash.ts`、`src/tools/processes.ts`、`tests/processes.test.ts`、`tests/runtime.test.ts` | 中文输出 0 处替换字符；跨块密钥被脱敏；翻页读取字节数有上限 |
+| B | 进程记录在 spawn 后立即落盘，identity 随后补写；POSIX 固定以 `LC_ALL=C`、`TZ=UTC` 捕获 | `src/tools/processes.ts`、`tests/processes-*.test.ts` | R2 崩溃场景：恢复后记录可见、状态未知、pid 存活；不同 LANG 与 TZ 下令牌一致 |
+| C | 前台与后台输出改为流式 UTF-8 解码并按行脱敏；每个进程一个写入流；日志翻页只读所需范围 | `src/tools/bash.ts`、`src/tools/processes.ts`、`tests/processes-*.test.ts`、`tests/runtime.test.ts` | 中文输出 0 处替换字符；跨块密钥被脱敏；翻页读取字节数有上限 |
 | D | 有运行中或存活未知的后台进程时拒绝 `/verify`；重复工具名不再拼接；Responses 只认第一个终止事件；敏感名补 `.envrc`、`id_ecdsa`、`id_dsa`，忽略名不分大小写；Windows 新建文件不再覆盖；读取时中间路径缺失即拒绝并在读后复核 | `src/core/agent.ts`、`src/providers/model.ts`、`src/tools/paths.ts`、`src/tools/explore.ts`、`src/tools/executor.ts` 及对应测试 | V1、R7、R3 各一个回归；注入"检查后换成符号链接"时读取必须拒绝 |
-| E | 看门狗与 identity 超时改用可注入时钟；相互独立的进程测试并发执行；删去对内部 `Map` 与 `hasRef()` 的断言；npm 包排除 `docs/evaluations`；CI 跳过只改评测记录的提交 | `tests/processes.test.ts`、`src/tools/processes.ts`、`package.json`、`.github/workflows/ci.yml` | `npm test` ≤ 25 秒，`processes.test.ts` ≤ 10 秒；试打包不含评测记录 |
+| E | 看门狗与 identity 超时改用可注入时钟；相互独立的进程测试并发执行；删去对内部 `Map` 与 `hasRef()` 的断言；npm 包排除 `docs/evaluations`；CI 跳过只改评测记录的提交 | `tests/processes-*.test.ts`、`src/tools/processes.ts`、`package.json`、`.github/workflows/ci.yml` | `npm test` ≤ 25 秒，最慢进程测试文件 ≤ 10 秒；试打包不含评测记录 |
 | F | 任务评测夹具加入一个必须使用 `detach` 才能完成的任务，三种模式各 5 次 | `scripts/evaluate-tasks.ts`、`docs/evaluations` 新记录 | 记录 detach 使用率、轮询次数、kill 与审批次数；样本小，不作可靠性结论 |
 
 执行顺序：单元 0 由编排方完成；A 与 D 在两个独立 worktree 并行；B、C、E 都修改进程管理器，在 A 之后依次执行；整合审查的阻塞项关闭后运行 F（调用本机配置的 vLLM 服务）。合并到 main、推送触发 CI、升级到 0.2.0 需用户单独确认。
 
-### 迭代七：终端交互修正（v0.2.x）
+### 迭代七：终端交互修正（计划，v0.2.x）
 
 目标：用户在每个关键时刻都知道发生了什么、能做什么；不再有英文机器码直接面对用户。
 
@@ -72,7 +74,7 @@ UI 审查引用的画面均能在原始录屏中找到，逐条对照源码成�
 
 验收：[UI 审查](evaluations/ui-review-2026-09-29.md)第 6 节列出的未覆盖场景逐项进入 `tests/ui-*.test.ts` 与 `scripts/pty-smoke.py`；每个交互改动附真实 PTY 录屏。
 
-### 迭代八：可扩展的工具表与界面拆分（为 MCP 做准备）
+### 迭代八：可扩展的工具表与界面拆分（计划，为 MCP 做准备）
 
 前提：迭代六单元 A 完成。单一写者是 MCP 与多 Agent 的共同前置。
 
@@ -91,7 +93,7 @@ UI 审查引用的画面均能在原始录屏中找到，逐条对照源码成�
 
 - 每个单元沿用现有门禁：锁文件安装、类型检查、全量测试、构建、安装包 smoke、POSIX PTY smoke；整合后三平台 CI；合并前独立审查，阻塞项关闭后再合并。
 - 修复必须先有能失败的复现测试，再有修复；不能只改代码。
-- 迭代六结束时 `npm test` 回到 25 秒以内（当前 53 秒）；单元 F 的结果与[第四轮批次 B](evaluations/repeated-tasks-iter4-summary.json)分开报告，不宣称改进。
+- 迭代六已将 `npm test` 从基线 `53` 秒降至三次实测 `21.5–23.0` 秒；单元 F 的结果与[第四轮批次 B](evaluations/repeated-tasks-iter4-summary.json)分开报告，不宣称改进。
 - 版本：迭代六合并并通过评测后，经用户确认一次性升到 0.2.0。
 
 ## 5. 明确不做的事
