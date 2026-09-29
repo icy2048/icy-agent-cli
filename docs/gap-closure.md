@@ -215,3 +215,48 @@ usage 合计包含预处理及本地估算。部分运行只有估算总数，�
 诚实边界：detached 进程不提供操作系统沙箱，没有 per-process 资源限制，不支持交互输入，也不自动重启；detached 子进程会继承写入 icy 的管道，如果 icy 自身崩溃（不是正常退出），继续写输出的子进程会收到 EPIPE/SIGPIPE 并通常退出，崩溃后的尾部输出会丢失；恢复只观察 PID 身份，不接管旧进程。Windows CI 状态为“尚未运行”，Windows 真机状态为“尚未进行”，分支已推送，`ec21645` 的[三平台 CI](https://github.com/icy2048/icy-agent-cli/actions/runs/36509915094) 全部通过：macOS/Linux 各 343 项、0 跳过；Windows 321 项通过、22 项跳过（4 项既有 POSIX 专属用例加 18 项依赖 POSIX 进程组/`ps` 的后台进程用例，Windows `taskkill`/`tasklist` 路径只有注入 spawn 的单元覆盖）。未升版本、未提交发布或 PR。
 
 审查与修复过程：首版由 gpt-5.6-luna 分两个单元实现（工具／进程／持久化层，UI／CLI／文档），编排方拒绝了其中一处越界改动——非交互模式对 detached 请求自动授权——并恢复为"未批准的 bash 一律退出 2"。grok-4.6 的第一轮独立审查给出 4 项阻塞（恢复后 PID 复用误杀、`closeAll` 漏掉 `unknown` 进程且超时不续、持久化失败毒化保存队列、`unknown` 存活进程不阻止验收）与 6 项其他问题；修复后的第二轮审查确认 R1–R4、R7、R9、R10 关闭，另指出 Windows `taskkill` 非零退出中断终止流程、identity 误判把存活进程标为 `pidAlive=false`、看门狗一次性失效、identity 捕获无超时、交互退出失败仍返回 0 等缺陷，均已修复并各自加回归。实现方一次声称"测试已补齐"而实际未写，编排方按测试数核对后另行补齐。本机最终门禁：类型检查、343 项测试（连续三次全部通过）、构建、安装包 smoke、POSIX PTY smoke 全部通过；管道导致 icy 崩溃后子进程 SIGPIPE 的问题有意不改架构，记录为边界。
+
+## 2026-09-29：第六轮迭代：单一写者、进程可靠性与输出管道
+
+本轮在 `codex/iteration-6` 完成 A–F：会话快照改为单一串行写者，后台进程先持久化再捕获 identity，前台与后台输出统一处理 UTF-8 流和行级脱敏，文件读取与新文件创建增加并发防护，`/verify` 对仍可能改动工作区的后台进程 fail closed，进程测试和 npm 包边界收紧，并加入必须使用 `detach` 的 live 评测夹具。以下数字来自编排方在 macOS、Node 22.15 上的复现和门禁记录；没有把本地结果写成三平台 CI 结果。
+
+| 编号 | 修复前 | 修复后 | 单元 |
+| --- | --- | --- | --- |
+| R1 | 同尺寸并发保存 `3000` 次有 `30` 次留下旧快照；大快照与 `/clear` 竞争 `200` 次有 `200` 次撤销清空 | 分别为 `0/3000`、`0/200` | A |
+| R2 | identity 捕获期间宿主被 SIGKILL 后，子进程存活但磁盘为 `0` 条记录；恢复不可见，`/kill` 为 `process_not_found` | 崩溃前已有 running/pid 记录；恢复显示 `unknown`、`identity_unconfirmed`、`pidAlive=true`，icy 不向其发信号，用户可在 `/ps` 看到 pid | B，审查跟进 |
+| R3 | Windows 先 stat 后 rename 的竞争会覆盖并发创建的文件 | 所有平台先 hard link，失败后用独占 `wx`；并发文件保留并返回 `file_changed` | D |
+| R4 | 并发换链接的 `5000` 次读取中有 `47` 次读到工作区外内容 | `0/5000`；要求路径组件存在、可用时 `O_NOFOLLOW`，并在读取后复核路径和文件身份 | D，审查跟进 |
+| R5 | 前台 `216,000` 字节中文输出有 `45` 个 U+FFFD；后台 `3.6 MB` 日志有 `732` 个 | 均为 `0` | C |
+| R6 | zh_CN、C、C+UTC 产生三个不同 identity token | `zh_CN+Asia/Shanghai`、`C+UTC`、`en_US+America/Los_Angeles` 三种组合产生相同 token；旧 token 仍可匹配 | B |
+| R7 | Chat Completions 重复发送完整工具名时解析为 `readread` | 解析为 `read`；Responses 只接受第一个终止事件 | D |
+| R8 | `100,000` 行无缓冲输出约 `11,000` 次追加，排空 `0.56 s` | 约 `1,300` 次 writer 调用，与退出一起约 `0.1 s` 排空；`16 MiB` 突发约 `1,000` 次、约 `0.5 s` | C |
+| R9 | `16 MiB` 日志每页 `115–173 ms`，堆最多多占约 `168 MB` | 每页 `3–29 ms`，堆多占约 `7–10 MB` | C |
+| V1 | 后台进程在 `/verify` 中退出时，验收记录可能按当前修改版本计为证据 | `/verify` 先重探测；运行中或 `unknown` 且仍存活时拒绝 | D，审查跟进 |
+| T1 | `npm test` wall time `53 s`；`processes.test.ts` 单独 `47.6 s` | 三次 `npm test` 为 `21.5–23.0 s`；最慢的 `processes-*.test.ts` 文件为 `3.8 s` | E |
+| P1 | npm 包 `154` 个文件、解包 `7.8 MB`，其中 `docs/evaluations` 为 `6.8 MB` | `101` 个文件、`0.76 MB`，不含 `docs/evaluations`；CI 对只改该目录的 push 和 pull request 跳过 | E |
+
+每个单元的门禁均执行 `npm run check`、`npm test`、`npm run build`、`npm run test:package` 和 macOS `npm run test:pty`，全部通过；测试数从迭代前的 `344` 增至 `380`，`npm test` 结束后没有残留测试进程。进程测试现位于 `tests/processes-*.test.ts`，不是旧的单一 `tests/processes.test.ts`。
+
+### 审查结果
+
+grok-4.6 对 `main...codex/iteration-6` 的整合审查结论为 **fix-first**。阻塞项是：无 identity token 的五秒启动回退可能命中复用 PID 并被看门狗发信号；以及首次快照失败后子进程可能仍存活而未被跟踪。前者已移除，token-less 记录永不发信号；后者改为停止子进程并向调用方报告错误，停止未确认时保留 `running` 及 `persist_failed;kill_unconfirmed`。后续还修复了强制 64 KiB 刷新切断 surrogate pair、ELOOP 映射、inode 为 0 的元数据比较、目录写入/编辑错误、前台输出字符边界、失败日志写入计数，以及 `/verify` 重探测 liveness。
+
+审查中未采用“并行测试文件间 Timeout handle 断言会 flaky”的判断：`node --test` 为每个文件隔离进程。structuredClone/快照校验成本未作为问题测量；Chat `max_completion_tokens` 和 Responses include flags 属于此前审查留下的兼容性加固，不计入本轮。单元 E 的 delegate 在最终检查时触及 30 分钟 supervisor 超时，但工作已完成，验收测量由编排方执行；实现方加入的越界 `--test-concurrency=8` 已撤回。带该参数的一次失败无法归因，之后 `20` 次运行（其中 `8` 次带参数、`12` 次在加倍负载下不带参数）均通过。
+
+### Live detach 评测（单元 F）
+
+[原始记录](evaluations/repeated-tasks-iter6-detach.json)来源提交为 `d13cf87`；使用本机 vLLM 的 Chat Completions / `qwen3.8-27b`。夹具 `detached-service` 要求启动一个不退出的本地 HTTP server，运行 `node verify.cjs`，再停止 server；只有 detached 启动 `node server.cjs` 和前台 `node verify.cjs` 需要审批。每种模式 `5` 次，共 `15` 次；每次预算为 `100,000` tokens / `20` 轮 / `50` 工具调用，单次 `90 s`。
+
+| 模式 | 通过 | 首次 server 启动为 detached | detach 启动次数 | `icy-process` 轮询 | kill 调用 | 拒绝 | 输入 tokens | 输出 tokens | 总耗时 |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| off | `5/5` | `5/5` | 5 | 3 | 5 | 0 | 74,540 | 2,899 | 102.1 s |
+| local | `5/5` | `5/5` | 5 | 6 | 5 | 0 | 91,774 | 3,321 | 109.8 s |
+| model | `5/5` | `5/5` | 5 | 7 | 7 | 0 | 122,434 | 4,674 | 148.2 s |
+
+15 次中每次 server 都由模型停止（`killed` / `model_kill`）。model 多出的两次 kill 是先把命令写成 `kill icy-process:<id>` 而不是 `command="kill"` 的无效参数，随后已纠正。这支持迭代八把 kill 拆成独立动词/工具的计划，但不能据此宣称可靠性：样本只是一个本地模型、一个合成夹具的 `15` 次描述性观察。
+
+### 状态与剩余限制
+
+分支 `codex/iteration-6` 目前只在本地：尚未推送，本轮尚未运行 CI，未合并，版本仍为 `0.1.0`。Windows 的 taskkill/tasklist/PowerShell 仅有注入测试；`evaluate-detach` 在 Windows 跳过；没有 Windows 实机检查。
+
+剩余限制保持明确：目录列举和搜索仍有文档所述的符号链接竞态；spawn 到首次快照之间最初几毫秒若进程崩溃仍可能留下未跟踪进程；无 token 记录显示为未确认且永不发信号；无空白且超过 `8 KiB` 的敏感值在强制刷新时仍可能被切开；inode 为 0 的文件系统使用元数据比较；模型使用 `bash command="kill"` 的参数形状仍容易出错。

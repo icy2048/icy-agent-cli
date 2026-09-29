@@ -9,7 +9,7 @@
   "files": [
     "dist",
     "README.md",
-    "docs"
+    "docs/*.md"
   ],
   "engines": {
     "node": ">=22"

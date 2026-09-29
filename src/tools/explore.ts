@@ -31,7 +31,7 @@ function posixPath(value: string): string {
 
 function ignored(relativePath: string): boolean {
   const parts = relativePath.split(path.sep).filter(Boolean);
-  return sensitive(relativePath) || parts.some(part => IGNORED_NAMES.has(part));
+  return sensitive(relativePath) || parts.some(part => IGNORED_NAMES.has(part.toLowerCase()));
 }
 
 async function entriesIn(directory: string, root: string, signal?: AbortSignal): Promise<Entry[]> {

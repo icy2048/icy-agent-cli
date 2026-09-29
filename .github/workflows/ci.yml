@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    paths-ignore: ['docs/evaluations/**']
   pull_request:
+    paths-ignore: ['docs/evaluations/**']
 
 permissions:
   contents: read

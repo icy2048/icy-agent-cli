@@ -52,13 +52,14 @@ export async function resolveWorkspacePath(p: string, platform = process.platfor
 }
 
 export function sensitive(file: string): boolean {
-  return file.split(/[\\/]/).some(part => /^(?:\.git|\.icy|\.ssh|\.aws|\.gnupg|\.kube|\.docker|\.npmrc|\.netrc|\.pypirc|\.git-credentials|\.htpasswd|credentials|id_rsa|id_ed25519)$/i.test(part)
+  return file.split(/[\\/]/).some(part => /^(?:\.git|\.icy|\.ssh|\.aws|\.gnupg|\.kube|\.docker|\.npmrc|\.netrc|\.pypirc|\.git-credentials|\.htpasswd|credentials|id_rsa|id_ed25519|id_dsa|id_ecdsa|id_ecdsa_sk|id_ed25519_sk|\.envrc)$/i.test(part)
     || /^\.env(?:\.|$)/i.test(part) && !/^\.env\.(?:example|sample|template)$/i.test(part)
     || /\.(?:pem|key|p12|pfx|token)$/i.test(part));
 }
 export interface WorkspacePathOptions {
   platform?: NodeJS.Platform;
   pathModule?: PathModule;
+  mustExist?: boolean;
 }
 
 export async function workspacePath(cwd: string, input: string, options: WorkspacePathOptions = {}): Promise<string> {
@@ -76,7 +77,7 @@ export async function workspacePath(cwd: string, input: string, options: Workspa
   for (const part of relative.split(pathModule.sep).filter(Boolean)) {
     cursor = pathModule.join(cursor, part);
     try { if ((await lstat(cursor)).isSymbolicLink()) throw new Error('symlink_not_allowed'); }
-    catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') break; throw e; }
+    catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') { if (options.mustExist) throw e; break; } throw e; }
   }
   return target;
 }

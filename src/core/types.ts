@@ -11,7 +11,7 @@ export interface ToolResult {
   durationMs?: number; changedFile?: string; diff?: string;
 }
 export interface ProcessRecord {
-  id: string; toolCallId: string; command: string; cwd: string; pid?: number; identity?: string; startedAt: string; endedAt?: string;
+  id: string; toolCallId: string; command: string; cwd: string; pid?: number; identity?: string; identityScheme?: 'v2'; startedAt: string; endedAt?: string;
   timeoutMs: number; status: 'running' | 'exited' | 'killed' | 'timeout' | 'output_limit' | 'spawn_error' | 'unknown';
   exitCode?: number | null; signal?: string; bytes: number; truncated?: boolean; reason?: string; pidAlive?: boolean;
 }

@@ -135,7 +135,7 @@ icy --version
 | 展开 / 收起思考 | Ctrl+T 或 `/thinking` |
 | 输出翻页 | PgUp / PgDn |
 | 取消本轮 / 退出 | Esc / Ctrl+C；空闲时 Ctrl+C 退出 |
-| shell 审批 | 最后一页按 Y 允许一次、A 允许本次进程会话中的相同完整命令/cwd/超时、N 拒绝 |
+| shell 审批 | 最后一页按 Y 允许一次、A 允许本次进程会话中的相同完整命令/cwd/超时/detach、N 拒绝 |
 | 长命令审批 | PgUp / PgDn 查看完整命令；必须翻到最后一页后才能 Y/A |
 
 输入框是单行视窗，但保留真实多行内容；按 Unicode grapheme（字素簇）编辑中文和 emoji。上限是 20,000 个 grapheme，中文单字、组合重音字符和组合 emoji 各计 1 个；键入或粘贴超限时整次拒绝，保留草稿和光标，不截断，Enter 也不会提交，并显示提示。密钥输入的超限提示不显示密钥内容。`NO_COLOR=1 icy` 可禁用颜色。
@@ -151,9 +151,9 @@ icy --version
 | `read` | 读取 UTF-8 文本并返回行号和 SHA256；也可免审批列目录（`path` 为目录）或搜索内容（`pattern`）。目录 `depth` 为 1–5（默认 1，1 只列直接子项），最多 500 项；搜索是区分大小写的固定字符串，或 `regex=true` 的 JavaScript 正则（模式最多 200 字符），最多扫描 2,000 个文件、每文件 1 MB、最多 200 条匹配，搜索最多运行 10 秒，正则每文件最多 1 秒。普通文件最多 1 MB。读取 `icy-process:<id>` 会显示状态头和分页输出；只有未设置 `offset` / `limit` 的轮询最多等待 10 秒，分页读取立即返回。 |
 | `write` | 创建或整体覆盖 UTF-8 文件。覆盖现有文件必须传入此前 `read` 的 SHA256；新文件必须传 `expectedHash: null`。内容最多 1 MB，返回 diff；`icy-output:` 引用不可写。 |
 | `edit` | 按 `path`、`oldText`、`newText` 做精确替换；`oldText` 非空且必须只匹配一次，空格和换行也必须匹配；不是正则或 unified diff，缺失/多次匹配会拒绝。写入前后保留哈希校验；文本参数最多 1 MB。 |
-| `bash` | POSIX 使用 `/bin/bash --noprofile --norc -c`；Windows 依次使用 `ICY_BASH`、PATH 中的 `bash.exe`（排除 `System32\bash.exe` WSL 启动器）、标准 Git for Windows 安装位置，均以 `--noprofile --norc -c` 调用。无交互 stdin，参数最多 20,000 字符；前台命令超时最多 60 秒，`detach: true` 的后台命令默认且最多 30 分钟。后台输出脱敏后写入 `~/.icy/sessions/<id>/processes/<id>.log`，磁盘上限 16 MiB；返回 `icy-process:<id>`，用 `read icy-process:<id>` 最多等待 10 秒并按 Unicode 字符分页读取，等待不计入 `requestTimeoutMs`，重复轮询会消耗 `maxToolCalls`。`kill` 只接受后台进程引用且不需要审批；审批授权 key 包含 detach。正常退出会终止仍运行的后台进程（`session_closed`），icy 崩溃后不自动重启；恢复时原先运行的记录为 `unknown`，并带 `pidAlive` 判断进程是否仍存活。Windows 终止先用不带 `/F` 的 `taskkill.exe /T`，确认仍存活后再用 `/T /F`，均设置 `windowsHide`；taskkill 的 128 和 1282 表示进程已经退出，会按成功处理。恢复记录只在 lstart/CreationDate 身份令牌匹配时允许终止，不再要求 `ps` 命令行以 shell 路径开头。身份无法确认的记录保留真实 liveness 并在 `/task`、`/ps` 中显示为“未确认”。找不到时返回 `bash_unavailable`：`bash 不可用：请安装 Git for Windows，或用 ICY_BASH 指定 bash.exe 路径。` |
+| `bash` | POSIX 使用 `/bin/bash --noprofile --norc -c`；Windows 依次使用 `ICY_BASH`、PATH 中的 `bash.exe`（排除 `System32\bash.exe` WSL 启动器）、标准 Git for Windows 安装位置，均以 `--noprofile --norc -c` 调用。无交互 stdin，参数最多 20,000 字符；前台命令超时最多 60 秒，`detach: true` 的后台命令默认且最多 30 分钟。后台 stdout/stderr 作为 UTF-8 流解码并逐行脱敏，stderr 每行加 `[stderr] ` 前缀；同一进程的输出通过一个写入流写入 `~/.icy/sessions/<id>/processes/<id>.log`，磁盘上限 16 MiB。返回 `icy-process:<id>`，用 `read icy-process:<id>` 最多等待 10 秒；日志通过索引定位并按 Unicode 码点分页读取，等待不计入 `requestTimeoutMs`，重复轮询会消耗 `maxToolCalls`。超长且无空白的单行在 64 KiB 强制刷新时仍可能切开一个超过 8 KiB 的敏感值。`kill` 只接受后台进程引用且不需要审批；审批授权 key 包含 detach。正常退出会终止仍运行的后台进程（`session_closed`），icy 崩溃后不自动重启；恢复时原先运行的记录为 `unknown`，并带 `pidAlive` 判断进程是否仍存活。Windows 终止先用不带 `/F` 的 `taskkill.exe /T`，确认仍存活后再用 `/T /F`，均设置 `windowsHide`；taskkill 的 128 和 1282 表示进程已经退出，会按成功处理。恢复记录只在 lstart/CreationDate 身份令牌匹配时允许终止，不再要求 `ps` 命令行以 shell 路径开头。身份无法确认的记录保留真实 liveness 并在 `/task`、`/ps` 中显示为“未确认”。找不到时返回 `bash_unavailable`：`bash 不可用：请安装 Git for Windows，或用 ICY_BASH 指定 bash.exe 路径。` |
 
-文件工具拒绝越出工作区、NUL、符号链接路径和敏感路径。Windows 将驱动器字母和分隔符规范化，用于会话/工作区匹配；junction 也由 `lstat` 识别为链接并拒绝。新文件创建在 Windows 直接走带二次存在检查的 `rename` 路径；POSIX 的 hard link 失败时也回退到该路径。敏感名称包括 `.git`、`.icy`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`credentials`、`id_rsa`、`id_ed25519`、非示例的 `.env*`，以及 `.pem`、`.key`、`.p12`、`.pfx`、`.token` 结尾的文件；`.env.example`、`.env.sample`、`.env.template` 例外。`bash` 的搜索范围和忽略规则由实际命令决定，例如 `rg` 与 `find` 不同；bash 不是文件工具的越界保护替代品。
+文件工具拒绝越出工作区、NUL、符号链接路径和敏感路径。读取文件要求每个路径组件均存在，打开时在可用平台使用 `O_NOFOLLOW` 不跟随最终符号链接，并在读取后再次检查路径和文件身份；变化时返回 `file_changed_during_read`。Windows 将驱动器字母和分隔符规范化，用于会话/工作区匹配；junction 也由 `lstat` 识别为链接并拒绝。新文件创建在所有平台先尝试 hard link，失败后回退到独占创建（`wx`）；并发创建时对方文件不会被替换，写入返回 `file_changed`。敏感名称包括 `.git`、`.icy`、`.ssh`、`.aws`、`.gnupg`、`.kube`、`.docker`、`.npmrc`、`.netrc`、`.pypirc`、`.git-credentials`、`.htpasswd`、`credentials`、`id_rsa`、`id_ed25519`、`id_dsa`、`id_ecdsa`、`id_ecdsa_sk`、`id_ed25519_sk`、`.envrc`、非示例的 `.env*`，以及 `.pem`、`.key`、`.p12`、`.pfx`、`.token` 结尾的文件；名称匹配不区分大小写，`.env.example`、`.env.sample`、`.env.template` 例外。`bash` 的搜索范围和忽略规则由实际命令决定，例如 `rg` 与 `find` 不同；bash 不是文件工具的越界保护替代品。
 
 工具结果超过 32 KiB 时保存为 `icy-output:<id>.txt` 并返回有界预览；失败命令还可能返回常见错误行的字面诊断片段，不能保证覆盖所有失败。bash 输出超过 256 KiB 会终止命令。`read` 读取普通文件时 `offset` / `limit` 按行计数；读取输出引用时按 Unicode 字符计数，每页最多 6,000 字符，结果带下一页 offset。输出引用不能用 `write` / `edit` 修改；无需额外工具即可读取，也能读取很长的单行输出。
 
@@ -163,7 +163,7 @@ icy --version
 - 新消息创建新任务。`/continue` 延续原目标和待办，创建新的运行记录与预算并关联上次运行；不重放历史工具。遇到 `interrupted_unknown`，先核对实际状态。
 - `/todo` 和 `/done` 是用户操作；模型不能自行把待办标为完成。`/task` 显示最近检查点、停止原因、预算和最近验收结果。模型结束回答不等于目标已验收。
 - `/verify <命令>` 不请求模型，在当前工作区通过 `bash` 执行并记录；使用 shell 审批、超时和输出限制，每次验收有独立运行记录。普通工具循环中的测试不会自动成为用户指定验收。
-- “已验证完成”要求待办为空、至少有一项用户登记的验收，且每个登记命令的最近成功记录都对应当前 Agent 修改版本 `mutationRevision`；后台进程处于 `running` 时会阻止该状态。新的普通 `write`、`edit` 或 `bash` 会使旧证据过期，并在界面标出；后台进程的启动和退出也各自增加 `mutationRevision`。该状态只证明登记的检查通过，不是对任意自然语言目标的语义证明。
+- “已验证完成”要求待办为空、至少有一项用户登记的验收，且每个登记命令的最近成功记录都对应当前 Agent 修改版本 `mutationRevision`；后台进程处于 `running`，或处于 `unknown` 且 `pidAlive` 为 `true` 时，会阻止该状态。新的普通 `write`、`edit` 或 `bash` 会使旧证据过期，并在界面标出；后台进程的启动和退出也各自增加 `mutationRevision`。该状态只证明登记的检查通过，不是对任意自然语言目标的语义证明。
 - 验收命令可能修改文件。执行前后会在本机比较工作区指纹（路径、内容、权限和链接目标）；不跟随符号链接，只排除当前会话存储目录，最多检查 10,000 个条目和 64 MiB 内容。检测到变化、取消、读取失败或无法确认时，旧证据过期。对会写入产物的检查或较大工作区，建议一开始登记一条包含全部检查的验收命令，避免分次执行时旧证据持续过期。外部编辑器或其他进程的修改不会自动更新 Agent 修改版本，需要重新验收。
 
 会话保存在 `~/.icy/sessions/<id>/`（或 `ICY_HOME/sessions/<id>/`），包含 v2 快照、事件日志和长输出。恢复前会校验消息结构、工具调用配对和调用 ID；损坏快照保留原件并报告位置，恢复失败会释放本次锁。合法但未完成的调用补齐为 `interrupted_unknown` 或 `not_executed`，活动运行标为中断，不重放副作用；结果未知的 `write`、`edit`、`bash` 也会使旧验收证据过期。
@@ -186,7 +186,7 @@ v1 会话恢复时迁移到 v2，保留原消息、工具结果和 Responses 专
 
 ## 当前边界
 
-shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。后台命令没有交互式 stdin，默认且最多运行 30 分钟，输出最多写入 16 MiB；不自动重启，没有每进程资源限制，且 detached 进程本身不提供额外沙箱。detached 子进程会继承写入 icy 的管道；如果 icy 自身崩溃（不是正常退出），仍继续写输出的子进程会收到 EPIPE/SIGPIPE 并通常退出，崩溃后的尾部输出会丢失。恢复只观察 PID 身份，不接管旧进程。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，前台 bash 输出超过 256 KiB 会终止命令。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持自动上下文摘要、MCP、多 Agent、后台任务编排。Windows 不执行 POSIX `0600`/`0700` 权限位，凭据安全依赖用户 profile ACL；Windows 已通过 GitHub Actions 自动测试，但实机交互验收尚未进行。
+shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命令可以访问工作区之外的资源，路径与哈希检查也不能消除外部进程并发修改的竞态。后台命令没有交互式 stdin，默认且最多运行 30 分钟，输出最多写入 16 MiB；不自动重启，没有每进程资源限制，且 detached 进程本身不提供额外沙箱。detached 子进程会继承写入 icy 的管道；如果 icy 自身崩溃（不是正常退出），仍继续写输出的子进程会收到 EPIPE/SIGPIPE 并通常退出，崩溃后的尾部输出会丢失。身份是以 C locale/UTC 捕获的进程启动时间（Windows 为 UTC ISO）；没有身份令牌的记录（例如 spawn 后最初几毫秒崩溃的记录）会以 pid 显示为未确认，icy 永不向其发信号。文件工具最多读取 1 MB 文本，单条结果超过 32 KiB 只显示有界预览，前台 bash 输出超过 256 KiB 会终止命令。目录列举和搜索不提供同等句柄级并发替换防护。事件和工具输出只按已知 key、常见密钥模式脱敏并清理终端控制字符，不是完整的敏感数据识别系统；模型仍会收到任务需要的文件和工具结果。暂不支持自动上下文摘要、MCP、多 Agent、后台任务编排。Windows 不执行 POSIX `0600`/`0700` 权限位，凭据安全依赖用户 profile ACL；Windows 已通过 GitHub Actions 自动测试，但实机交互验收尚未进行。
 
 ## 开发与验证
 
@@ -202,7 +202,7 @@ shell 在当前用户主机上运行，**不是操作系统沙箱**；获批命�
 | `npm run eval:tasks -- --live` | 默认在临时工作区用已配置主模型各运行一次五类合成编码任务，可用 `--repetitions` / `--concurrency`；检查文件结果、验证脚本保留、实际验收输出和保护文件；会产生模型请求、临时修改和指定验收授权 |
 | `npm run eval:repository -- --live` | 在仓库临时副本运行真实仓库任务的中断、恢复和独立验收评测 |
 
-测试覆盖四工具循环、两种协议的工具列表和请求分片、旧工具拒绝、参数/精确替换歧义、Bash 语法、文件冲突、路径与敏感路径边界、授权/取消/进程终止、后台进程、长输出、预算/超时/异常记账、上下文外置、会话校验与 v1/v2 恢复、任务命令和检查点、工具轨迹恢复、验收证据过期、目录列举与搜索、模型探针、会话过滤、中文/emoji 输入以及 CLI/PTY/包安装行为。
+测试覆盖四工具循环、两种协议的工具列表和请求分片、旧工具拒绝、参数/精确替换歧义、Bash 语法、文件冲突、路径与敏感路径边界、授权/取消/进程终止、后台进程、长输出、预算/超时/异常记账、上下文外置、会话校验与 v1/v2 恢复、任务命令和检查点、工具轨迹恢复、验收证据过期、目录列举与搜索、模型探针、会话过滤、中文/emoji 输入以及 CLI/PTY/包安装行为。进程测试位于 `tests/processes-*.test.ts`；npm 包的文档部分只包含 `docs/*.md`，不再包含 `docs/evaluations`，CI 对只改 `docs/evaluations/**` 的 push 和 pull request 跳过门禁。
 
 `eval:prompts` 的离线夹具包含顺序、条件、例外、否定、验收和引用材料；默认使用确定性假模型，不发送工作区文件或执行主机工具；`--live` 只发送合成夹具到配置的小模型服务。它只报告原文是否保留、字面要求遗漏、字符数、预处理 token 和耗时，不测自主任务完成率，也不证明语义等价。`eval:tasks -- --live` 默认每个样例只执行一次；即使输出正确，也不能据此给出稳定成功率、费用排名或压缩收益。真实模型结果、历史失败、重复批次和上下文诊断保存在 [docs/evaluations/](docs/evaluations/)；限制与审计见 [docs/gap-closure.md](docs/gap-closure.md)。
 

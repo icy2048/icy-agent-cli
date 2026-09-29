@@ -21,7 +21,7 @@ const count = z.number().int().nonnegative();
 const status = z.enum(['running', 'awaiting_approval', 'cancelled', 'limited', 'failed', 'answered', 'verified', 'interrupted']);
 const absolutePath = z.string().refine(value => path.isAbsolute(value) && !value.includes('\0'), 'Expected an absolute path');
 const processRecordSchema = z.object({
-  id: z.string().uuid(), toolCallId: callId, command: z.string().min(1), cwd: absolutePath, pid: z.number().int().positive().optional(), identity: z.string().optional(),
+  id: z.string().uuid(), toolCallId: callId, command: z.string().min(1), cwd: absolutePath, pid: z.number().int().positive().optional(), identity: z.string().optional(), identityScheme: z.literal('v2').optional(),
   startedAt: timestamp, endedAt: timestamp.optional(), timeoutMs: z.number().int().min(1).max(1_800_000),
   status: z.enum(['running', 'exited', 'killed', 'timeout', 'output_limit', 'spawn_error', 'unknown']),
   exitCode: z.number().int().nullable().optional(), signal: z.string().optional(), bytes: count,

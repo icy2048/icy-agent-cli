@@ -1,3 +1,13 @@
+/** Return the largest prefix ending at a UTF-8 character boundary. */
+export function utf8PrefixLength(output: Uint8Array, limit: number): number {
+  const end = Math.min(output.length, Math.max(0, limit));
+  if (!end) return 0;
+  let start = end - 1;
+  while (start > 0 && (output[start] & 0xc0) === 0x80) start--;
+  const first = output[start], width = first < 0x80 ? 1 : first >= 0xf0 ? 4 : first >= 0xe0 ? 3 : first >= 0xc0 ? 2 : 1;
+  return start + width <= end ? end : start;
+}
+
 /** Select literal excerpts, without interpreting output or changing its full reference. */
 export function outputPreview(content: string, failed: boolean): string {
   const chars = Array.from(content);

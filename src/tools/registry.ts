@@ -42,7 +42,7 @@ export class ToolRegistry {
       result.durationMs ??= Date.now() - start; return result;
     } catch (e) {
       const content = redact(errorText(e), [this.config.apiKey]);
-      const stable = /^(invalid_arguments|timeout_exceeds_foreground_limit|process_not_found|process_ambiguous|arguments_not_supported_for_process|arguments_not_supported_for_output|output_reference_is_read_only|offset_out_of_range|bash_unavailable|read_only|approval_required|permission_denied)(?::|$)/.exec(content)?.[1];
+      const stable = /^(invalid_arguments|timeout_exceeds_foreground_limit|process_not_found|process_ambiguous|arguments_not_supported_for_process|arguments_not_supported_for_output|output_reference_is_read_only|offset_out_of_range|bash_unavailable|is_directory|read_only|approval_required|permission_denied)(?::|$)/.exec(content)?.[1];
       return { ok: false, error: signal.aborted ? 'cancelled' : stable ?? 'tool_error', content, durationMs: Date.now() - start };
     }
   }

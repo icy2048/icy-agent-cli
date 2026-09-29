@@ -23,13 +23,11 @@ export class Agent {
   }
   private bindProcessEvents(owner: SessionStore) {
     owner.getProcessManager(async record => {
-      if (owner.data.task && record.status !== 'spawn_error') {
-        markMutation(owner.data);
-        await owner.save();
-      }
       const safe = JSON.parse(JSON.stringify({ type: 'process', record }, (_key, value) => typeof value === 'string' ? redact(value, [this.config.apiKey]) : value)) as AgentEvent;
       await owner.event(safe);
       if (this.store === owner) this.emit(safe);
+    }, record => {
+      if (owner.data.task && record.status !== 'spawn_error') markMutation(owner.data);
     });
   }
   async configure(config: Config, provider: Provider, persist: () => Promise<void>) {
@@ -254,6 +252,9 @@ export class Agent {
     const task = this.store.data.task;
     if (!task) throw new Error('请先执行一个任务，再指定验收命令。');
     if (!command.trim()) throw new Error('请提供验收命令：/verify <命令>');
+    await this.store.getProcessManager().refreshUnknownLiveness();
+    const live = this.store.data.processes.find(record => record.status === 'running' || record.status === 'unknown' && record.pidAlive === true);
+    if (live) throw new Error(`有后台进程仍在运行（icy-process:${live.id.slice(0, 8)}），验收结果不可靠。先用 /ps 查看，/kill 终止或等待结束后再 /verify。`);
     this.busy = true; this.startedCalls.clear(); this.endedCalls.clear();
     const call: ToolCall = { id: randomUUID(), name: 'bash', arguments: JSON.stringify({ command, cwd: null, timeoutMs: null, detach: false, kill: null }) };
     let pending: ToolCall[] = [];
